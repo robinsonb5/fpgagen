@@ -152,7 +152,13 @@ entity chameleon_sdram is
 		vram_q : out unsigned(15 downto 0);
 		vram_u_n : in std_logic;
 		vram_l_n : in std_logic;
-		
+
+-- AMR
+		vram2_req : in std_logic;
+		vram2_ack : out std_logic;
+		vram2_a : in unsigned((colAddrBits+rowAddrBits+2) downto 1);
+		vram2_q : out unsigned(15 downto 0);
+
 --GE Temporary
 		initDone : out std_logic;
 		
@@ -212,7 +218,8 @@ architecture rtl of chameleon_sdram is
 		PORT_ROMRD,
 		PORT_ROMWR,
 		PORT_RAM68K,
-		PORT_VRAM
+		PORT_VRAM,
+		PORT_VRAM2
 	);
 	subtype row_t is unsigned((rowAddrBits-1) downto 0);
 	subtype col_t is unsigned((colAddrBits-1) downto 0);
@@ -257,6 +264,7 @@ architecture rtl of chameleon_sdram is
 	signal romrd_ackReg : std_logic := '0';
 	signal ram68k_ackReg : std_logic := '0';
 	signal vram_ackReg : std_logic := '0';
+	signal vram2_ackReg : std_logic := '0';
 	
 --GE
 	signal cpu6510_qReg : unsigned(7 downto 0);
@@ -264,6 +272,7 @@ architecture rtl of chameleon_sdram is
 	signal romrd_qReg : unsigned(63 downto 0);
 	signal ram68k_qReg : unsigned(15 downto 0);	
 	signal vram_qReg : unsigned(15 downto 0);	
+	signal vram2_qReg : unsigned(15 downto 0);	
 	
 	signal initDoneReg : std_logic := '0';
 	
@@ -387,6 +396,14 @@ begin
 				nextRamRow <= vram_a((colAddrBits+rowAddrBits) downto (colAddrBits+1));
 				nextRamCol <= vram_a(colAddrBits downto 1);
 				
+			elsif (vram2_req /= vram2_ackReg) and (currentPort /= PORT_VRAM2) then
+				nextRamState <= RAM_READ_1;
+				nextBurst <= '0';
+				nextRamPort <= PORT_VRAM2;
+				nextRamBank <= vram2_a((colAddrBits+rowAddrBits+2) downto (colAddrBits+rowAddrBits+1));
+				nextRamRow <= vram2_a((colAddrBits+rowAddrBits) downto (colAddrBits+1));
+				nextRamCol <= vram2_a(colAddrBits downto 1);
+
 			elsif (romrd_req /= romrd_ackReg) and (currentPort /= PORT_ROMRD) then
 				nextRamState <= RAM_READ_1;
 				nextRamPort <= PORT_ROMRD;
@@ -702,6 +719,8 @@ begin
 						ram68k_qReg <= ram_data_reg;
 					when PORT_VRAM => --GE
 						vram_qReg <= ram_data_reg;
+					when PORT_VRAM2 => --AMR
+						vram2_qReg <= ram_data_reg;
 					when others =>
 						null;
 					end case;
@@ -718,7 +737,7 @@ begin
 -- /!\
 					case currentPort is
 					when PORT_CPU6510 | PORT_REU | PORT_CPU_1541 
-						| PORT_ROMWR | PORT_RAM68K | PORT_VRAM => --GE
+						| PORT_ROMWR | PORT_RAM68K | PORT_VRAM | PORT_VRAM2 => --GE
 						null;
 					when others =>
 						ramDone <= '1';
@@ -1006,8 +1025,17 @@ begin
 	vram_ack <= vram_ackReg;
 	vram_q <= vram_qReg; --GE
 
-
-
+	process(clk)
+	begin
+		if rising_edge(clk) then
+			if currentPort = PORT_VRAM2
+			and ramDone = '1' then
+				vram2_ackReg <= not vram2_ackReg;
+			end if;
+		end if;
+	end process;
+	vram2_ack <= vram2_ackReg;
+	vram2_q <= vram2_qReg; --AMR
 
 	
 	initDone <= initDoneReg; --Ge

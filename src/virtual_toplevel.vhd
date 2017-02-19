@@ -147,6 +147,11 @@ signal vram_d : std_logic_vector(15 downto 0);
 signal vram_q : std_logic_vector(15 downto 0);
 signal vram_l_n : std_logic;
 signal vram_u_n : std_logic;
+-- Second port - AMR
+signal vram2_req : std_logic;
+signal vram2_ack : std_logic;
+signal vram2_a : std_logic_vector(15 downto 1);
+signal vram2_q : std_logic_vector(15 downto 0);
 
 
 type sdrc_t is ( SDRC_IDLE,
@@ -178,7 +183,7 @@ signal ZRC : zrc_t;
 type zrcp_t is ( ZRCP_T80, ZRCP_TG68 );
 signal ZRCP : zrcp_t;
 
-constant useCache : boolean := false;
+constant useCache : boolean := true;
 
 -- Genesis core
 signal NO_DATA		: std_logic_vector(15 downto 0) := x"4E71";	-- SYNTHESIS gp/m68k.c line 12
@@ -510,6 +515,11 @@ sdc : entity work.sdram_controller generic map (
 	vram_u_n => vram_u_n,
 	vram_l_n => vram_l_n,
 	
+	vram2_req	=> vram2_req,
+	vram2_ack => vram2_ack,
+	vram2_a	=> vram2_a,
+	vram2_q	=> vram2_q,
+
 	initDone 	=> SDR_INIT_DONE
 );
 
@@ -643,6 +653,11 @@ port map(
 	vram_q	=> vram_q,
 	vram_u_n	=> vram_u_n,
 	vram_l_n	=> vram_l_n,
+	
+	vram2_req => vram2_req,
+	vram2_ack => vram2_ack,
+	vram2_a	=> vram2_a,
+	vram2_q	=> vram2_q,
 	
 	INTERLACE	=> INTERLACE,
 
@@ -1544,7 +1559,7 @@ begin
 				if TG68_FLASH_SEL = '1' and TG68_FLASH_DTACK_N = '1' then
 					-- FF_FL_ADDR <= TG68_A(21 downto 0);
 					if useCache and (TG68_A(21 downto 3) = romrd_a_cached(21 downto 3)) then
-						case TG68_A(2 downto 1) is
+						case TG68_A(2 downto 1) is						
 						when "00" =>
 							if TG68_UDS_N = '0' then TG68_FLASH_D(15 downto 8) <= romrd_q_cached(15 downto 8); end if;
 							if TG68_LDS_N = '0' then TG68_FLASH_D(7 downto 0) <= romrd_q_cached(7 downto 0); end if;

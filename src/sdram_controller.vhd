@@ -42,6 +42,11 @@ entity sdram_controller is
 		vram_q : out std_logic_vector(15 downto 0);
 		vram_u_n : in std_logic;
 		vram_l_n : in std_logic;
+
+		vram2_req : in std_logic;
+		vram2_ack : out std_logic;
+		vram2_a : in std_logic_vector(15 downto 1);
+		vram2_q : out std_logic_vector(15 downto 0);
 		
 		romwr_req : in std_logic;
 		romwr_ack : out std_logic;
@@ -82,6 +87,9 @@ architecture rtl of sdram_controller is
 	signal vram_d_u : unsigned(15 downto 0);
 	signal vram_q_u : unsigned(15 downto 0);
 
+	signal vram2_a_u : unsigned(addrwidth downto 1);
+	signal vram2_q_u : unsigned(15 downto 0);
+
 	
 begin
 	
@@ -99,6 +107,9 @@ begin
 	vram_a_u <= unsigned(std_logic_vector(to_unsigned(2#1100000#, addrwidth - 15)) & vram_a);
 	vram_d_u <= unsigned(vram_d);
 	vram_q <= std_logic_vector(vram_q_u);
+
+	vram2_a_u <= unsigned(std_logic_vector(to_unsigned(2#1100000#, addrwidth - 15)) & vram2_a);
+	vram2_q <= std_logic_vector(vram2_q_u);
 	
 -- -----------------------------------------------------------------------
 -- SDRAM Controller
@@ -210,6 +221,11 @@ begin
 			vram_q => vram_q_u,
 			vram_u_n => vram_u_n,
 			vram_l_n => vram_l_n,
+
+			vram2_req => vram2_req,
+			vram2_ack => vram2_ack,
+			vram2_a => vram2_a_u,
+			vram2_q => vram2_q_u,
 			
 			initDone => initDone,
 			

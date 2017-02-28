@@ -44,9 +44,8 @@ create_clock -name fm_clk3 -period 388.9 -waveform { 0 129.64 } [get_nets {virtu
 #create_clock -name fm_clk6 -period 777.8 [get_nets {virtualtoplevel|fm|u_clksync|u_clkgen|clk_n6}]
 #create_clock -name VCLK -period 129.6 [get_nets {virtualtoplevel|VCLK}]
 
-create_generated_clock -name VCLK -source [get_nets {U00|altpll_component|auto_generated|wire_pll1_clk[0]}] -divide_by 7 -duty_cycle 57.1 [get_nets {virtualtoplevel|VCLK}]
-# romrd_req is identified as a clock, it should not run faster than MCLK/2
-create_generated_clock -name romrd_req -source [get_nets {U00|altpll_component|auto_generated|wire_pll1_clk[0]}] -divide_by 7  [get_nets {virtualtoplevel|romrd_req}]
+# create_generated_clock -name VCLK -source [get_nets {U00|altpll_component|auto_generated|wire_pll1_clk[0]}] -divide_by 7 -duty_cycle 57.1 [get_nets {virtualtoplevel|VCLK}]
+create_generated_clock -name ZCLK -source [get_nets {U00|altpll_component|auto_generated|wire_pll1_clk[1]}] -divide_by 2 -duty_cycle 50 [get_nets {virtualtoplevel|ZCLK}]
 create_generated_clock -name fm_clk6 -source [get_nets {virtualtoplevel|VCLK}] -divide_by 6 -duty_cycle 50 -phase 0 [get_nets {virtualtoplevel|fm|u_clksync|u_clkgen|clk_n6}]
 create_generated_clock -name ZCLK -source [get_nets {virtualtoplevel|VCLK}] -divide_by 14 -duty_cycle 50 [get_nets {virtualtoplevel|ZCLK}]
 create_generated_clock -name psg_clk -source [get_nets {virtualtoplevel|ZCLK}] -divide_by 32 [get_nets {virtualtoplevel|u_psg|clk_divide[4]}]
@@ -162,9 +161,10 @@ set_false_path  -from  [get_clocks {fm_clk6}]  -to  [get_clocks {U00|altpll_comp
 #set_multicycle_path -from [get_clocks {mypll2|altpll_component|auto_generated|pll1|clk[0]}] -to [get_clocks {sd2clk_pin}] -setup -end 2
 
 set_multicycle_path -from [get_clocks {sd1clk_pin}] -to [get_clocks {U00|altpll_component|auto_generated|pll1|clk[2]}] -setup -end 2
+set_multicycle_path -from [get_clocks {sd1clk_pin}] -to [get_clocks {U00|altpll_component|auto_generated|pll1|clk[2]}] -hold -end 1
 
 set_multicycle_path -through [get_nets {*zpu|Mult0*}] -setup -end 2
-set_multicycle_path -through [get_nets {*zpu|Mult0*}] -hold -end 2
+set_multicycle_path -through [get_nets {*zpu|Mult0*}] -hold -end 1
 
 #**************************************************************
 # Set Maximum Delay

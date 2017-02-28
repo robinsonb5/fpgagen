@@ -21,7 +21,6 @@ component pll
 		c1		: OUT STD_LOGIC ;
 		c2		: OUT STD_LOGIC ;
 		c3		: OUT STD_LOGIC ;
-		c4		: OUT STD_LOGIC ;
 		locked		: OUT STD_LOGIC 
 	);
 end component;

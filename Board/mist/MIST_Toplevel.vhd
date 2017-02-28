@@ -50,6 +50,7 @@ signal reset_d : std_logic;
 signal pll_locked : std_logic;
 signal MCLK      : std_logic;
 signal memclk      : std_logic;
+signal VCLK : std_logic;
 
 signal audiol : std_logic_vector(15 downto 0);
 signal audior : std_logic_vector(15 downto 0);
@@ -251,7 +252,7 @@ end process;
     port map(
       inclk0 => CLOCK_27(0),	-- 27 MHz external
       c0     => MCLK,			-- 54 MHz internal
-		c1     => open,
+		c1     => VCLK,
       c2     => memclk,			-- 108 Mhz
       c3     => SDRAM_CLK,		-- 108 Mhz external
 		locked => pll_locked
@@ -292,6 +293,7 @@ virtualtoplevel : entity work.Virtual_Toplevel
 	port map(
 		reset => reset,
 		MCLK => MCLK,
+		VCLK => VCLK,
 		SDR_CLK => memclk,
 
     -- SDRAM DE1 ports

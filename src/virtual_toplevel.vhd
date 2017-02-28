@@ -48,6 +48,7 @@ entity Virtual_Toplevel is
 	port(
 		reset : in std_logic;
 		MCLK : in std_logic;
+		VCLK : in std_logic;
 		SDR_CLK : in std_logic;
 
 		DRAM_ADDR	: out std_logic_vector(rowAddrBits-1 downto 0);
@@ -256,7 +257,9 @@ signal T80_DI              : std_logic_vector(7 downto 0);
 signal T80_DO              : std_logic_vector(7 downto 0);
 
 -- CLOCK GENERATION
-signal VCLK			: std_logic;
+signal vclk_prev : std_logic;
+signal vclk_high : std_logic; -- readable from other clocks without timing problems.
+--signal VCLK			: std_logic;
 signal RST_VCLK	: std_logic; -- Reset for blocks using VCLK as clock
 signal RST_VCLK_aux : std_logic;
 signal VCLKCNT		: std_logic_vector(2 downto 0);
@@ -826,7 +829,8 @@ begin
 			HINT_ACK <= '1';
 		end if;
 
-		if VCLKCNT = "110" then
+		if VCLKCNT = "000" then
+--		if VCLKCNT = "110" then
 			if VINT_TG68 = '1' and VINT_TG68_ACK = '0' then
 				TG68_IPL_N <= "001";	-- IPL Level 6
 				-- if TG68_INTACK = '1' then
@@ -879,42 +883,87 @@ begin
 end process;
 
 -- CLOCK GENERATION
-process( MRST_N, MCLK, VCLKCNT )
+
+process(MRST_N, VCLK)
 begin
 	if MRST_N = '0' then
-		VCLK <= '1';
 		ZCLK <= '0';
-		VCLKCNT <= "001"; -- important for SDRAM controller (EDIT: not needed anymore)
+	elsif rising_edge(VCLK) then
+		ZCLK <= not ZCLK;
+	end if;
+end process;
+
+process(MRST_N,MCLK)
+begin
+
+	if falling_edge(MCLK) then
+		vclk_high<=VCLK;
+	end if;
+
+	if MRST_N = '0' then
 		TG68_ENARDREG <= '0';
 		TG68_ENAWRREG <= '0';
 	elsif rising_edge(MCLK) then
-		VCLKCNT <= VCLKCNT + 1;
-		if VCLKCNT = "000" then
-			ZCLK <= not ZCLK;
-		end if;
-		if VCLKCNT = "110" then
-			VCLKCNT <= "000";
-		end if;
-		if VCLKCNT <= "011" then
-			VCLK <= '1';
+		
+-- Rising edge of VCLK
+		if vclk_prev='0' and vclk_high='1' then
+			VCLKCNT<="000";
 		else
-			VCLK <= '0';
+			VCLKCNT<=VCLKCNT+1;
 		end if;
 		
-		if VCLKCNT = "110" then
-			TG68_ENAWRREG <= '1';
-		else
-			TG68_ENAWRREG <= '0';
-		end if;
-		
-		if VCLKCNT = "011" then
+		if VCLKCNT="000" then
 			TG68_ENARDREG <= '1';
 		else
 			TG68_ENARDREG <= '0';
 		end if;
-		
+
+		if VCLKCNT="011" then
+			TG68_ENAWRREG <= '1';
+		else
+			TG68_ENAWRREG <= '0';
+		end if;
+
+		vclk_prev<=vclk_high;
 	end if;
 end process;
+
+--process( MRST_N, MCLK, VCLKCNT )
+--begin
+--	if MRST_N = '0' then
+--		VCLK <= '1';
+--		ZCLK <= '0';
+--		VCLKCNT <= "001"; -- important for SDRAM controller (EDIT: not needed anymore)
+--		TG68_ENARDREG <= '0';
+--		TG68_ENAWRREG <= '0';
+--	elsif rising_edge(MCLK) then
+--		VCLKCNT <= VCLKCNT + 1;
+--		if VCLKCNT = "000" then
+--			ZCLK <= not ZCLK;
+--		end if;
+--		if VCLKCNT = "110" then
+--			VCLKCNT <= "000";
+--		end if;
+--		if VCLKCNT <= "011" then
+--			VCLK <= '1';
+--		else
+--			VCLK <= '0';
+--		end if;
+--		
+--		if VCLKCNT = "110" then
+--			TG68_ENAWRREG <= '1';
+--		else
+--			TG68_ENAWRREG <= '0';
+--		end if;
+--		
+--		if VCLKCNT = "011" then
+--			TG68_ENARDREG <= '1';
+--		else
+--			TG68_ENARDREG <= '0';
+--		end if;
+--		
+--	end if;
+--end process;
 
 process( MRST_N, ZCLK )
 begin
@@ -1687,7 +1736,7 @@ begin
 
 		case FC is
 		when FC_IDLE =>			
-			if VCLKCNT = "001" then
+			if VCLKCNT = "000" then
 				if TG68_FLASH_SEL = '1' and TG68_FLASH_DTACK_N = '1' then
 					-- FF_FL_ADDR <= TG68_A(21 downto 0);
 					if useCache and (TG68_A(21 downto 3) = romrd_a_cached(21 downto 3)) then
@@ -1905,7 +1954,7 @@ begin
 
 		case SDRC is
 		when SDRC_IDLE =>
-			if VCLKCNT = "001" then
+			if VCLKCNT = "000" then
 				if TG68_SDRAM_SEL = '1' and TG68_SDRAM_DTACK_N = '1' then
 					ram68k_req <= not ram68k_req;
 					ram68k_a <= TG68_A(15 downto 1);
@@ -2010,7 +2059,7 @@ begin
 
 		case ZRC is
 		when ZRC_IDLE =>
-			if VCLKCNT = "001" then
+			if VCLKCNT = "000" then
 				if TG68_ZRAM_SEL = '1' and TG68_ZRAM_DTACK_N = '1' then
 					if TG68_UDS_N = '0' then
 						zram_a <= TG68_A(12 downto 1) & "0";

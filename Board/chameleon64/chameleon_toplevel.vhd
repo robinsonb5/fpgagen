@@ -426,25 +426,25 @@ virtualtoplevel : entity work.Virtual_Toplevel
 			oBlue => blu
 		);
 	
---leftsd: component hybrid_pwm_sd
---	port map
---	(
---		clk => memclk,
---		n_reset => n_reset,
---		din(15) => not audio_l(15),
---		din(14 downto 0) => std_logic_vector(audio_l(14 downto 0)),
---		dout => sigmaL
---	);
---	
---rightsd: component hybrid_pwm_sd
---	port map
---	(
---		clk => memclk,
---		n_reset => n_reset,
---		din(15) => not audio_r(15),
---		din(14 downto 0) => std_logic_vector(audio_r(14 downto 0)),
---		dout => sigmaR
---	);
---
+leftsd: component hybrid_pwm_sd
+	port map
+	(
+		clk => memclk,
+		n_reset => n_reset,
+		din(15) => not audio_l(15),
+		din(14 downto 0) => std_logic_vector(audio_l(14 downto 0)),
+		dout => sigmaL
+	);
+	
+rightsd: component hybrid_pwm_sd
+	port map
+	(
+		clk => memclk,
+		n_reset => n_reset,
+		din(15) => not audio_r(15),
+		din(14 downto 0) => std_logic_vector(audio_r(14 downto 0)),
+		dout => sigmaR
+	);
+
 
 end architecture;

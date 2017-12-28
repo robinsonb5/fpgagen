@@ -377,8 +377,8 @@ virtualtoplevel : entity work.Virtual_Toplevel
 	 ps2k_dat_in => ps2_keyboard_dat_in,
  
 --    -- Joystick ports (Port_A, Port_B)
-	joya => std_logic_vector(joy1),
-	joyb => std_logic_vector(joy2),
+	joya => std_logic_vector(not joy1),
+	joyb => std_logic_vector(not joy2),
 --	joyc => std_logic_vector(joy3),
 --	joyd => std_logic_vector(joy4),
 

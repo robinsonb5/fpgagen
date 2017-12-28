@@ -2103,7 +2103,7 @@ end process;
 
 mycontrolmodule : entity work.CtrlModule
 	generic map (
-		sysclk_frequency => 1080 -- Sysclk frequency * 10
+		sysclk_frequency => 540 -- Sysclk frequency * 10
 	)
 	port map (
 		clk => MCLK,

@@ -194,7 +194,7 @@ begin
 my1mhz : entity work.chameleon_1mhz
 	generic map (
 		-- Timer calibration. Clock speed in Mhz.
-		clk_ticks_per_usec => 126
+		clk_ticks_per_usec => 108
 	)
 	port map(
 		clk => memclk,
@@ -217,7 +217,7 @@ myReset : entity work.gen_reset
 		generic map (
 			enable_docking_station => true,
 			enable_c64_joykeyb => true,
-			enable_c64_4player => true,
+			enable_c64_4player => false,
 			enable_raw_spi => true,
 			enable_iec_access =>true
 		)
@@ -323,8 +323,8 @@ cdtv_remote : entity work.chameleon_cdtv_remote
 --		key_rew : out std_logic;
 		key_play => gp1_run,
 --		key_ff : out std_logic;
-		key_stop => gp1_select,
---		key_vol_up : out std_logic;
+--		key_stop => gp1_select,
+		key_vol_up => gp1_select,
 --		key_vol_dn : out std_logic;
 		joystick_a => cdtv_joy1,
 		joystick_b => cdtv_joy2
@@ -334,8 +334,11 @@ cdtv_remote : entity work.chameleon_cdtv_remote
 
 joy1<=not gp1_run & not gp1_select & (c64_joy1 and cdtv_joy1);
 joy2<="11" & (c64_joy2 and cdtv_joy2);
-joy3<="11" & joystick3;
-joy4<="11" & joystick4;
+
+joy3<=joy1(7)&joy1(5)&joy1(4)&joy1(6)&joy1(0)&joy1(1)&joy1(2)&joy1(3);
+joy4<=joy2(7)&joy2(5)&joy2(4)&joy2(6)&joy2(0)&joy2(1)&joy2(2)&joy2(3);
+--joy3<="11" & joystick3;
+--joy4<="11" & joystick4;
 	
 
   U00 : entity work.pll
@@ -377,8 +380,8 @@ virtualtoplevel : entity work.Virtual_Toplevel
 	 ps2k_dat_in => ps2_keyboard_dat_in,
  
 --    -- Joystick ports (Port_A, Port_B)
-	joya => std_logic_vector(not joy1),
-	joyb => std_logic_vector(not joy2),
+	joya => std_logic_vector(not joy3),
+	joyb => std_logic_vector(not joy4),
 --	joyc => std_logic_vector(joy3),
 --	joyd => std_logic_vector(joy4),
 

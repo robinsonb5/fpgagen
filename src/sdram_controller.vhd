@@ -140,47 +140,6 @@ begin
 			sd_ldqm => sd_ldqm,
 			sd_udqm => sd_udqm,
 			
-			cache_req => '0',
-			cache_ack => open,
-			cache_we => '0',
-			cache_burst => '0',
-			cache_a => (others => '0'),
-			cache_d => (others => '0'),
-			cache_q => open,
-			
-			vid0_req => '0',
-			vid0_ack => open,
-			vid0_addr => (others => '0'),
-			vid0_do => open,
-
-			vid1_rdStrobe => '0',
-			vid1_busy => open,
-			vid1_addr => (others => '0'),
-			vid1_do => open,
-			
-			vicvid_wrStrobe => '0',
-			vicvid_addr => (others => '0'),
-			vicvid_di => (others => '0'),
-			
-			cpu6510_request => '0',
-			cpu6510_ack => open,
-			cpu6510_we => '0',
-			cpu6510_a => (others => '0'),
-			cpu6510_d => (others => '0'),
-			cpu6510_q => open,
-
-			reuStrobe => '0',
-			reuBusy => open,
-			reuWe => '0',
-			reuA => (others => '0'),
-			reuD => (others => '0'),
-			reuQ => open,
-
-			cpu1541_req => '0',
-			cpu1541_we => '0',
-			cpu1541_a => (others => '0'),
-			cpu1541_d => (others => '0'),
-			
 			romwr_req => romwr_req,
 			romwr_ack => romwr_ack,
 			romwr_we => romwr_we,

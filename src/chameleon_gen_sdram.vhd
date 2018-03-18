@@ -396,7 +396,11 @@ begin
 
 	process(clk)
 	begin
-		if rising_edge(clk) then
+-- These are already registered by virtue of being assigned with a clock edge.
+-- Registering them again gives the synthesis software the opportunity to pipeline
+-- them if need be, but it shouldn't be necessary for the MD core.
+
+--		if rising_edge(clk) then
 			sd_data <= (others => 'Z');
 			if sd_data_ena = '1' then
 				sd_data <= sd_data_reg;
@@ -409,7 +413,7 @@ begin
 			sd_ba_1 <= sd_ba_1_reg;
 			sd_ldqm <= sd_ldqm_reg;
 			sd_udqm <= sd_udqm_reg;
-		end if;
+--		end if;
 	end process;
 
 	process(clk)
@@ -550,7 +554,7 @@ begin
 						end loop;
 					end if;
 				when RAM_ACTIVE =>
-					ramTimer <= 2;
+					ramTimer <= 1;
 					ramState <= currentState;
 					sd_addr_reg <= currentRow;
 					sd_ras_n_reg <= '0';
@@ -561,7 +565,7 @@ begin
 --					preselectBank<='1';
 				when RAM_READ_1 =>
 					if currentBurst='1' then
-						ramTimer <= casLatency + 1;
+						ramTimer <= casLatency;-- + 1;
 						ramState <= RAM_READ_2;
 					else
 						ramState <= RAM_READ_TERMINATEBURST;
@@ -572,7 +576,7 @@ begin
 					sd_ba_1_reg <= currentBank(1);
 --					preselectBank<='1';
 				when RAM_READ_TERMINATEBURST =>
-					ramTimer <= casLatency;
+					ramTimer <= casLatency-1;
 					ramState <= RAM_READ_2;
 					sd_we_n_reg <= '0';	-- Terminate Burst
 					sd_ba_0_reg <= currentBank(0);

@@ -128,12 +128,6 @@ architecture rtl of chameleon_sdram is
 		RAM_WRITE_ABORT,
 		RAM_WRITE_DLY,
 		
-		HV_READ_1,
-		HV_READ_2,
-		HV_READ_3,
-		HV_WRITE_1,
-		HV_WRITE_2,
-		
 		RAM_PRECHARGE,
 		RAM_PRECHARGE_ALL,
 		RAM_AUTOREFRESH
@@ -188,9 +182,9 @@ architecture rtl of chameleon_sdram is
 	signal vicvid_buffer : unsigned(63 downto 0);
 	
 -- Active rows in SDRAM
-	type bankRowDef is array(0 to 3) of row_t;
-	signal bankActive : std_logic_vector(0 to 3) := (others => '0');
-	signal bankRow : bankRowDef;
+--	type bankRowDef is array(0 to 3) of row_t;
+--	signal bankActive : std_logic_vector(0 to 3) := (others => '0');
+--	signal bankRow : bankRowDef;
 
 -- Memory auto refresh
 	constant refreshClocks : integer := 9;
@@ -209,6 +203,8 @@ architecture rtl of chameleon_sdram is
 	signal currentUdqm : std_logic;
 	signal currentBurst : std_logic;
 
+	signal preselectBank : std_logic;
+	
 	signal nextRamBank : unsigned(1 downto 0);
 	signal nextRamRow : row_t;
 	signal nextRamCol : col_t;
@@ -217,16 +213,36 @@ architecture rtl of chameleon_sdram is
 	signal nextLdqm : std_logic;
 	signal nextUdqm : std_logic;
 	signal nextBurst : std_logic;
+	
+	type ramPort_record is record
+		ramport : ramPorts;
+		bank : unsigned(1 downto 0);
+		row : row_t;
+		col : col_t;
+		udqm : std_logic;
+		ldqm : std_logic;
+		pending : std_logic;
+		burst : std_logic;
+		wr : std_logic;
+	end record;
+	type ramPort_records is array(3 downto 0) of ramPort_record;
+	signal ramPort_rec : ramPort_records;
+	
+	signal ramPort_pri : integer range 0 to 3;
+	signal ramPort_req : std_logic;
 
-	
-	signal hv_a : std_logic_vector(13 downto 0);
-	signal hv_d	: std_logic_vector(15 downto 0);
-	signal hv_q	: std_logic_vector(15 downto 0);
-	signal hv_we : std_logic;
-	
-	signal nextHvState : ramStates;
-	signal nextHvAddr : std_logic_vector(13 downto 0);
-	
+
+	type bank_record is record
+		row : row_t;
+		rowopen : std_logic;
+		ready : std_logic;
+		pending : std_logic;
+		inuse : std_logic;
+		ramport : ramPorts;
+	end record;
+	type bank_records is array(3 downto 0) of bank_record;
+	signal banks : bank_records;
+
 
 constant useCache : boolean := false;
 	
@@ -249,6 +265,105 @@ begin
 		end if;
 	end process;
 
+	
+-- Priority encode ports to banks
+
+process(clk)
+begin
+
+	for ba in 0 to 3 loop
+
+		for p in 0 to 3 loop
+		
+			banks(ba).pending<='0';
+			banks(ba).ready<='0';
+			banks(ba).inuse<='0';
+			banks(ba).ramport<=PORT_NONE;
+
+			if ramPort_rec(p).pending='1' and to_integer(ramPort_rec(p).bank)=ba then
+				banks(ba).ramport<=ramPort_rec(p).ramport;
+				if to_integer(currentBank)/=ba then
+					banks(ba).pending<='1';	-- There is an active port associated with this bank that needs service
+				else
+					banks(ba).inuse<='1'; -- This bank is currently being serviced
+				end if;
+				if banks(ba).row=ramPort_rec(p).row and banks(ba).rowopen='1' then
+					banks(ba).ready<='1'; -- This bank is open and on the correct row.
+				end if;
+			end if;
+		end loop;
+	end loop;
+end process;
+
+	
+-- -----------------------------------------------------------------------
+-- Create row, column, bank and pending signals for each port
+
+		-- ROM Write port
+
+		ramPort_rec(0).pending<='1' when (romwr_req /= romwr_ackReg) and (currentPort /= PORT_ROMWR) else '0';
+		ramPort_rec(0).bank<=romwr_a((colAddrBits+2) downto (colAddrBits+1));
+		ramPort_rec(0).row<=romwr_a((colAddrBits+rowAddrBits+2) downto (colAddrBits+3));
+		ramPort_rec(0).col<=romwr_a(colAddrBits downto 1);
+		ramPort_rec(0).wr<=romwr_we;		
+		ramPort_rec(0).burst<='0';
+		ramPort_rec(0).ldqm<='0';
+		ramPort_rec(0).udqm<='0';
+		ramPort_rec(0).ramport<=PORT_ROMWR;
+		
+		-- ROM Read port
+		
+		ramPort_rec(1).pending<='1' when (romrd_req /= romrd_ackReg) and (currentPort /= PORT_ROMRD) else '0';
+		ramPort_rec(1).bank<=romrd_a((colAddrBits+2) downto (colAddrBits+1));
+		ramPort_rec(1).row<=romrd_a((colAddrBits+rowAddrBits+2) downto (colAddrBits+3));
+		ramPort_rec(1).col<=romrd_a(colAddrBits downto 3)&"00";
+		ramPort_rec(1).wr<='0';
+		ramPort_rec(1).burst<='1';
+		ramPort_rec(1).ldqm<='0';
+		ramPort_rec(1).udqm<='0';
+		ramPort_rec(1).ramport<=PORT_ROMRD;
+
+		
+		-- 68K RAM port
+
+		ramPort_rec(2).pending<='1' when (ram68k_req /= ram68k_ackReg) and (currentPort /= PORT_RAM68K) else '0';
+		ramPort_rec(2).bank<=ram68k_a((colAddrBits+2) downto (colAddrBits+1));
+		ramPort_rec(2).row<=ram68k_a((colAddrBits+rowAddrBits+2) downto (colAddrBits+3));
+		ramPort_rec(2).col<=ram68k_a(colAddrBits downto 1);
+		ramPort_rec(2).wr<=ram68k_we;
+		ramPort_rec(2).burst<='0';
+		ramPort_rec(2).ldqm<=ram68k_l_n;
+		ramPort_rec(2).udqm<=ram68k_u_n;
+		ramPort_rec(2).ramport<=PORT_RAM68K;
+
+		
+		-- VRAM port
+
+		ramPort_rec(3).pending<='1' when (vram_req /= vram_ackReg) and (currentPort /= PORT_VRAM) else '0';
+		ramPort_rec(3).bank<=vram_a((colAddrBits+2) downto (colAddrBits+1));
+		ramPort_rec(3).row<=vram_a((colAddrBits+rowAddrBits+2) downto (colAddrBits+3));
+		ramPort_rec(3).col<=vram_a(colAddrBits downto 1);
+		ramPort_rec(3).wr<=vram_we;
+		ramPort_rec(3).burst<='0';
+		ramPort_rec(3).ldqm<=vram_l_n;
+		ramPort_rec(3).udqm<=vram_u_n;
+		ramPort_rec(3).ramport<=PORT_VRAM;
+
+		
+process(clk)
+begin	
+		-- Priority encode
+		ramPort_pri<=0;
+		ramPort_req<='0';
+		for i in 0 to 3 loop
+			if ramPort_rec(i).pending='1' then
+				ramPort_pri<=i;
+				ramPort_req<='1';
+			end if;
+		end loop;
+
+	end process;
+	
 -- -----------------------------------------------------------------------
 -- State machine
 	process(clk)
@@ -261,58 +376,22 @@ begin
 			nextRamCol <= ( others => '0');
 			nextLdqm <= '0';
 			nextUdqm <= '0';
+			nextBurst <= '0';
 
-			nextHvState <= RAM_IDLE;
-			nextHvAddr <= (others => '0');
-			
-			if (romwr_req /= romwr_ackReg) and (currentPort /= PORT_ROMWR) then
+			if ramPort_req='1' then
 				nextRamState <= RAM_READ_1;
-				if romwr_we = '1' then
+				if ramPort_rec(ramPort_pri).wr = '1' then
 					nextRamState <= RAM_WRITE_1;
-				end if;
-				nextBurst <= '0';
-				nextRamPort <= PORT_ROMWR;
-				nextRamBank <= romwr_a((colAddrBits+2) downto (colAddrBits+1));
-				nextRamRow <= romwr_a((colAddrBits+rowAddrBits+2) downto (colAddrBits+3));
-				nextRamCol <= romwr_a(colAddrBits downto 1);
-
-			elsif (vram_req /= vram_ackReg) and (currentPort /= PORT_VRAM) then
-				nextRamState <= RAM_READ_1;
-				if vram_we = '1' then
-					nextRamState <= RAM_WRITE_1;
-					nextLdqm <= vram_l_n;
-					nextUdqm <= vram_u_n;
-				end if;
-				nextBurst <= '0';
-				nextRamPort <= PORT_VRAM;
-				nextRamBank <= vram_a((colAddrBits+2) downto (colAddrBits+1));
-				nextRamRow <= vram_a((colAddrBits+rowAddrBits+2) downto (colAddrBits+3));
-				nextRamCol <= vram_a(colAddrBits downto 1);
-				
-			elsif (romrd_req /= romrd_ackReg) and (currentPort /= PORT_ROMRD) then
-				nextRamState <= RAM_READ_1;
-				nextRamPort <= PORT_ROMRD;
-				nextBurst <= '1';
-				nextRamBank <= romrd_a((colAddrBits+2) downto (colAddrBits+1));
-				nextRamRow <= romrd_a((colAddrBits+rowAddrBits+2) downto (colAddrBits+3));
-				nextRamCol <= romrd_a(colAddrBits downto 3) & "00";
-
-			elsif (ram68k_req /= ram68k_ackReg) and (currentPort /= PORT_RAM68K) then
-				nextRamState <= RAM_READ_1;
-				if ram68k_we = '1' then
-					nextRamState <= RAM_WRITE_1;
-					nextLdqm <= ram68k_l_n;
-					nextUdqm <= ram68k_u_n;
-				end if;
-				nextBurst <= '0';
-				nextRamPort <= PORT_RAM68K;
-				nextRamBank <= ram68k_a((colAddrBits+2) downto (colAddrBits+1));
-				nextRamRow <= ram68k_a((colAddrBits+rowAddrBits+2) downto (colAddrBits+3));
-				nextRamCol <= ram68k_a(colAddrBits downto 1);
-			else
-				nextBurst<='0'; -- Avoid latch
+					nextLdqm <= ramPort_rec(ramPort_pri).ldqm;
+					nextUdqm <= ramPort_rec(ramPort_pri).udqm;
+				end if;				
+				nextBurst <= ramPort_rec(ramPort_pri).burst;
+				nextRamPort <= ramPort_rec(ramPort_pri).ramport;
+				nextRamBank <= ramPort_rec(ramPort_pri).bank;
+				nextRamRow <= ramPort_rec(ramPort_pri).row;
+				nextRamCol <= ramPort_rec(ramPort_pri).col;
 			end if;
-		--end if;		
+
 	end process;
 
 	process(clk)
@@ -350,9 +429,24 @@ begin
 
 			sd_ldqm_reg <= '0';
 			sd_udqm_reg <= '0';
+			preselectBank<='0';
 			
-			hv_we <= '0';
-
+			-- Close the next bank's row in advance if we can.
+			if preselectBank='1' then
+				if currentBank /= nextRamBank and
+						banks(to_integer(nextRamBank)).rowopen='1' and
+						banks(to_integer(nextRamBank)).pending='1' and
+						banks(to_integer(nextRamBank)).row /= nextRamRow then
+					-- Wrong row active in bank, do precharge to close the row
+					sd_we_n_reg <= '0';
+					sd_ras_n_reg <= '0';				
+					sd_ba_0_reg <= nextRamBank(0);
+					sd_ba_1_reg <= nextRamBank(1);
+					banks(to_integer(nextRamBank)).rowopen <= '0';
+					-- FIXME - add a counter to each bank to aid in scheduling
+				end if;
+			end if;
+			
 			if ramTimer /= 0 then
 				ramTimer <= ramTimer - 1;
 			else
@@ -429,23 +523,31 @@ begin
 						end case;
 
 						ramState <= nextRamState;
-						if bankActive(to_integer(nextRamBank)) = '0' then
+						if banks(to_integer(nextRamBank)).rowopen = '0' then
 							-- Current bank not active. Activate a row first
 							ramState <= RAM_ACTIVE;
-						elsif bankRow(to_integer(nextRamBank)) /= nextRamRow then
+						elsif banks(to_integer(nextRamBank)).row /= nextRamRow then
 							-- Wrong row active in bank, do precharge then activate a row.
-							ramState <= RAM_PRECHARGE;
+--							ramState <= RAM_PRECHARGE;
+							ramTimer <= 1;
+							ramState <= RAM_ACTIVE;
+							sd_we_n_reg <= '0';
+							sd_ras_n_reg <= '0';				
+							sd_ba_0_reg <= nextRamBank(0);
+							sd_ba_1_reg <= nextRamBank(1);
+							banks(to_integer(nextRamBank)).rowopen <= '0';
 						end if;
 					elsif (delay_refresh = '0') and (refreshTimer > refresh_interval) then
 						-- Refresh timeout, perform auto-refresh cycle
 						refreshActive <= '1';
 						refreshSubtract <= '1';
-						if bankActive /= "0000" then
-							-- There are still rows active, so we precharge them first							
-							ramState <= RAM_PRECHARGE_ALL;
-						else
-							ramState <= RAM_AUTOREFRESH;
-						end if;
+						ramSTate <= RAM_AUTOREFRESH;
+						for i in 0 to 3 loop
+							if banks(i).rowopen='1' then
+								-- There are still rows active, so we precharge them first							
+								ramState <= RAM_PRECHARGE_ALL;
+							end if;
+						end loop;
 					end if;
 				when RAM_ACTIVE =>
 					ramTimer <= 2;
@@ -454,8 +556,9 @@ begin
 					sd_ras_n_reg <= '0';
 					sd_ba_0_reg <= currentBank(0);
 					sd_ba_1_reg <= currentBank(1);
-					bankRow(to_integer(currentBank)) <= currentRow;
-					bankActive(to_integer(currentBank)) <= '1';
+					banks(to_integer(currentBank)).row <= currentRow;
+					banks(to_integer(currentBank)).rowopen <= '1';
+--					preselectBank<='1';
 				when RAM_READ_1 =>
 					if currentBurst='1' then
 						ramTimer <= casLatency + 1;
@@ -467,6 +570,7 @@ begin
 					sd_cas_n_reg <= '0';
 					sd_ba_0_reg <= currentBank(0);
 					sd_ba_1_reg <= currentBank(1);
+--					preselectBank<='1';
 				when RAM_READ_TERMINATEBURST =>
 					ramTimer <= casLatency;
 					ramState <= RAM_READ_2;
@@ -476,6 +580,7 @@ begin
 				when RAM_READ_2 =>
 					if currentBurst='1' then
 						ramState <= RAM_READ_3;
+--						preselectBank<='1';
 					else
 						ramDone <='1';
 						ramState <= RAM_IDLE;
@@ -494,20 +599,22 @@ begin
 				when RAM_READ_3 =>
 					ramState <= RAM_READ_4;
 					currentRdData(31 downto 16) <= ram_data_reg;
+--					preselectBank<='1';
 				when RAM_READ_4 =>
 					ramState <= RAM_READ_5;
 					currentRdData(47 downto 32) <= ram_data_reg;
 					ramAlmostDone <= '1';
+--					preselectBank<='1';
 				when RAM_READ_5 =>
 					currentRdData(63 downto 48) <= ram_data_reg;
 					ramState <= RAM_IDLE;
 -- /!\
-					case currentPort is
-						when PORT_ROMWR | PORT_RAM68K | PORT_VRAM => --GE - shouldn't be needed, AMR.
-							null;
-						when others =>
+--					case currentPort is
+--						when PORT_ROMWR | PORT_RAM68K | PORT_VRAM => --GE - shouldn't be needed, AMR.
+--							null;
+--						when others =>
 							ramDone <= '1';
-					end case;
+--					end case;
 -- /!\
 				when RAM_WRITE_1 =>
 					ramState <= RAM_WRITE_2;
@@ -564,7 +671,7 @@ begin
 					sd_ras_n_reg <= '0';				
 					sd_ba_0_reg <= currentBank(0);
 					sd_ba_1_reg <= currentBank(1);
-					bankActive(to_integer(currentBank)) <= '0';
+					banks(to_integer(currentBank)).rowopen <= '0';
 				when RAM_PRECHARGE_ALL =>
 					ramTimer <= 2;
 					ramState <= RAM_IDLE;
@@ -574,8 +681,10 @@ begin
 					end if;
 					sd_addr_reg(10) <= '1'; -- All banks
 					sd_we_n_reg <= '0';
-					sd_ras_n_reg <= '0';				
-					bankActive <= "0000";
+					sd_ras_n_reg <= '0';
+					for i in 0 to 3 loop
+						banks(i).rowopen<='0';
+					end loop;
 				when RAM_AUTOREFRESH =>
 					ramTimer <= refreshClocks;
 					ramState <= RAM_IDLE;

@@ -204,6 +204,7 @@ architecture rtl of chameleon_sdram is
 	signal currentBurst : std_logic;
 
 	signal preselectBank : std_logic;
+	signal preselectBankPause : std_logic;
 	
 	signal nextRamBank : unsigned(1 downto 0);
 	signal nextRamRow : row_t;
@@ -235,10 +236,6 @@ architecture rtl of chameleon_sdram is
 	type bank_record is record
 		row : row_t;
 		rowopen : std_logic;
-		ready : std_logic;
-		pending : std_logic;
-		inuse : std_logic;
-		ramport : ramPorts;
 	end record;
 	type bank_records is array(3 downto 0) of bank_record;
 	signal banks : bank_records;
@@ -264,36 +261,6 @@ begin
 			end if;
 		end if;
 	end process;
-
-	
--- Priority encode ports to banks
-
-process(clk)
-begin
-
-	for ba in 0 to 3 loop
-
-		for p in 0 to 3 loop
-		
-			banks(ba).pending<='0';
-			banks(ba).ready<='0';
-			banks(ba).inuse<='0';
-			banks(ba).ramport<=PORT_NONE;
-
-			if ramPort_rec(p).pending='1' and to_integer(ramPort_rec(p).bank)=ba then
-				banks(ba).ramport<=ramPort_rec(p).ramport;
-				if to_integer(currentBank)/=ba then
-					banks(ba).pending<='1';	-- There is an active port associated with this bank that needs service
-				else
-					banks(ba).inuse<='1'; -- This bank is currently being serviced
-				end if;
-				if banks(ba).row=ramPort_rec(p).row and banks(ba).rowopen='1' then
-					banks(ba).ready<='1'; -- This bank is open and on the correct row.
-				end if;
-			end if;
-		end loop;
-	end loop;
-end process;
 
 	
 -- -----------------------------------------------------------------------
@@ -368,7 +335,6 @@ begin
 -- State machine
 	process(clk)
 	begin
-		--if rising_edge(clk) then
 			nextRamState <= RAM_IDLE;
 			nextRamPort <= PORT_NONE;
 			nextRamBank <= "00";
@@ -433,21 +399,39 @@ begin
 
 			sd_ldqm_reg <= '0';
 			sd_udqm_reg <= '0';
-			preselectBank<='0';
+			preselectBankPause<='0';
+
+			if ramTimer=0 then
+				preselectBank<='0';
+			end if;
 			
-			-- Close the next bank's row in advance if we can.
-			if preselectBank='1' then
-				if currentBank /= nextRamBank and
-						banks(to_integer(nextRamBank)).rowopen='1' and
-						banks(to_integer(nextRamBank)).pending='1' and
+
+			-- Issue the next bank's PRECHARGE and ACTIVE commands if we can.
+			
+			if preselectBank='1' and preselectBankPause='0' then
+				if nextRamState /= RAM_IDLE and
+						(currentBank /= nextRamBank or ramAlmostDone='1') then
+					-- Do we need to close a row first?
+					if	banks(to_integer(nextRamBank)).rowopen='1' and
 						banks(to_integer(nextRamBank)).row /= nextRamRow then
-					-- Wrong row active in bank, do precharge to close the row
-					sd_we_n_reg <= '0';
-					sd_ras_n_reg <= '0';				
-					sd_ba_0_reg <= nextRamBank(0);
-					sd_ba_1_reg <= nextRamBank(1);
-					banks(to_integer(nextRamBank)).rowopen <= '0';
-					-- FIXME - add a counter to each bank to aid in scheduling
+						-- Wrong row active in bank, do precharge to close the row
+						sd_we_n_reg <= '0';
+						sd_ras_n_reg <= '0';				
+						sd_ba_0_reg <= nextRamBank(0);
+						sd_ba_1_reg <= nextRamBank(1);
+						banks(to_integer(nextRamBank)).rowopen <= '0';
+						-- Ensure a gap of at least one clock between preselecion commands
+						preselectBankPause<='1';					
+					elsif banks(to_integer(nextRamBank)).rowopen='0' then
+						sd_addr_reg <= nextRamRow;
+						sd_ras_n_reg <= '0';
+						sd_ba_0_reg <= nextRamBank(0);
+						sd_ba_1_reg <= nextRamBank(1);
+						banks(to_integer(nextRamBank)).row <= nextRamRow;
+						banks(to_integer(nextRamBank)).rowopen <= '1';
+						-- Ensure a gap of at least one clock between this and next command
+--						preselectBankPause<='1';					
+					end if;
 				end if;
 			end if;
 			
@@ -505,54 +489,69 @@ begin
 					initDoneReg <= '1'; --GE
 					refreshActive <= '0';
 					currentPort <= PORT_NONE;
-					if nextRamState /= RAM_IDLE then
-						currentState <= nextRamState;
-						currentPort <= nextRamPort;
-						currentBank <= nextRamBank;
-						currentRow <= nextRamRow;
-						currentCol <= nextRamCol;
-						currentLdqm <= nextLdqm;
-						currentUdqm <= nextUdqm;
-						currentBurst <= nextBurst;
-						
-						case nextRamPort is
-							when PORT_ROMWR =>
-								currentWrData(15 downto 0) <= romwr_d;
-							when PORT_RAM68K =>
-								currentWrData(15 downto 0) <= ram68k_d;						
-							when PORT_VRAM =>
-								currentWrData(15 downto 0) <= vram_d;													
-							when others =>
-								null;
-						end case;
+--					if preselectBankPause='0' then
+					
+						-- Do we have a request to service?
+						if nextRamState /= RAM_IDLE then
+							currentState <= nextRamState;
+							currentPort <= nextRamPort;
+							currentBank <= nextRamBank;
+							currentRow <= nextRamRow;
+							currentCol <= nextRamCol;
+							currentLdqm <= nextLdqm;
+							currentUdqm <= nextUdqm;
+							currentBurst <= nextBurst;
+							
+							case nextRamPort is
+								when PORT_ROMWR =>
+									currentWrData(15 downto 0) <= romwr_d;
+								when PORT_RAM68K =>
+									currentWrData(15 downto 0) <= ram68k_d;						
+								when PORT_VRAM =>
+									currentWrData(15 downto 0) <= vram_d;													
+								when others =>
+									null;
+							end case;
 
-						ramState <= nextRamState;
-						if banks(to_integer(nextRamBank)).rowopen = '0' then
-							-- Current bank not active. Activate a row first
-							ramState <= RAM_ACTIVE;
-						elsif banks(to_integer(nextRamBank)).row /= nextRamRow then
-							-- Wrong row active in bank, do precharge then activate a row.
---							ramState <= RAM_PRECHARGE;
-							ramTimer <= 1;
-							ramState <= RAM_ACTIVE;
-							sd_we_n_reg <= '0';
-							sd_ras_n_reg <= '0';				
-							sd_ba_0_reg <= nextRamBank(0);
-							sd_ba_1_reg <= nextRamBank(1);
-							banks(to_integer(nextRamBank)).rowopen <= '0';
-						end if;
-					elsif (delay_refresh = '0') and (refreshTimer > refresh_interval) then
-						-- Refresh timeout, perform auto-refresh cycle
-						refreshActive <= '1';
-						refreshSubtract <= '1';
-						ramSTate <= RAM_AUTOREFRESH;
-						for i in 0 to 3 loop
-							if banks(i).rowopen='1' then
-								-- There are still rows active, so we precharge them first							
-								ramState <= RAM_PRECHARGE_ALL;
+							ramState <= nextRamState;
+							if banks(to_integer(nextRamBank)).rowopen = '0' then
+								-- Current bank not active. Activate a row first
+	--							ramState <= RAM_ACTIVE;
+								-- Might as well open the row directly here.
+								ramTimer <= 1;
+								sd_addr_reg <= nextRamRow;
+								sd_ras_n_reg <= '0';
+								sd_ba_0_reg <= nextRamBank(0);
+								sd_ba_1_reg <= nextRamBank(1);
+								banks(to_integer(nextRamBank)).row <= nextRamRow;
+								banks(to_integer(nextRamBank)).rowopen <= '1';
+							elsif banks(to_integer(nextRamBank)).row /= nextRamRow then
+								-- Wrong row active in bank, do precharge then activate a row.
+	--							ramState <= RAM_PRECHARGE;
+								ramTimer <= 1;
+								ramState <= RAM_ACTIVE;
+								sd_we_n_reg <= '0';
+								sd_ras_n_reg <= '0';				
+								sd_ba_0_reg <= nextRamBank(0);
+								sd_ba_1_reg <= nextRamBank(1);
+								banks(to_integer(nextRamBank)).rowopen <= '0';
 							end if;
-						end loop;
-					end if;
+
+						elsif (delay_refresh = '0') and (refreshTimer > refresh_interval) then
+							-- Refresh timeout, perform auto-refresh cycle
+							refreshActive <= '1';
+							refreshSubtract <= '1';
+							ramSTate <= RAM_AUTOREFRESH;
+							for i in 0 to 3 loop
+								if banks(i).rowopen='1' then
+									-- There are still rows active, so we precharge them first							
+									ramState <= RAM_PRECHARGE_ALL;
+								end if;
+							end loop;
+
+						end if; -- nextState/=RAM_IDLE
+--					end if; -- preselectBankPause
+
 				when RAM_ACTIVE =>
 					ramTimer <= 1;
 					ramState <= currentState;
@@ -567,6 +566,7 @@ begin
 					if currentBurst='1' then
 						ramTimer <= casLatency;-- + 1;
 						ramState <= RAM_READ_2;
+						preselectBank<='1';
 					else
 						ramState <= RAM_READ_TERMINATEBURST;
 					end if;
@@ -576,6 +576,7 @@ begin
 					sd_ba_1_reg <= currentBank(1);
 --					preselectBank<='1';
 				when RAM_READ_TERMINATEBURST =>
+					preselectBank<='1';
 					ramTimer <= casLatency-1;
 					ramState <= RAM_READ_2;
 					sd_we_n_reg <= '0';	-- Terminate Burst
@@ -584,7 +585,7 @@ begin
 				when RAM_READ_2 =>
 					if currentBurst='1' then
 						ramState <= RAM_READ_3;
---						preselectBank<='1';
+						preselectBank<='1';
 					else
 						ramDone <='1';
 						ramState <= RAM_IDLE;
@@ -603,14 +604,17 @@ begin
 				when RAM_READ_3 =>
 					ramState <= RAM_READ_4;
 					currentRdData(31 downto 16) <= ram_data_reg;
---					preselectBank<='1';
+					ramAlmostDone <= '1'; -- Safe to issue next command to this bank
+					preselectBank<='1';
 				when RAM_READ_4 =>
 					ramState <= RAM_READ_5;
 					currentRdData(47 downto 32) <= ram_data_reg;
-					ramAlmostDone <= '1';
---					preselectBank<='1';
+					ramAlmostDone <= '1'; -- Safe to issue next command to this bank
+					preselectBank<='1';
 				when RAM_READ_5 =>
 					currentRdData(63 downto 48) <= ram_data_reg;
+--					ramAlmostDone <= '1'; -- Safe to issue next command to this bank
+--					preselectBank<='1';
 					ramState <= RAM_IDLE;
 -- /!\
 --					case currentPort is

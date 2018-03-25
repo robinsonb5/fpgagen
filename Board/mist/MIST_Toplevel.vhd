@@ -299,6 +299,10 @@ end process;
 
 --SDRAM_A(12)<='0';
 virtualtoplevel : entity work.Virtual_Toplevel
+	generic map(
+		rasCasTiming => 3,
+		prechargeTiming => 3
+	)
 	port map(
 		reset => reset,
 		MCLK => MCLK,

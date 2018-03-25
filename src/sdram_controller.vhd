@@ -8,11 +8,14 @@ use IEEE.NUMERIC_STD.ALL;
 entity sdram_controller is
 	generic (
 		colAddrBits : integer := 9;
-		rowAddrBits : integer := 13
+		rowAddrBits : integer := 13;
+		rasCasTiming : integer := 2;
+		prechargeTiming: integer := 2
 	);
 	port (
 		-- System
 		clk : in std_logic;
+		reset_n : in std_logic :='1';
 
 		-- SDRAM interface
 		sd_data : inout unsigned(15 downto 0);
@@ -106,27 +109,15 @@ begin
 	sdr : entity work.chameleon_sdram
 		generic map (
 			casLatency => 2,
---			casLatency => 3,
 			colAddrBits => colAddrBits,
 			rowAddrBits => rowAddrBits,
-
---			t_ck_ns => 10.0
---			t_ck_ns => 6.7
-
---			t_ck_ns => 7.9
-
---			t_ck_ns => 8.4
---			t_ck_ns => 8.0
+			prechargeTiming => prechargeTiming,
+			rasCasTiming => rasCasTiming,
 			t_ck_ns => 9.3
-
---			t_ck_ns => 12.0
---			t_ck_ns => 12.5
-
---			t_ck_ns => 23.5
---			t_ck_ns => 8.3	
 		)
 		port map (
 			clk => clk,
+			reset_n => reset_n,
 
 			reserve => '0',
 

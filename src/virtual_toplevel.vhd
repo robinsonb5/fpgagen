@@ -43,7 +43,9 @@ use IEEE.NUMERIC_STD.ALL;
 entity Virtual_Toplevel is
 	generic (
 		colAddrBits : integer := 9;
-		rowAddrBits : integer := 13
+		rowAddrBits : integer := 13;
+		rasCasTiming : integer := 2;
+		prechargeTiming: integer := 2
 	);
 	port(
 		reset : in std_logic;
@@ -519,9 +521,12 @@ LED <= FM_ENABLE;
 -- -----------------------------------------------------------------------		
 sdc : entity work.sdram_controller generic map (
 	colAddrBits => colAddrBits,
-	rowAddrBits => rowAddrBits
+	rowAddrBits => rowAddrBits,
+	prechargeTiming => prechargeTiming,
+	rasCasTiming => rasCasTiming
 ) port map(
 	clk			=> SDR_CLK,
+	reset_n => reset,
 	
 	std_logic_vector(sd_data)	=> DRAM_DQ,
 	std_logic_vector(sd_addr)	=> DRAM_ADDR,

@@ -33,9 +33,10 @@ entity chameleon_sdram is
 		-- SDRAM cols/rows  8/12 = 8 Mbyte, 9/12 = 16 Mbyte, 9/13 = 32 Mbyte
 		colAddrBits : integer := 9;
 		rowAddrBits : integer := 12;
+		rasCasTiming : integer := 2;
+		prechargeTiming: integer := 2;
 
 		-- Controller settings
-		writeBurst : boolean := false;  -- Warning: Set to True if using the cache port!
 		initTimeout : integer := 10000;
 	-- SDRAM timing
 		casLatency : integer := 3;
@@ -45,6 +46,7 @@ entity chameleon_sdram is
 	port (
 -- System
 		clk : in std_logic;
+		reset_n : in std_logic := '1';
 
 		reserve : in std_logic := '0';
 		delay_refresh : in std_logic := '0';
@@ -117,6 +119,7 @@ architecture rtl of chameleon_sdram is
 		RAM_ACTIVE,
 		RAM_READ_1,
 		RAM_READ_TERMINATEBURST,
+		RAM_READ_BURST,
 		RAM_READ_2,
 		RAM_READ_3,
 		RAM_READ_4,
@@ -140,6 +143,7 @@ architecture rtl of chameleon_sdram is
 		PORT_RAM68K,
 		PORT_VRAM
 	);
+	
 	subtype row_t is unsigned((rowAddrBits-1) downto 0);
 	subtype col_t is unsigned((colAddrBits-1) downto 0);
 	
@@ -204,7 +208,7 @@ architecture rtl of chameleon_sdram is
 	signal currentBurst : std_logic;
 
 	signal preselectBank : std_logic;
-	signal preselectBankPause : std_logic;
+	signal preselectBankPause : integer range 0 to 3;
 	
 	signal nextRamBank : unsigned(1 downto 0);
 	signal nextRamRow : row_t;
@@ -224,7 +228,9 @@ architecture rtl of chameleon_sdram is
 		ldqm : std_logic;
 		pending : std_logic;
 		burst : std_logic;
+		burstlength : integer range 0 to 7;
 		wr : std_logic;
+		fill : std_logic;
 	end record;
 	type ramPort_records is array(3 downto 0) of ramPort_record;
 	signal ramPort_rec : ramPort_records;
@@ -240,10 +246,71 @@ architecture rtl of chameleon_sdram is
 	type bank_records is array(3 downto 0) of bank_record;
 	signal banks : bank_records;
 
+	subtype addr_bankbits is Natural range colAddrBits+2 downto colAddrBits+1;
+	subtype addr_rowbits is Natural range colAddrBits+rowAddrBits+2 downto colAddrBits+3;
+	subtype addr_colbits is Natural range colAddrBits downto 1;
+	subtype addr_colbits_64bit is Natural range colAddrBits downto 3;
 
-constant useCache : boolean := false;
+	COMPONENT TwoWayCache
+	PORT
+	(
+		clk		:	 IN STD_LOGIC;
+		reset_n	: IN std_logic;
+		ready : out std_logic;
+		cpu_addr		:	 IN UNSIGNED(31 DOWNTO 0);
+		cpu_req		:	 IN STD_LOGIC;
+		cpu_ack		:	 OUT STD_LOGIC;
+		cpu_cachevalid		:	 OUT STD_LOGIC;
+		cpu_rw_n		:	 IN STD_LOGIC;
+		cpu_rwl_n	: in std_logic;
+		cpu_rwu_n : in std_logic;
+		data_from_cpu		:	 IN UNSIGNED(15 DOWNTO 0);
+		data_to_cpu		:	 OUT UNSIGNED(15 DOWNTO 0);
+		data_from_sdram		:	 IN UNSIGNED(15 DOWNTO 0);
+		sdram_req		:	 OUT STD_LOGIC;
+		sdram_fill		:	 IN STD_LOGIC
+	);
+END COMPONENT;
+
 	
+constant useCache : boolean := false;
+
+-- Cache signals
+
+signal cache_ready : std_logic;
+signal cache_req : std_logic;
+signal cache_req_d : std_logic_vector(1 downto 0);
+signal cache_ack : std_logic;
+signal cache_valid : std_logic;
+signal cache_wr : std_logic;
+signal cache_wrl : std_logic;
+signal cache_wrh : std_logic;
+signal cache_out : std_logic_vector(15 downto 0);
+signal cache_req_out : std_logic;
+signal cache_fill : std_logic;
 begin
+
+mytwc : component TwoWayCache
+	PORT map
+	(
+		clk => clk,
+		reset_n => reset_n,
+		ready => cache_ready,
+		cpu_addr(31 downto colAddrBits+rowAddrBits+3) => (others => '0'),
+		cpu_addr(colAddrBits+rowAddrBits+2 downto 0) => vram_a&'0',
+		cpu_req => cache_req,
+		cpu_ack => cache_ack,
+		cpu_cachevalid => cache_valid,
+		cpu_rw_n => not vram_we,
+		cpu_rwl_n => vram_l_n,
+		cpu_rwu_n => vram_u_n,
+		data_from_cpu => vram_d,
+		data_to_cpu => vram_q,
+		data_from_sdram => ram_data_reg,
+		sdram_req => cache_req_out,
+		sdram_fill => cache_fill
+	);
+
 
 -- -----------------------------------------------------------------------
 
@@ -269,10 +336,10 @@ begin
 		-- ROM Write port
 
 		ramPort_rec(0).pending<='1' when (romwr_req /= romwr_ackReg) and (currentPort /= PORT_ROMWR) else '0';
-		ramPort_rec(0).bank<=romwr_a((colAddrBits+2) downto (colAddrBits+1));
-		ramPort_rec(0).row<=romwr_a((colAddrBits+rowAddrBits+2) downto (colAddrBits+3));
-		ramPort_rec(0).col<=romwr_a(colAddrBits downto 1);
-		ramPort_rec(0).wr<=romwr_we;		
+		ramPort_rec(0).bank<=romwr_a(addr_bankbits);
+		ramPort_rec(0).row<=romwr_a(addr_rowbits);
+		ramPort_rec(0).col<=romwr_a(addr_colbits);
+		ramPort_rec(0).wr<=romwr_we;
 		ramPort_rec(0).burst<='0';
 		ramPort_rec(0).ldqm<='0';
 		ramPort_rec(0).udqm<='0';
@@ -281,11 +348,12 @@ begin
 		-- ROM Read port
 		
 		ramPort_rec(1).pending<='1' when (romrd_req /= romrd_ackReg) and (currentPort /= PORT_ROMRD) else '0';
-		ramPort_rec(1).bank<=romrd_a((colAddrBits+2) downto (colAddrBits+1));
-		ramPort_rec(1).row<=romrd_a((colAddrBits+rowAddrBits+2) downto (colAddrBits+3));
-		ramPort_rec(1).col<=romrd_a(colAddrBits downto 3)&"00";
+		ramPort_rec(1).bank<=romrd_a(addr_bankbits);
+		ramPort_rec(1).row<=romrd_a(addr_rowbits);
+		ramPort_rec(1).col<=romrd_a(addr_colbits_64bit)&"00";
 		ramPort_rec(1).wr<='0';
 		ramPort_rec(1).burst<='1';
+		ramPort_rec(0).burstlength<=3;
 		ramPort_rec(1).ldqm<='0';
 		ramPort_rec(1).udqm<='0';
 		ramPort_rec(1).ramport<=PORT_ROMRD;
@@ -294,9 +362,9 @@ begin
 		-- 68K RAM port
 
 		ramPort_rec(2).pending<='1' when (ram68k_req /= ram68k_ackReg) and (currentPort /= PORT_RAM68K) else '0';
-		ramPort_rec(2).bank<=ram68k_a((colAddrBits+2) downto (colAddrBits+1));
-		ramPort_rec(2).row<=ram68k_a((colAddrBits+rowAddrBits+2) downto (colAddrBits+3));
-		ramPort_rec(2).col<=ram68k_a(colAddrBits downto 1);
+		ramPort_rec(2).bank<=ram68k_a(addr_bankbits);
+		ramPort_rec(2).row<=ram68k_a(addr_rowbits);
+		ramPort_rec(2).col<=ram68k_a(addr_colbits);
 		ramPort_rec(2).wr<=ram68k_we;
 		ramPort_rec(2).burst<='0';
 		ramPort_rec(2).ldqm<=ram68k_l_n;
@@ -306,16 +374,27 @@ begin
 		
 		-- VRAM port
 
-		ramPort_rec(3).pending<='1' when (vram_req /= vram_ackReg) and (currentPort /= PORT_VRAM) else '0';
-		ramPort_rec(3).bank<=vram_a((colAddrBits+2) downto (colAddrBits+1));
-		ramPort_rec(3).row<=vram_a((colAddrBits+rowAddrBits+2) downto (colAddrBits+3));
-		ramPort_rec(3).col<=vram_a(colAddrBits downto 1);
+		cache_req<='1' when (vram_req /= vram_ackReg) and (currentPort /= PORT_VRAM) else '0';
+
+		ramPort_rec(3).pending<='1' when cache_req_out='1' or
+			((vram_req /= vram_ackReg) and (currentPort /= PORT_VRAM) and vram_we='1') else '0';
+		ramPort_rec(3).bank<=vram_a(addr_bankbits);
+		ramPort_rec(3).row<=vram_a(addr_rowbits);
+		ramPort_rec(3).col<=vram_a(addr_colbits);
 		ramPort_rec(3).wr<=vram_we;
-		ramPort_rec(3).burst<='0';
+		ramPort_rec(3).burst<='1';
+		ramPort_rec(0).burstlength<=7;
 		ramPort_rec(3).ldqm<=vram_l_n;
 		ramPort_rec(3).udqm<=vram_u_n;
 		ramPort_rec(3).ramport<=PORT_VRAM;
-
+		cache_fill<=ramPort_rec(3).fill;
+		
+process(clk)
+begin	
+			if rising_edge(clk) then
+				cache_req_d<=cache_req_d(0)&cache_req; -- Delay req signal to allow the cache address logic time to catch up.
+			end if;
+end process;
 		
 process(clk)
 begin	
@@ -329,7 +408,7 @@ begin
 			end if;
 		end loop;
 
-	end process;
+end process;
 	
 -- -----------------------------------------------------------------------
 -- State machine
@@ -399,7 +478,8 @@ begin
 
 			sd_ldqm_reg <= '0';
 			sd_udqm_reg <= '0';
-			preselectBankPause<='0';
+
+			ramPort_rec(3).fill<='0';
 
 			if ramTimer=0 then
 				preselectBank<='0';
@@ -407,8 +487,12 @@ begin
 			
 
 			-- Issue the next bank's PRECHARGE and ACTIVE commands if we can.
+
+			if preselectBankPause /= 0 then
+				preselectBankPause <= preselectBankPause - 1;
+			end if;
 			
-			if preselectBank='1' and preselectBankPause='0' then
+			if preselectBank='1' and preselectBankPause=0 then
 				if nextRamState /= RAM_IDLE and
 						(currentBank /= nextRamBank or ramAlmostDone='1') then
 					-- Do we need to close a row first?
@@ -421,8 +505,9 @@ begin
 						sd_ba_1_reg <= nextRamBank(1);
 						banks(to_integer(nextRamBank)).rowopen <= '0';
 						-- Ensure a gap of at least one clock between preselecion commands
-						preselectBankPause<='1';					
+						preselectBankPause<=prechargeTiming-1;
 					elsif banks(to_integer(nextRamBank)).rowopen='0' then
+						-- Open the next row
 						sd_addr_reg <= nextRamRow;
 						sd_ras_n_reg <= '0';
 						sd_ba_0_reg <= nextRamBank(0);
@@ -430,7 +515,7 @@ begin
 						banks(to_integer(nextRamBank)).row <= nextRamRow;
 						banks(to_integer(nextRamBank)).rowopen <= '1';
 						-- Ensure a gap of at least one clock between this and next command
---						preselectBankPause<='1';					
+						preselectBankPause<=rasCasTiming-1;
 					end if;
 				end if;
 			end if;
@@ -473,11 +558,8 @@ begin
 					-- Set mode bits of RAM.
 					ramTimer <= 10;
 					ramState <= RAM_IDLE; -- ram is ready for commands after set-mode
-					if writeBurst=true then
-						sd_addr_reg <= resize("000000100010", sd_addr'length); -- CAS2, Burstlength 4 (8 bytes, 64 bits)
-					else
-						sd_addr_reg <= resize("001000100010", sd_addr'length); -- CAS2, Burstlength 4 (8 bytes, 64 bits), no burst on writes
-					end if;
+
+					sd_addr_reg <= resize("001000100011", sd_addr'length); -- CAS2, Burstlength 8 (16 bytes, 128 bits), no burst on writes
 
 					if casLatency = 3 then
 						sd_addr_reg(6 downto 4) <= "011";
@@ -489,7 +571,7 @@ begin
 					initDoneReg <= '1'; --GE
 					refreshActive <= '0';
 					currentPort <= PORT_NONE;
---					if preselectBankPause='0' then
+					if preselectBankPause=0 then
 					
 						-- Do we have a request to service?
 						if nextRamState /= RAM_IDLE then
@@ -518,7 +600,7 @@ begin
 								-- Current bank not active. Activate a row first
 	--							ramState <= RAM_ACTIVE;
 								-- Might as well open the row directly here.
-								ramTimer <= 1;
+								ramTimer <= rasCasTiming-1;
 								sd_addr_reg <= nextRamRow;
 								sd_ras_n_reg <= '0';
 								sd_ba_0_reg <= nextRamBank(0);
@@ -528,7 +610,7 @@ begin
 							elsif banks(to_integer(nextRamBank)).row /= nextRamRow then
 								-- Wrong row active in bank, do precharge then activate a row.
 	--							ramState <= RAM_PRECHARGE;
-								ramTimer <= 1;
+								ramTimer <= prechargeTiming-1;
 								ramState <= RAM_ACTIVE;
 								sd_we_n_reg <= '0';
 								sd_ras_n_reg <= '0';				
@@ -550,7 +632,7 @@ begin
 							end loop;
 
 						end if; -- nextState/=RAM_IDLE
---					end if; -- preselectBankPause
+					end if; -- preselectBankPause
 
 				when RAM_ACTIVE =>
 					ramTimer <= 1;
@@ -564,9 +646,15 @@ begin
 --					preselectBank<='1';
 				when RAM_READ_1 =>
 					if currentBurst='1' then
-						ramTimer <= casLatency;-- + 1;
-						ramState <= RAM_READ_2;
-						preselectBank<='1';
+						if currentPort=PORT_VRAM then  -- FIXME - make this runtime selectable
+							ramTimer <= casLatency-1;-- + 1;
+							ramState <= RAM_READ_BURST;
+							preselectBank<='1';
+						else
+							ramTimer <= casLatency;-- + 1;
+							ramState <= RAM_READ_2;
+							preselectBank<='1';
+						end if;
 					else
 						ramState <= RAM_READ_TERMINATEBURST;
 					end if;
@@ -582,10 +670,14 @@ begin
 					sd_we_n_reg <= '0';	-- Terminate Burst
 					sd_ba_0_reg <= currentBank(0);
 					sd_ba_1_reg <= currentBank(1);
+				when RAM_READ_BURST =>
+						ramPort_rec(3).fill<='1';	-- FIXME - make the port number runtime selectable
+						ramTimer<=7;
+						ramState<=RAM_IDLE;			
 				when RAM_READ_2 =>
 					if currentBurst='1' then
 						ramState <= RAM_READ_3;
-						preselectBank<='1';
+--						preselectBank<='1';
 					else
 						ramDone <='1';
 						ramState <= RAM_IDLE;
@@ -602,6 +694,12 @@ begin
 							null;
 					end case;
 				when RAM_READ_3 =>
+					-- FIXME - need to schdule this according to CAS Latency
+					-- Terminate burst - assuming we're not in cache mode...
+					sd_we_n_reg <= '0';
+					sd_ba_0_reg <= currentBank(0);
+					sd_ba_1_reg <= currentBank(1);
+
 					ramState <= RAM_READ_4;
 					currentRdData(31 downto 16) <= ram_data_reg;
 					ramAlmostDone <= '1'; -- Safe to issue next command to this bank
@@ -613,17 +711,9 @@ begin
 					preselectBank<='1';
 				when RAM_READ_5 =>
 					currentRdData(63 downto 48) <= ram_data_reg;
---					ramAlmostDone <= '1'; -- Safe to issue next command to this bank
---					preselectBank<='1';
 					ramState <= RAM_IDLE;
--- /!\
---					case currentPort is
---						when PORT_ROMWR | PORT_RAM68K | PORT_VRAM => --GE - shouldn't be needed, AMR.
---							null;
---						when others =>
-							ramDone <= '1';
---					end case;
--- /!\
+					ramDone <= '1';
+
 				when RAM_WRITE_1 =>
 					ramState <= RAM_WRITE_2;
 					sd_data_ena <= '1';
@@ -638,40 +728,8 @@ begin
 					sd_data_reg <= currentWrData(15 downto 0);
 					sd_ldqm_reg <= currentLdqm;
 					sd_udqm_reg <= currentUdqm;
--- /!\
-					if writeBurst=false then	-- Are we writing in single word mode?
-						ramState<=RAM_IDLE;
-						ramDone<='1';
-					else
-						if currentLdqm = '1'
-						or currentUdqm = '1' 
-						or currentPort = PORT_ROMWR --GE
-						or currentPort = PORT_RAM68K --GE
-						or currentPort = PORT_VRAM --GE					
-						then
-							-- This is a partial write, abort burst.
-							ramState <= RAM_WRITE_ABORT;
-						end if;
-					end if;
-				when RAM_WRITE_2 =>
-					ramState <= RAM_WRITE_3;
-					sd_data_ena <= '1';
-					sd_data_reg <= currentWrData(31 downto 16);
-				when RAM_WRITE_3 =>
-					ramState <= RAM_WRITE_4;
-					sd_data_ena <= '1';
-					sd_data_reg <= currentWrData(47 downto 32);
-				when RAM_WRITE_4 =>
-					ramState <= RAM_WRITE_DLY;
-					sd_data_ena <= '1';
-					sd_data_reg <= currentWrData(63 downto 48);
-				when RAM_WRITE_ABORT =>
-					ramState <= RAM_WRITE_DLY;
-					sd_we_n_reg <= '0';
-				when RAM_WRITE_DLY =>
-					ramState <= RAM_IDLE;
-					ramAlmostDone <= '1';
-					ramDone <= '1';
+					ramState<=RAM_IDLE;
+					ramDone<='1';
 				when RAM_PRECHARGE =>
 					ramTimer <= 2;
 					ramState <= RAM_ACTIVE;
@@ -755,14 +813,14 @@ begin
 	process(clk)
 	begin
 		if rising_edge(clk) then
-			if currentPort = PORT_VRAM
-			and ramDone = '1' then
-				vram_ackReg <= not vram_ackReg;
+			if (currentPort = PORT_VRAM and (ramDone = '1' or cache_ack='1'))
+					or (cache_req_d="11" and cache_valid='1' and vram_we='0') then
+				vram_ackReg <= vram_req;
 			end if;
 		end if;
 	end process;
 	vram_ack <= vram_ackReg;
-	vram_q <= vram_qReg; --GE
+--	vram_q <= vram_qReg; --GE
 
 
 	

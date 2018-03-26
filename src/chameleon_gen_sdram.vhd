@@ -588,12 +588,16 @@ end process;
 								when PORT_ROMWR =>
 									currentWrData(15 downto 0) <= romwr_d;
 								when PORT_RAM68K =>
-									currentWrData(15 downto 0) <= ram68k_d;						
+									currentWrData(15 downto 0) <= ram68k_d;
 								when PORT_VRAM =>
-									currentWrData(15 downto 0) <= vram_d;													
+									currentWrData(15 downto 0) <= vram_d;
 								when others =>
 									null;
 							end case;
+							
+							if nextRamState=RAM_WRITE_1 then	-- No need to wait for the write to complete before acknowledging
+								ramDone<='1';
+							end if;
 
 							ramState <= nextRamState;
 							if banks(to_integer(nextRamBank)).rowopen = '0' then
@@ -715,7 +719,6 @@ end process;
 					ramDone <= '1';
 
 				when RAM_WRITE_1 =>
-					ramState <= RAM_WRITE_2;
 					sd_data_ena <= '1';
 					sd_we_n_reg <= '0';
 					sd_cas_n_reg <= '0';
@@ -728,8 +731,8 @@ end process;
 					sd_data_reg <= currentWrData(15 downto 0);
 					sd_ldqm_reg <= currentLdqm;
 					sd_udqm_reg <= currentUdqm;
-					ramState<=RAM_IDLE;
-					ramDone<='1';
+					ramState<=RAM_IDLE;	-- FIXME - potentially violating write-to-precharge time here
+--					ramDone<='1';
 				when RAM_PRECHARGE =>
 					ramTimer <= 2;
 					ramState <= RAM_ACTIVE;
@@ -814,7 +817,7 @@ end process;
 	begin
 		if rising_edge(clk) then
 			if (currentPort = PORT_VRAM and (ramDone = '1' or cache_ack='1'))
-					or (cache_req_d="11" and cache_valid='1' and vram_we='0') then
+					or (cache_req_d(0)='1' and cache_valid='1' and vram_we='0') then
 				vram_ackReg <= vram_req;
 			end if;
 		end if;

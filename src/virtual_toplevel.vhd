@@ -259,12 +259,13 @@ signal T80_DO              : std_logic_vector(7 downto 0);
 
 -- CLOCK GENERATION
 signal VCLK			: std_logic;
+signal VCLK_ENA	: std_logic;
 signal RST_VCLK	: std_logic; -- Reset for blocks using VCLK as clock
 signal RST_VCLK_aux : std_logic;
 signal VCLKCNT		: std_logic_vector(2 downto 0);
 -- signal VCLKCNT		: unsigned(2 downto 0);
 signal ZCLK			: std_logic := '0';
-
+signal ZCLK_ENA   : std_logic;
 signal ZCLKCNT		: std_logic_vector(3 downto 0);
 
 -- FLASH CONTROL
@@ -617,8 +618,8 @@ port map(
 t80 : entity work.t80se
 port map(
 	RESET_n		=> T80_RESET_N,
-	CLK_n		=> T80_CLK_N,
-	CLKEN		=> T80_CLKEN,
+	CLK_n		=> MCLK, -- T80_CLK_N,
+	CLKEN		=> T80_CLKEN and ZCLK_ENA, -- T80_CLKEN,
 	WAIT_n	=> T80_WAIT_N,
 	INT_n		=> T80_INT_N,
 	NMI_n		=> T80_NMI_N,
@@ -737,8 +738,8 @@ port map(
 
 u_psg : work.psg
 port map(
-	clk		=> T80_CLK_N,
-	clken	=> T80_CLKEN,
+	clk		=> MCLK, -- T80_CLK_N,
+	clken	=> T80_CLKEN and ZCLK_ENA, -- T80_CLKEN,
 	WR_n	=> not PSG_SEL,
 	D_in	=> PSG_DI,
 	output	=> PSG_SND
@@ -893,12 +894,21 @@ begin
 		TG68_ENARDREG <= '0';
 		TG68_ENAWRREG <= '0';
 	elsif rising_edge(MCLK) then
+		ZCLK_ENA <= '0';
+		VCLK_ENA <= '0';
+
 		VCLKCNT <= VCLKCNT + 1;
 		if VCLKCNT = "000" then
 			ZCLK <= not ZCLK;
+			if ZCLK='0' then
+				ZCLK_ENA<='1';
+			end if;
 		end if;
 		if VCLKCNT = "110" then
 			VCLKCNT <= "000";
+		end if;
+		if VCLKCNT = "010" then
+			VCLK_ENA <= '1';
 		end if;
 		if VCLKCNT <= "011" then
 			VCLK <= '1';
@@ -921,17 +931,19 @@ begin
 	end if;
 end process;
 
-process( MRST_N, ZCLK )
+process( MRST_N, MCLK )
 begin
 	if MRST_N = '0' then
 		T80_CLKEN <= '1';
 		ZCLKCNT <= (others => '0');
-	elsif falling_edge( ZCLK ) then
-		ZCLKCNT <= ZCLKCNT + 1;
-		T80_CLKEN <= '1';
-		if ZCLKCNT = "1110" then
-			ZCLKCNT <= (others => '0');
-			T80_CLKEN <= '0';
+	elsif rising_edge(MCLK ) then
+		if ZCLK_ENA='1' then
+			ZCLKCNT <= ZCLKCNT + 1;
+			T80_CLKEN <= '1';
+			if ZCLKCNT = "1110" then
+				ZCLKCNT <= (others => '0');
+				T80_CLKEN <= '0';
+			end if;
 		end if;
 	end if;
 end process;

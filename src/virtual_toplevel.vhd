@@ -220,9 +220,9 @@ signal NO_DATA		: std_logic_vector(15 downto 0) := x"4E71";	-- SYNTHESIS gp/m68k
 signal MRST_N		: std_logic;
 
 -- 68K
-signal TG68_CLK		: std_logic;
+--signal TG68_CLK		: std_logic;
 signal TG68_RES_N	: std_logic;
-signal TG68_CLKE	: std_logic;
+--signal TG68_CLKE	: std_logic;
 signal TG68_DI		: std_logic_vector(15 downto 0);
 signal TG68_IPL_N	: std_logic_vector(2 downto 0);
 signal TG68_DTACK_N	: std_logic;
@@ -266,6 +266,7 @@ signal VCLKCNT		: std_logic_vector(2 downto 0);
 -- signal VCLKCNT		: unsigned(2 downto 0);
 signal ZCLK			: std_logic := '0';
 signal ZCLK_ENA   : std_logic;
+signal ZCLK_nENA   : std_logic;
 signal ZCLKCNT		: std_logic_vector(3 downto 0);
 
 -- FLASH CONTROL
@@ -599,7 +600,7 @@ port map(
 	-- clk			=> TG68_CLK,
 	clk			=> MCLK,
 	reset			=> TG68_RES_N,
-	clkena_in	=> TG68_CLKE,
+	clkena_in	=> '1',
 	data_in		=> TG68_DI,
 	IPL			=> TG68_IPL_N,
 	dtack			=> TG68_DTACK_N,
@@ -649,7 +650,7 @@ port map(
 io : entity work.gen_io
 port map(
 	RST_N		=> MRST_N,
-	CLK			=> VCLK,
+	CLK			=> MCLK,
 
 	P1_UP		=> not JOY_1(3) and gp1emu(0),
 	P1_DOWN	=> not JOY_1(2) and gp1emu(1),
@@ -669,7 +670,7 @@ port map(
 	P2_C		=> not JOY_2(6) and gp2emu(6),
 	P2_START	=> not JOY_2(7) and gp2emu(7),
 		
-	SEL		=> IO_SEL,
+	SEL		=> IO_SEL and VCLK_ENA, -- Eliminate VCLK ripple clock
 	A			=> IO_A,
 	RNW		=> IO_RNW,
 	UDS_N		=> IO_UDS_N,
@@ -739,7 +740,8 @@ port map(
 u_psg : work.psg
 port map(
 	clk		=> MCLK, -- T80_CLK_N,
-	clken	=> T80_CLKEN and ZCLK_ENA, -- T80_CLKEN,
+	clken		=> ZCLK_ENA,
+	timing_clken	=> ZCLK_ENA and T80_CLKEN, -- T80_CLKEN,
 	WR_n	=> not PSG_SEL,
 	D_in	=> PSG_DI,
 	output	=> PSG_SND
@@ -895,14 +897,14 @@ begin
 		TG68_ENAWRREG <= '0';
 	elsif rising_edge(MCLK) then
 		ZCLK_ENA <= '0';
+		ZCLK_nENA <= '0';
 		VCLK_ENA <= '0';
 
 		VCLKCNT <= VCLKCNT + 1;
 		if VCLKCNT = "000" then
 			ZCLK <= not ZCLK;
-			if ZCLK='0' then
-				ZCLK_ENA<='1';
-			end if;
+			ZCLK_ENA<=not ZCLK; -- Replace rising edge
+			ZCLK_nENA<=ZCLK; -- Replace falling edge
 		end if;
 		if VCLKCNT = "110" then
 			VCLKCNT <= "000";
@@ -958,8 +960,8 @@ VBUS_DATA <= DMA_FLASH_D when DMA_FLASH_SEL = '1'
 
 -- 68K INPUTS
 TG68_RES_N <= MRST_N and host_bootdone;
-TG68_CLK <= VCLK;
-TG68_CLKE <= '1';
+--TG68_CLK <= VCLK;
+--TG68_CLKE <= '1';
 
 TG68_DTACK_N <= TG68_FLASH_DTACK_N when TG68_FLASH_SEL = '1'
 	else TG68_SDRAM_DTACK_N when TG68_SDRAM_SEL = '1' 
@@ -1553,7 +1555,8 @@ begin
 	if MRST_N = '0' then
 		PSG_SEL<= '0';
 	elsif rising_edge(MCLK) then
-		if VCLK='0' then
+		if ZCLK_nENA='1' then
+			PSG_SEL<= '0';
 			if TG68_PSG_SEL = '1' then
 				PSG_SEL <= '1';
 				if TG68_A(0)='0' then

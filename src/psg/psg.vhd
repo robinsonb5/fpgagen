@@ -10,6 +10,7 @@ use IEEE.NUMERIC_STD.ALL;
 entity psg is
 	port (	clk		: in  STD_LOGIC;
 			clken	: in  STD_LOGIC;
+			timing_clken	: in  STD_LOGIC;
 			WR_n	: in  STD_LOGIC;
 			D_in	: in  STD_LOGIC_VECTOR (7 downto 0);
 			output	: out STD_LOGIC_VECTOR(5 downto 0));
@@ -91,7 +92,7 @@ begin
 	-- FIXME - reset?
 		if rising_edge(clk) then
 			en_32<='0';
-			if clken='1' then
+			if timing_clken='1' then
 				clk_divide <= clk_divide+1;
 				if clk_divide="10000" then
 					en_32<='1';

@@ -817,7 +817,7 @@ end process;
 	begin
 		if rising_edge(clk) then
 			if (currentPort = PORT_VRAM and (ramDone = '1' or cache_ack='1'))
-					or (cache_req_d(0)='1' and cache_valid='1' and vram_we='0') then
+					or (cache_req_d="11" and cache_valid='1' and vram_we='0') then
 				vram_ackReg <= vram_req;
 			end if;
 		end if;

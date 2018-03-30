@@ -273,22 +273,6 @@ pll mypll
 	.c2(DRAM_CLK)
 );
 
-
-// 7MHz
-reg [2-1:0] clk7_cnt;
-reg         clk7_en_reg;
-always @ (posedge clk_28, negedge pll_locked) begin
-  if (!pll_locked) begin
-    clk7_cnt <= 2'b10;
-    clk7_en_reg <= #1 1'b1;
-  end else begin
-    clk7_cnt <= clk7_cnt + 2'b01;
-    clk7_en_reg <= #1 ~|clk7_cnt;
-  end
-end
-
-assign clk_7 = clk7_cnt[1];
-assign clk7_en = clk7_en_reg;
  
 assign audio_lr_switch = 1'b0;
 assign audio_lr_mix = 1'b0;

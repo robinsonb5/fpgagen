@@ -531,6 +531,7 @@ end process;
 					--   perform a few autorefresh cycles (we do 2 of them)
 					--   setmode (burst and CAS latency)
 					--   after a few clocks ram is ready for use (we wait 10 just to be sure).
+					initDoneReg <= '0'; --GE
 					ramTimer <= 20000;
 					ramState <= RAM_INIT_PRECHARGE;
 				when RAM_INIT_PRECHARGE =>
@@ -567,8 +568,8 @@ end process;
 					sd_we_n_reg <= '0';
 					sd_ras_n_reg <= '0';
 					sd_cas_n_reg <= '0';
-				when RAM_IDLE =>
 					initDoneReg <= '1'; --GE
+				when RAM_IDLE =>
 					refreshActive <= '0';
 					currentPort <= PORT_NONE;
 					if preselectBankPause=0 then
@@ -816,8 +817,8 @@ end process;
 	process(clk)
 	begin
 		if rising_edge(clk) then
-			if (currentPort = PORT_VRAM and (ramDone = '1' or cache_ack='1'))
-					or (cache_req_d="11" and cache_valid='1' and vram_we='0') then
+			if (currentPort = PORT_VRAM and (vram_we='1' and ramDone = '1'))
+					or (cache_req_d="11" and (cache_valid='1' or cache_ack='1') and vram_we='0') then
 				vram_ackReg <= vram_req;
 			end if;
 		end if;

@@ -49,8 +49,8 @@ entity Virtual_Toplevel is
 	);
 	port(
 		reset : in std_logic;
-		MCLK : in std_logic;
-		SDR_CLK : in std_logic;
+		MCLK : in std_logic;		-- 54MHz
+		SDR_CLK : in std_logic;		-- 108MHz
 
 		DRAM_ADDR	: out std_logic_vector(rowAddrBits-1 downto 0);
 		DRAM_BA_0	: out std_logic;
@@ -504,7 +504,12 @@ begin
 
 -- Reset
 PRE_RESET_N <= reset and SDR_INIT_DONE and host_reset_n;
-MRST_N <= PRE_RESET_N;
+process(MRST_N,MCLK)
+begin
+	if rising_edge(MCLK) then
+		MRST_N <= PRE_RESET_N;
+	end if;
+end process;
 
 -- Joystick swapping
 JOY_SWAP <= SW(2);
@@ -685,6 +690,7 @@ vdp : entity work.vdp
 port map(
 	RST_N		=> MRST_N,
 	CLK		=> MCLK,
+	MEMCLK	=> SDR_CLK,
 		
 	SEL		=> VDP_SEL,
 	A			=> VDP_A,
@@ -750,7 +756,7 @@ port map(
 -- FM
 fm_mixer:jt12_mixer
 port map(
-	rst			=> not MRST_N,
+	rst			=> '1', -- not MRST_N,
 	clk			=> MCLK,
 	sample		=> FM_SAMPLE,
 	left_in 	=> FM_MUX_LEFT,
@@ -775,7 +781,7 @@ port map(
 
 fm : jt12
 port map(
-	rst		=> RST_VCLK,	-- gen-hw.txt line 328
+	rst		=> '1', -- RST_VCLK,	-- gen-hw.txt line 328
 	clk		=> VCLK,
 	clk_out	=> FM_CLKOUT,
 	

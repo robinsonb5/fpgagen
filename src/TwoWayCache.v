@@ -249,25 +249,28 @@ begin
 					tag_mru1<=1'b0;
 					tag_wren1<=1'b1;
 				end
-				
-				// FIXME - ultimately we should clear a cacheline here and cache
-				// the data for future use.
 
 				// FIXME - we also need to check at this point whether the write cache
 				// can merge this data into the current write, and if so send an ack.
 
-				state<=WRITE2;
+				if(cpu_rw_n==1'b0)
+					state<=WRITE2;
+				else
+					state<=WAITING;
 			end
 
 		WRITE2:
 			begin
-				if(cpu_req==1'b0)	// Wait for the write cycle to finish
+				if(cpu_rw_n==1'b1)	// Wait for the write cycle to finish
 					state<=WAITING;
 			end
 
 		WAITRD:
 			begin
-				state<=PAUSE1;
+//				if(cpu_req==1'b1)
+//					state<=PAUSE1;
+//				else
+					state<=WAITING;
 				// Check both tags for a match...
 				if(tag_hit1 && data_valid1)
 				begin

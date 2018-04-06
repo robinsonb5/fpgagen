@@ -45,6 +45,7 @@ entity vdp is
 	port(
 		RST_N		: in std_logic;
 		CLK			: in std_logic;
+		MEMCLK	: in std_logic;
 		
 		SEL			: in std_logic;
 		A			: in std_logic_vector(4 downto 0);
@@ -252,6 +253,7 @@ signal DT_VRAM_SEL		: std_logic;
 signal DT_VRAM_ADDR		: std_logic_vector(14 downto 0);
 signal DT_VRAM_DI		: std_logic_vector(15 downto 0);
 signal DT_VRAM_DO		: std_logic_vector(15 downto 0);
+signal DT_VRAM_DO_REG		: std_logic_vector(15 downto 0);
 signal DT_VRAM_RNW		: std_logic;
 signal DT_VRAM_UDS_N	: std_logic;
 signal DT_VRAM_LDS_N	: std_logic;
@@ -351,6 +353,13 @@ type vmc_t is (
 );
 signal VMC	: vmc_t;
 
+signal early_ack_bga : std_logic;
+signal early_ack_bgb : std_logic;
+signal early_ack_sp1 : std_logic;
+signal early_ack_sp2 : std_logic;
+signal early_ack_dt : std_logic;
+signal early_ack : std_logic;
+
 ----------------------------------------------------------------
 -- BACKGROUND RENDERING
 ----------------------------------------------------------------
@@ -395,6 +404,7 @@ signal BGB_HF		: std_logic;
 
 signal BGB_VRAM_ADDR	: std_logic_vector(14 downto 0);
 signal BGB_VRAM_DO	: std_logic_vector(15 downto 0);
+signal BGB_VRAM_DO_REG	: std_logic_vector(15 downto 0);
 signal BGB_SEL		: std_logic;
 signal BGB_DTACK_N	: std_logic;
 
@@ -433,6 +443,7 @@ signal BGA_HF		: std_logic;
 
 signal BGA_VRAM_ADDR	: std_logic_vector(14 downto 0);
 signal BGA_VRAM_DO	: std_logic_vector(15 downto 0);
+signal BGA_VRAM_DO_REG	: std_logic_vector(15 downto 0);
 signal BGA_SEL		: std_logic;
 signal BGA_DTACK_N	: std_logic;
 
@@ -493,6 +504,7 @@ signal SP1_X		: std_logic_vector(7 downto 0);
 
 signal SP1_VRAM_ADDR	: std_logic_vector(14 downto 0);
 signal SP1_VRAM_DO	: std_logic_vector(15 downto 0);
+signal SP1_VRAM_DO_REG	: std_logic_vector(15 downto 0);
 signal SP1_SEL		: std_logic;
 signal SP1_DTACK_N	: std_logic;
 
@@ -526,6 +538,7 @@ signal SP2_Y		: std_logic_vector(7 downto 0);
 
 signal SP2_VRAM_ADDR	: std_logic_vector(14 downto 0);
 signal SP2_VRAM_DO	: std_logic_vector(15 downto 0);
+signal SP2_VRAM_DO_REG	: std_logic_vector(15 downto 0);
 signal SP2_SEL		: std_logic;
 signal SP2_DTACK_N	: std_logic;
 
@@ -855,6 +868,21 @@ vram_d <= vram_d_reg;
 vram_u_n <= vram_u_n_reg;
 vram_l_n <= vram_l_n_reg;
 
+-- SP1_VRAM_DO <= vram_q;
+
+early_ack_bga <= '0' when VMC=VMC_BGA_RD1 and vram_req_reg=vram_ack else '1';
+early_ack_bgb <= '0' when VMC=VMC_BGB_RD1 and vram_req_reg=vram_ack else '1';
+early_ack_sp1 <= '0' when VMC=VMC_SP1_RD1 and vram_req_reg=vram_ack else '1';
+early_ack_sp2 <= '0' when VMC=VMC_SP2_RD1 and vram_req_reg=vram_ack else '1';
+early_ack_dt <= '0' when VMC=VMC_DT_ACC1 and vram_req_reg=vram_ack else '1';
+
+BGA_VRAM_DO <= vram_q when early_ack_bga='0' and BGA_DTACK_N = '1' else BGA_VRAM_DO_REG;
+BGB_VRAM_DO <= vram_q when early_ack_bgb='0' and BGB_DTACK_N = '1' else BGB_VRAM_DO_REG;
+SP1_VRAM_DO <= vram_q when early_ack_sp1='0' and SP1_DTACK_N = '1' else SP1_VRAM_DO_REG;
+SP2_VRAM_DO <= vram_q when early_ack_sp2='0' and SP2_DTACK_N = '1' else SP2_VRAM_DO_REG;
+DT_VRAM_DO <= vram_q when early_ack_dt='0' and SP2_DTACK_N = '1' else DT_VRAM_DO_REG;
+
+
 process( RST_N, CLK )
 -- synthesis translate_off
 file F		: text open write_mode is "vram_dbg.out";
@@ -948,7 +976,7 @@ begin
 		
 		when VMC_BGB_RD1 =>		-- BACKGROUND B
 			if vram_req_reg = vram_ack then
-				BGB_VRAM_DO <= vram_q;
+				BGB_VRAM_DO_REG <= vram_q;
 				BGB_DTACK_N <= '0';
 				
 				VMC <= VMC_IDLE;
@@ -956,7 +984,7 @@ begin
 				
 		when VMC_BGA_RD1 =>		-- BACKGROUND A
 			if vram_req_reg = vram_ack then
-				BGA_VRAM_DO <= vram_q;
+				BGA_VRAM_DO_REG <= vram_q;
 				BGA_DTACK_N <= '0';
 				
 				VMC <= VMC_IDLE;
@@ -964,7 +992,7 @@ begin
 			
 		when VMC_SP1_RD1 =>		-- SPRITE ENGINE PART 1
 			if vram_req_reg = vram_ack then
-				SP1_VRAM_DO <= vram_q;
+				SP1_VRAM_DO_REG <= vram_q;
 				SP1_DTACK_N <= '0';
 				
 				VMC <= VMC_IDLE;
@@ -972,7 +1000,7 @@ begin
 
 		when VMC_SP2_RD1 =>		-- SPRITE ENGINE PART 2
 			if vram_req_reg = vram_ack then
-				SP2_VRAM_DO <= vram_q;
+				SP2_VRAM_DO_REG <= vram_q;
 				SP2_DTACK_N <= '0';
 				
 				VMC <= VMC_IDLE;
@@ -980,7 +1008,7 @@ begin
 	
 		when VMC_DT_ACC1 =>		-- DATA TRANSFER
 			if vram_req_reg = vram_ack then
-				DT_VRAM_DO <= vram_q;
+				DT_VRAM_DO_REG <= vram_q;
 				DT_VRAM_DTACK_N <= '0';
 				
 				VMC <= VMC_IDLE;
@@ -1029,8 +1057,9 @@ begin
 			
 			when BGBC_HS_RD =>
 				V_BGB_XSTART := "0000000000" - BGB_VRAM_DO(9 downto 0);
-				if BGB_DTACK_N = '0' then
-					BGB_SEL <= '0';
+				if early_ack_bgb = '0' then
+--				if BGB_DTACK_N = '0' then
+				BGB_SEL <= '0';
 					BGB_X <= ( V_BGB_XSTART(9 downto 3) & "000" ) and (HSIZE & "11111111");
 					BGB_POS <= "0000000000" - ( "0000000" & V_BGB_XSTART(2 downto 0) );
 					BGBC <= BGBC_CALC_Y;
@@ -1063,7 +1092,8 @@ begin
 				BGBC <= BGBC_BASE_RD;
 				
 			when BGBC_BASE_RD =>
-				if BGB_DTACK_N = '0' then
+				if early_ack_bgb='0' then
+--				if BGB_DTACK_N = '0' then
 -- synthesis translate_off					
 					write(L, string'("BGB BASE_RD Y="));
 					hwrite(L, "000000" & BGB_Y(9 downto 0));
@@ -1154,7 +1184,8 @@ begin
 				end if;
 
 			when BGBC_TILE_RD =>
-				if BGB_DTACK_N = '0' then
+				if early_ack_bgb = '0' then
+--				if BGB_DTACK_N = '0' then
 -- synthesis translate_off					
 					write(L, string'("BGB TILE_RD Y="));
 					hwrite(L, "000000" & BGB_Y(9 downto 0));
@@ -1237,7 +1268,8 @@ begin
 			
 			when BGAC_HS_RD =>
 				V_BGA_XSTART := "0000000000" - BGA_VRAM_DO(9 downto 0);
-				if BGA_DTACK_N = '0' then
+				if early_ack_bga='0' then
+--				if BGA_DTACK_N = '0' then
 					BGA_SEL <= '0';
 					BGA_X <= ( V_BGA_XSTART(9 downto 3) & "000" ) and (HSIZE & "11111111");
 					BGA_POS <= "0000000000" - ( "0000000" & V_BGA_XSTART(2 downto 0) );
@@ -1279,7 +1311,8 @@ begin
 				BGAC <= BGAC_BASE_RD;
 				
 			when BGAC_BASE_RD =>
-				if BGA_DTACK_N = '0' then
+				if early_ack_bga='0' then
+--				if BGA_DTACK_N = '0' then
 -- synthesis translate_off					
 					write(L, string'("BGA BASE_RD Y="));
 					hwrite(L, "000000" & BGA_Y(9 downto 0));
@@ -1428,7 +1461,8 @@ begin
 				end if;
 
 			when BGAC_TILE_RD =>
-				if BGA_DTACK_N = '0' then
+				if early_ack_bga='0' then
+--				if BGA_DTACK_N = '0' then
 -- synthesis translate_off					
 					write(L, string'("BGA TILE_RD Y="));
 					hwrite(L, "000000" & BGA_Y(9 downto 0));
@@ -1506,7 +1540,8 @@ begin
 				end if;
 			
 			when SP1C_Y_RD =>
-				if SP1_DTACK_N = '0' then
+				if early_ack_sp1='0' then
+--				if SP1_DTACK_N = '0' then
 					-- OBJ_Y( CONV_INTEGER( SP1_X(7 downto 1) ) ) <= SP1_VRAM_DO(8 downto 0);
 					OBJ_Y_ADDR_WR <= "00" & SP1_X(7 downto 1);
 					OBJ_Y_D <= "0000000" & SP1_VRAM_DO(8 downto 0);
@@ -1516,7 +1551,8 @@ begin
 				end if;
 			
 			when SP1C_SZL_RD =>
-				if SP1_DTACK_N = '0' then
+				if early_ack_sp1='0' then
+--				if SP1_DTACK_N = '0' then
 					-- OBJ_SZ_LINK( CONV_INTEGER( SP1_X(7 downto 1) ) ) <= SP1_VRAM_DO(11 downto 8) & SP1_VRAM_DO(6 downto 0);
 					OBJ_SZ_LINK_ADDR_WR <= "00" & SP1_X(7 downto 1);
 					OBJ_SZ_LINK_D <= "00000" & SP1_VRAM_DO(11 downto 8) & SP1_VRAM_DO(6 downto 0);
@@ -1628,7 +1664,8 @@ begin
 				SP2C <= SP2C_X_RD;
 				
 			when SP2C_X_RD =>
-				if SP2_DTACK_N = '0' then
+				if early_ack_sp2='0' then
+--				if SP2_DTACK_N = '0' then
 					SP2_SEL <= '0';
 					OBJ_X <= SP2_VRAM_DO(8 downto 0);
 					SP2C <= SP2C_X_TST;
@@ -1644,7 +1681,8 @@ begin
 				end if;
 			
 			when SP2C_TDEF_RD =>
-				if SP2_DTACK_N = '0' then
+				if early_ack_sp2='0' then
+--				if SP2_DTACK_N = '0' then
 					SP2_SEL <= '0';
 					OBJ_PRI <= SP2_VRAM_DO(15);
 					OBJ_PAL <= SP2_VRAM_DO(14 downto 13);
@@ -1803,7 +1841,8 @@ begin
 				end if;
 			
 			when SP2C_TILE_RD =>
-				if SP2_DTACK_N = '0' then
+				if early_ack_sp2='0' then
+--				if SP2_DTACK_N = '0' then
 					SP2C <= SP2C_LOOP;
 				end if;
 			
@@ -2477,7 +2516,8 @@ begin
 				DTC <= DTC_VRAM_WR2;
 			
 			when DTC_VRAM_WR2 =>
-				if DT_VRAM_DTACK_N = '0' then
+				if early_ack_dt='0' then
+--				if DT_VRAM_DTACK_N = '0' then
 					DT_VRAM_SEL <= '0';	
 					DTC <= DTC_IDLE;
 				end if;
@@ -2515,7 +2555,8 @@ begin
 				DTC <= DTC_VRAM_RD2;
 			
 			when DTC_VRAM_RD2 =>
-				if DT_VRAM_DTACK_N = '0' then
+				if early_ack_dt='0' then
+--				if DT_VRAM_DTACK_N = '0' then
 					DT_VRAM_SEL <= '0';	
 					DT_RD_DATA <= DT_VRAM_DO;
 					DT_RD_DTACK_N <= '0';
@@ -2582,7 +2623,8 @@ begin
 				DTC <= DTC_DMA_FILL_WR2;
 				
 			when DTC_DMA_FILL_WR2 =>	
-				if DT_VRAM_DTACK_N = '0' then
+				if early_ack_dt='0' then
+--				if DT_VRAM_DTACK_N = '0' then
 					DT_VRAM_SEL <= '0';	
 					ADDR <= ADDR + ADDR_STEP;
 					DMA_LENGTH <= DMA_LENGTH - 1;
@@ -2637,7 +2679,8 @@ begin
 				DTC <= DTC_DMA_COPY_RD2;
 			
 			when DTC_DMA_COPY_RD2 =>	
-				if DT_VRAM_DTACK_N = '0' then
+				if early_ack_dt='0' then
+--				if DT_VRAM_DTACK_N = '0' then
 -- synthesis translate_off					
 					write(L, string'("   VRAM RD ["));
 					hwrite(L, x"00" & DMA_SOURCE(15 downto 1) & '0');
@@ -2685,7 +2728,8 @@ begin
 				DTC <= DTC_DMA_COPY_WR2;
 
 			when DTC_DMA_COPY_WR2 =>	
-				if DT_VRAM_DTACK_N = '0' then
+				if early_ack_dt='0' then
+--				if DT_VRAM_DTACK_N = '0' then
 					DT_VRAM_SEL <= '0';	
 					ADDR <= ADDR + ADDR_STEP;
 					DMA_LENGTH <= DMA_LENGTH - 1;
@@ -2817,7 +2861,8 @@ begin
 				DTC <= DTC_DMA_VBUS_VRAM_WR2;
 			
 			when DTC_DMA_VBUS_VRAM_WR2 =>
-				if DT_VRAM_DTACK_N = '0' then
+				if early_ack_dt='0' then
+--				if DT_VRAM_DTACK_N = '0' then
 					DT_VRAM_SEL <= '0';	
 					ADDR <= ADDR + ADDR_STEP;
 					DMA_LENGTH <= DMA_LENGTH - 1;

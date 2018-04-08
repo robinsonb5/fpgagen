@@ -59,7 +59,7 @@ entity vdp is
 		vram_req : out std_logic;
 		vram_ack : in std_logic;
 		vram_we : out std_logic;
-		vram_a : out std_logic_vector(14 downto 0);
+		vram_a : buffer std_logic_vector(14 downto 0);
 		vram_d : out std_logic_vector(15 downto 0);
 		vram_q : in std_logic_vector(15 downto 0);
 		vram_u_n : out std_logic;
@@ -340,16 +340,11 @@ signal HV_VCNT		: std_logic_vector(9 downto 0);
 
 type vmc_t is (
 	VMC_IDLE,
-	VMC_BGB_RD1,
-	VMC_BGB_RD2,
-	VMC_BGA_RD1,
-	VMC_BGA_RD2,
-	VMC_SP1_RD1,
-	VMC_SP1_RD2,
-	VMC_SP2_RD1,
-	VMC_SP2_RD2,
-	VMC_DT_ACC1,
-	VMC_DT_ACC2
+	VMC_BGB,
+	VMC_BGA,
+	VMC_SP1,
+	VMC_SP2,
+	VMC_DT
 );
 signal VMC	: vmc_t;
 
@@ -862,19 +857,25 @@ end process;
 -- VRAM CONTROLLER
 ----------------------------------------------------------------
 vram_req <= vram_req_reg;
-vram_we <= vram_we_reg;
-vram_a <= vram_a_reg;
-vram_d <= vram_d_reg;
-vram_u_n <= vram_u_n_reg;
-vram_l_n <= vram_l_n_reg;
+
+vram_a <= BGA_VRAM_ADDR when VMC=VMC_BGA
+	else BGB_VRAM_ADDR when VMC=VMC_BGB
+	else DT_VRAM_ADDR when VMC=VMC_DT
+	else SP1_VRAM_ADDR when VMC=VMC_SP1
+	else SP2_VRAM_ADDR when VMC=VMC_SP2
+	else vram_a_reg;
+vram_d <= DT_VRAM_DI when VMC=VMC_DT else (others=>'X');
+vram_we <= not DT_VRAM_RNW when VMC=VMC_DT else '0';
+vram_u_n <= DT_VRAM_UDS_N when VMC=VMC_DT else '0';
+vram_l_n <= DT_VRAM_LDS_N when VMC=VMC_DT else '0';
 
 -- SP1_VRAM_DO <= vram_q;
 
-early_ack_bga <= '0' when VMC=VMC_BGA_RD1 and vram_req_reg=vram_ack else '1';
-early_ack_bgb <= '0' when VMC=VMC_BGB_RD1 and vram_req_reg=vram_ack else '1';
-early_ack_sp1 <= '0' when VMC=VMC_SP1_RD1 and vram_req_reg=vram_ack else '1';
-early_ack_sp2 <= '0' when VMC=VMC_SP2_RD1 and vram_req_reg=vram_ack else '1';
-early_ack_dt <= '0' when VMC=VMC_DT_ACC1 and vram_req_reg=vram_ack else '1';
+early_ack_bga <= '0' when VMC=VMC_BGA and vram_req_reg=vram_ack else '1';
+early_ack_bgb <= '0' when VMC=VMC_BGB and vram_req_reg=vram_ack else '1';
+early_ack_sp1 <= '0' when VMC=VMC_SP1 and vram_req_reg=vram_ack else '1';
+early_ack_sp2 <= '0' when VMC=VMC_SP2 and vram_req_reg=vram_ack else '1';
+early_ack_dt <= '0' when VMC=VMC_DT and vram_req_reg=vram_ack else '1';
 
 BGA_VRAM_DO <= vram_q when early_ack_bga='0' and BGA_DTACK_N = '1' else BGA_VRAM_DO_REG;
 BGB_VRAM_DO <= vram_q when early_ack_bgb='0' and BGB_DTACK_N = '1' else BGB_VRAM_DO_REG;
@@ -901,6 +902,9 @@ begin
 		
 		VMC <= VMC_IDLE;
 	elsif rising_edge(CLK) then
+	
+		vram_a_reg<=vram_a;
+	
 		if BGB_SEL = '0' then 
 			BGB_DTACK_N <= '1';
 		end if;
@@ -919,62 +923,24 @@ begin
 		
 		case VMC is
 		when VMC_IDLE =>
-			vram_u_n_reg <= '0';
-			vram_l_n_reg <= '0';
-			vram_we_reg <= '0';
-			
 			if BGB_SEL = '1' and BGB_DTACK_N = '1' then
 				vram_req_reg <= not vram_req_reg;
-				vram_a_reg <= BGB_VRAM_ADDR;
-				
-				VMC <= VMC_BGB_RD1;
+				VMC <= VMC_BGB;
 			elsif BGA_SEL = '1' and BGA_DTACK_N = '1' then
 				vram_req_reg <= not vram_req_reg;
-				vram_a_reg <= BGA_VRAM_ADDR;
-				
-				VMC <= VMC_BGA_RD1;
+				VMC <= VMC_BGA;
 			elsif SP1_SEL = '1' and SP1_DTACK_N = '1' then
 				vram_req_reg <= not vram_req_reg;
-				vram_a_reg <= SP1_VRAM_ADDR;
-				
-				VMC <= VMC_SP1_RD1;			
+				VMC <= VMC_SP1;			
 			elsif SP2_SEL = '1' and SP2_DTACK_N = '1' then
 				vram_req_reg <= not vram_req_reg;
-				vram_a_reg <= SP2_VRAM_ADDR;
-				
-				VMC <= VMC_SP2_RD1;			
+				VMC <= VMC_SP2;			
 			elsif DT_VRAM_SEL = '1' and DT_VRAM_DTACK_N = '1' then
--- synthesis translate_off					
-				if DT_VRAM_RNW = '0' then
-					write(L, string'("   VRAM WR ["));
-					hwrite(L, x"00" & DT_VRAM_ADDR & '0');
-					write(L, string'("] = ["));
-					if DT_VRAM_UDS_N = '0' and DT_VRAM_LDS_N ='1' then 
-						hwrite(L, DT_VRAM_DI(15 downto 8));
-						write(L, string'("  "));
-					elsif DT_VRAM_UDS_N = '1' and DT_VRAM_LDS_N ='0' then 
-						write(L, string'("  "));
-						hwrite(L, DT_VRAM_DI(7 downto 0));				
-					elsif DT_VRAM_UDS_N = '0' and DT_VRAM_LDS_N ='0' then 
-						hwrite(L, DT_VRAM_DI);
-					else
-						write(L, string'("????"));
-					end if;
-					write(L, string'("]"));
-					writeline(F,L);		
-				end if;
--- synthesis translate_on					
-				vram_req_reg <= not vram_req_reg;
-				vram_a_reg <= DT_VRAM_ADDR;
-				vram_d_reg <= DT_VRAM_DI;
-				vram_we_reg <= not DT_VRAM_RNW;
-				vram_u_n_reg <= DT_VRAM_UDS_N;
-				vram_l_n_reg <= DT_VRAM_LDS_N;
-				
-				VMC <= VMC_DT_ACC1;
+				vram_req_reg <= not vram_req_reg;				
+				VMC <= VMC_DT;
 			end if;
 		
-		when VMC_BGB_RD1 =>		-- BACKGROUND B
+		when VMC_BGB =>		-- BACKGROUND B
 			if vram_req_reg = vram_ack then
 				BGB_VRAM_DO_REG <= vram_q;
 				BGB_DTACK_N <= '0';
@@ -982,7 +948,7 @@ begin
 				VMC <= VMC_IDLE;
 			end if;
 				
-		when VMC_BGA_RD1 =>		-- BACKGROUND A
+		when VMC_BGA =>		-- BACKGROUND A
 			if vram_req_reg = vram_ack then
 				BGA_VRAM_DO_REG <= vram_q;
 				BGA_DTACK_N <= '0';
@@ -990,7 +956,7 @@ begin
 				VMC <= VMC_IDLE;
 			end if;
 			
-		when VMC_SP1_RD1 =>		-- SPRITE ENGINE PART 1
+		when VMC_SP1 =>		-- SPRITE ENGINE PART 1
 			if vram_req_reg = vram_ack then
 				SP1_VRAM_DO_REG <= vram_q;
 				SP1_DTACK_N <= '0';
@@ -998,7 +964,7 @@ begin
 				VMC <= VMC_IDLE;
 			end if;
 
-		when VMC_SP2_RD1 =>		-- SPRITE ENGINE PART 2
+		when VMC_SP2 =>		-- SPRITE ENGINE PART 2
 			if vram_req_reg = vram_ack then
 				SP2_VRAM_DO_REG <= vram_q;
 				SP2_DTACK_N <= '0';
@@ -1006,7 +972,7 @@ begin
 				VMC <= VMC_IDLE;
 			end if;
 	
-		when VMC_DT_ACC1 =>		-- DATA TRANSFER
+		when VMC_DT =>		-- DATA TRANSFER
 			if vram_req_reg = vram_ack then
 				DT_VRAM_DO_REG <= vram_q;
 				DT_VRAM_DTACK_N <= '0';

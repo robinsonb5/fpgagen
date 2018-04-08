@@ -155,6 +155,8 @@ architecture rtl of chameleon_sdram is
 	signal ram_data_reg : unsigned(sd_data'range);
 
 	signal cache_ack_reg : std_logic := '0';
+	signal cache_write : std_logic := '0';
+	signal cache_writeack : std_logic := '0';
 
 -- Registered sdram signals
 	signal sd_data_reg : unsigned(15 downto 0);
@@ -374,7 +376,8 @@ mytwc : component TwoWayCache
 		
 		-- VRAM port
 
-		cache_req<='1' when (vram_req /= vram_ackReg) and (currentPort /= PORT_VRAM) else '0';
+		cache_req<='1' when (vram_req /= vram_ackReg) and 
+				((currentPort /= PORT_VRAM) or cache_write='1') else '0';
 
 		ramPort_rec(3).pending<='1' when cache_req_out='1' or
 			((vram_req /= vram_ackReg) and (currentPort /= PORT_VRAM) and vram_we='1') else '0';
@@ -597,7 +600,11 @@ end process;
 							end case;
 							
 							if nextRamState=RAM_WRITE_1 then	-- No need to wait for the write to complete before acknowledging
-								ramDone<='1';
+								if nextRamPort=PORT_VRAM then
+									cache_write<='1';
+								else
+									ramDone<='1';
+								end if;
 							end if;
 
 							ramState <= nextRamState;
@@ -732,8 +739,16 @@ end process;
 					sd_data_reg <= currentWrData(15 downto 0);
 					sd_ldqm_reg <= currentLdqm;
 					sd_udqm_reg <= currentUdqm;
-					ramState<=RAM_IDLE;	-- FIXME - potentially violating write-to-precharge time here
+					if cache_write='1' then
+						ramState<=RAM_WRITE_2;
+					else
+						ramState<=RAM_IDLE;	-- FIXME - potentially violating write-to-precharge time here
+					end if;
 --					ramDone<='1';
+				when RAM_WRITE_2 =>
+					if cache_write='0' then
+						ramState<=RAM_IDLE;	-- FIXME - potentially violating write-to-precharge time here
+					end if;
 				when RAM_PRECHARGE =>
 					ramTimer <= 2;
 					ramState <= RAM_ACTIVE;
@@ -765,6 +780,18 @@ end process;
 				when others => null;
 					
 				end case;
+			end if;
+			
+			if cache_ack='1' and vram_we='1' then
+				cache_writeack<='1';
+			end if;
+			
+			if cache_ack='1' or cache_writeack='1' then
+				if cache_write='1' then
+					ramDone<='1';
+					cache_write<='0';
+					cache_writeack<='0';
+				end if;
 			end if;
 		end if;
 	end process;
@@ -825,6 +852,7 @@ end process;
 		end if;
 	end process;
 	vram_ack <= vram_ackReg;
+	
 --	vram_q <= vram_qReg; --GE
 
 -- FIXME - have to make sure writes are acknowledged by the cache

@@ -221,9 +221,7 @@ begin
 			begin
 				// If the current address is in cache,
 				// we must update the appropriate cacheline
-
-				// FIXME - this won't work for byte accesses!
-				
+			
 				// We mark the two halves of the word separately.
 				// If this is a byte write, the byte not being written
 				// will be marked as invalid, triggering a re-read if
@@ -252,6 +250,8 @@ begin
 
 				// FIXME - we also need to check at this point whether the write cache
 				// can merge this data into the current write, and if so send an ack.
+
+				cpu_ack<=1'b1;
 
 				if(cpu_rw_n==1'b0)
 					state<=WRITE2;

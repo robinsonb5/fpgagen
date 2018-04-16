@@ -222,9 +222,9 @@ assign TDO              = 1'b1;
 // assign SD_DAT3          = SPI_CS_N[0];
 
 // SRAM
-assign SRAM_OE_N = 1;
-assign SRAM_WE_N = 1;
-assign SRAM_CE_N = 1;
+assign SRAM_OE_N = 1'b0;
+assign SRAM_WE_N = 1'b1;
+assign SRAM_CE_N = 1'b1;
 assign SRAM_DQ          = SRAM_OE_N ? SRAM_DAT_W : 16'bzzzzzzzzzzzzzzzz;
 assign SRAM_DAT_R       = SRAM_DQ;
 
@@ -232,7 +232,8 @@ assign SRAM_DAT_R       = SRAM_DQ;
 // FLASH
 assign FL_DQ            = FL_OE_N   ? FL_DAT_W   : 8'bzzzzzzzz;
 assign FL_DAT_R         = FL_DQ;
-assign FL_CE_N = 1;
+assign FL_OE_N = 1'b0;
+assign FL_CE_N = 1'b1;
 
 // AUDIO
 assign AUDIOLEFT        = audio_left;

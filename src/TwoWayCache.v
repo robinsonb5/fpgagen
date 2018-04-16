@@ -322,8 +322,8 @@ begin
 
 		PAUSE1:
 		begin
-			cpu_ack<=cpu_req;
-			if(cpu_req==1'b0)
+//			cpu_ack<=cpu_req;
+//			if(cpu_req==1'b0)
 				state<=WAITING;
 		end
 		
@@ -425,7 +425,8 @@ begin
 		FILL9:
 		begin
 			readword<=cpu_addr[3:1];
-			state<=WAITING;
+//			state<=WAITING;
+			state<=PAUSE1; // Allow one extra clock after clearing readword_burst
 		end
 
 		default:

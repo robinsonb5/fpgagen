@@ -346,7 +346,9 @@ type vmc_t is (
 	VMC_SP2,
 	VMC_DT
 );
-signal VMC	: vmc_t;
+signal VMC	: vmc_t := VMC_IDLE;
+signal VMC_NEXT : vmc_t := VMC_IDLE;
+signal VMC_SEL	: vmc_t := VMC_IDLE;
 
 signal early_ack_bga : std_logic;
 signal early_ack_bgb : std_logic;
@@ -858,18 +860,20 @@ end process;
 ----------------------------------------------------------------
 vram_req <= vram_req_reg;
 
-vram_a <= BGA_VRAM_ADDR when VMC=VMC_BGA
-	else BGB_VRAM_ADDR when VMC=VMC_BGB
-	else DT_VRAM_ADDR when VMC=VMC_DT
-	else SP1_VRAM_ADDR when VMC=VMC_SP1
-	else SP2_VRAM_ADDR when VMC=VMC_SP2
-	else vram_a_reg;
-vram_d <= DT_VRAM_DI when VMC=VMC_DT else (others=>'X');
+--vram_a <= BGA_VRAM_ADDR when VMC_SEL=VMC_BGA
+--	else BGB_VRAM_ADDR when VMC_SEL=VMC_BGB
+--	else DT_VRAM_ADDR when VMC_SEL=VMC_DT
+--	else SP1_VRAM_ADDR when VMC_SEL=VMC_SP1
+--	else SP2_VRAM_ADDR when VMC_SEL=VMC_SP2
+--	else vram_a_reg;
+vram_d <= DT_VRAM_DI; --  when VMC=VMC_DT else (others=>'X');
 vram_we <= not DT_VRAM_RNW when VMC=VMC_DT else '0';
 vram_u_n <= DT_VRAM_UDS_N when VMC=VMC_DT else '0';
 vram_l_n <= DT_VRAM_LDS_N when VMC=VMC_DT else '0';
 
 -- SP1_VRAM_DO <= vram_q;
+
+VMC_SEL <= VMC; -- VMC_NEXT when vram_req_reg=vram_ack else VMC;
 
 early_ack_bga <= '0' when VMC=VMC_BGA and vram_req_reg=vram_ack else '1';
 early_ack_bgb <= '0' when VMC=VMC_BGB and vram_req_reg=vram_ack else '1';
@@ -900,8 +904,31 @@ begin
 
 		vram_req_reg <= '0';
 		
-		VMC <= VMC_IDLE;
-	elsif rising_edge(CLK) then
+		VMC<=VMC_IDLE;
+		VMC_NEXT<=VMC_IDLE;
+	else
+
+		-- Priority encoder for next port...
+--		vmc_req<='0';
+		VMC_NEXT<=VMC_IDLE;
+		if BGB_SEL = '1' and BGB_DTACK_N = '1' and early_ack_bgb='1' then
+			VMC_NEXT <= VMC_BGB;
+--			vmc_req<='1';
+		elsif BGA_SEL = '1' and BGA_DTACK_N = '1' and early_ack_bga='1' then
+			VMC_NEXT <= VMC_BGA;
+--			vmc_req<='1';
+		elsif SP1_SEL = '1' and SP1_DTACK_N = '1' and early_ack_sp1='1'then
+			VMC_NEXT <= VMC_SP1;			
+--			vmc_req<='1';
+		elsif SP2_SEL = '1' and SP2_DTACK_N = '1' and early_ack_sp2='1' then
+			VMC_NEXT <= VMC_SP2;			
+--			vmc_req<='1';
+		elsif DT_VRAM_SEL = '1' and DT_VRAM_DTACK_N = '1' and early_ack_dt='1' then
+			VMC_NEXT <= VMC_DT;
+--			vmc_req<='1';
+		end if;
+
+	if rising_edge(CLK) then
 	
 		vram_a_reg<=vram_a;
 	
@@ -920,69 +947,81 @@ begin
 		if DT_VRAM_SEL = '0' then 
 			DT_VRAM_DTACK_N <= '1';
 		end if;
+
+		if vram_req_reg = vram_ack then
+			VMC <= VMC_NEXT;
+			case VMC_NEXT is
+				when VMC_IDLE =>
+					null;
+				when VMC_BGA =>
+					vram_a <= BGA_VRAM_ADDR;
+				when VMC_BGB =>
+					vram_a <= BGB_VRAM_ADDR;
+				when VMC_SP1 =>
+					vram_a <= SP1_VRAM_ADDR;
+				when VMC_SP2 =>
+					vram_a <= SP2_VRAM_ADDR;
+				when VMC_DT =>
+					vram_a <= DT_VRAM_ADDR;
+			end case;
+			if VMC_NEXT /= VMC_IDLE then
+				vram_req_reg <= not vram_req_reg;
+			end if;
+		end if;
 		
 		case VMC is
 		when VMC_IDLE =>
-			if BGB_SEL = '1' and BGB_DTACK_N = '1' then
-				vram_req_reg <= not vram_req_reg;
-				VMC <= VMC_BGB;
-			elsif BGA_SEL = '1' and BGA_DTACK_N = '1' then
-				vram_req_reg <= not vram_req_reg;
-				VMC <= VMC_BGA;
-			elsif SP1_SEL = '1' and SP1_DTACK_N = '1' then
-				vram_req_reg <= not vram_req_reg;
-				VMC <= VMC_SP1;			
-			elsif SP2_SEL = '1' and SP2_DTACK_N = '1' then
-				vram_req_reg <= not vram_req_reg;
-				VMC <= VMC_SP2;			
-			elsif DT_VRAM_SEL = '1' and DT_VRAM_DTACK_N = '1' then
-				vram_req_reg <= not vram_req_reg;				
-				VMC <= VMC_DT;
-			end if;
+			null;
+
+--			if BGB_SEL = '1' and BGB_DTACK_N = '1' then
+--				vram_req_reg <= not vram_req_reg;
+--				VMC <= VMC_BGB;
+--			elsif BGA_SEL = '1' and BGA_DTACK_N = '1' then
+--				vram_req_reg <= not vram_req_reg;
+--				VMC <= VMC_BGA;
+--			elsif SP1_SEL = '1' and SP1_DTACK_N = '1' then
+--				vram_req_reg <= not vram_req_reg;
+--				VMC <= VMC_SP1;			
+--			elsif SP2_SEL = '1' and SP2_DTACK_N = '1' then
+--				vram_req_reg <= not vram_req_reg;
+--				VMC <= VMC_SP2;			
+--			elsif DT_VRAM_SEL = '1' and DT_VRAM_DTACK_N = '1' then
+--				vram_req_reg <= not vram_req_reg;				
+--				VMC <= VMC_DT;
+--			end if;
 		
 		when VMC_BGB =>		-- BACKGROUND B
 			if vram_req_reg = vram_ack then
 				BGB_VRAM_DO_REG <= vram_q;
 				BGB_DTACK_N <= '0';
-				
-				VMC <= VMC_IDLE;
 			end if;
-				
 		when VMC_BGA =>		-- BACKGROUND A
 			if vram_req_reg = vram_ack then
 				BGA_VRAM_DO_REG <= vram_q;
 				BGA_DTACK_N <= '0';
-				
-				VMC <= VMC_IDLE;
 			end if;
 			
 		when VMC_SP1 =>		-- SPRITE ENGINE PART 1
 			if vram_req_reg = vram_ack then
 				SP1_VRAM_DO_REG <= vram_q;
 				SP1_DTACK_N <= '0';
-				
-				VMC <= VMC_IDLE;
 			end if;
 
 		when VMC_SP2 =>		-- SPRITE ENGINE PART 2
 			if vram_req_reg = vram_ack then
 				SP2_VRAM_DO_REG <= vram_q;
 				SP2_DTACK_N <= '0';
-				
-				VMC <= VMC_IDLE;
 			end if;
 	
 		when VMC_DT =>		-- DATA TRANSFER
 			if vram_req_reg = vram_ack then
 				DT_VRAM_DO_REG <= vram_q;
 				DT_VRAM_DTACK_N <= '0';
-				
-				VMC <= VMC_IDLE;
 			end if;
 			
 		when others => null;
 		end case;
-		
+	end if;
 	end if;
 end process;
 
@@ -1025,7 +1064,7 @@ begin
 				V_BGB_XSTART := "0000000000" - BGB_VRAM_DO(9 downto 0);
 				if early_ack_bgb = '0' then
 --				if BGB_DTACK_N = '0' then
-				BGB_SEL <= '0';
+					BGB_SEL <= '0';
 					BGB_X <= ( V_BGB_XSTART(9 downto 3) & "000" ) and (HSIZE & "11111111");
 					BGB_POS <= "0000000000" - ( "0000000" & V_BGB_XSTART(2 downto 0) );
 					BGBC <= BGBC_CALC_Y;
@@ -1218,7 +1257,7 @@ begin
 					WIN_H <= not(WRIGT);
 				end if;
 			
-				case HSCR is -- Horizontal scroll mode
+			case HSCR is -- Horizontal scroll mode
 				when "00" =>
 					BGA_VRAM_ADDR <= HSCB & "000000000";
 				when "01" =>
@@ -2087,6 +2126,7 @@ end process;
 -- ALSO CLEARS THE SPRITE COLINFO BUFFER RIGHT AFTER RENDERING
 process( RST_N, CLK )
 begin
+	OBJ_COLINFO_D_B <= (others => '0');
 	if RST_N = '0' then
 		X <= (others => '0');
 		Y <= (others => '0');
@@ -2096,7 +2136,6 @@ begin
 		BGA_COLINFO_ADDR_B <= (others => '0');
 		OBJ_COLINFO_ADDR_B <= (others => '0');
 
-		OBJ_COLINFO_D_B <= (others => '0');
 		OBJ_COLINFO_WE_B <= '0';
 		
 	elsif rising_edge(CLK) then

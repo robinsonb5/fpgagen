@@ -626,7 +626,7 @@ obj_ci : entity work.vdp_colinfo
 port map(
 	address_a	=> OBJ_COLINFO_ADDR_A,
 	address_b	=> OBJ_COLINFO_ADDR_B,
-	clock		=> CLK,
+	clock		=> MEMCLK,
 	data_a		=> OBJ_COLINFO_D_A,
 	data_b		=> OBJ_COLINFO_D_B,
 	wren_a		=> OBJ_COLINFO_WE_A,
@@ -637,7 +637,7 @@ port map(
 
 obj_oi_y : entity work.vdp_objinfo
 port map(
-	clock		=> CLK,
+	clock		=> MEMCLK,
 	data		=> OBJ_Y_D,
 	rdaddress	=> OBJ_Y_ADDR_RD,
 	wraddress	=> OBJ_Y_ADDR_WR,
@@ -647,7 +647,7 @@ port map(
 
 obj_oi_sl : entity work.vdp_objinfo
 port map(
-	clock		=> CLK,
+	clock		=> MEMCLK,
 	data		=> OBJ_SZ_LINK_D,
 	rdaddress	=> OBJ_SZ_LINK_ADDR_RD,
 	wraddress	=> OBJ_SZ_LINK_ADDR_WR,
@@ -938,12 +938,12 @@ begin
 		if BGA_SEL = '0' then 
 			BGA_DTACK_N <= '1';
 		end if;
-		if SP1_SEL = '0' then 
+--		if SP1_SEL = '0' then 
 			SP1_DTACK_N <= '1';
-		end if;
-		if SP2_SEL = '0' then 
+--		end if;
+--		if SP2_SEL = '0' then 
 			SP2_DTACK_N <= '1';
-		end if;
+--		end if;
 		if DT_VRAM_SEL = '0' then 
 			DT_VRAM_DTACK_N <= '1';
 		end if;
@@ -1501,7 +1501,7 @@ end process;
 ----------------------------------------------------------------
 -- SPRITE ENGINE - PART ONE
 ----------------------------------------------------------------
-process( RST_N, CLK )
+process( RST_N, MEMCLK )
 begin
 	if RST_N = '0' then
 		SP1_SEL <= '0';
@@ -1512,7 +1512,7 @@ begin
 		OBJ_Y_ADDR_WR <= (others => '0');
 		OBJ_SZ_LINK_ADDR_WR <= (others => '0');
 		
-	elsif rising_edge(CLK) then
+	elsif rising_edge(MEMCLK) then
 		-- if SP1E_ACTIVE = '1' and SP2E_ACTIVE = '0' then
 		if SP1E_ACTIVE = '1' then
 			case SP1C is
@@ -1533,15 +1533,15 @@ begin
 				elsif SP1_X(0) = '1' and SP1_SEL = '0' then
 					SP1_VRAM_ADDR <= (SATB & "00000000") + (OBJ_CUR & "01");
 					SP1_SEL <= '1';
-					SP1C <= SP1C_SZL_RD;				
-				else
-					if (H40 = '1' and SP1_X = 160-1) or (H40 = '0' and SP1_X = 128-1) then
-						SP1C <= SP1C_DONE;
-					else
-						SP1_X <= SP1_X + 1;
-						SP1C <= SP1C_LOOP;
-					end if;
-					SP1_SEL <= '0';
+					SP1C <= SP1C_SZL_RD;
+--				else
+--					if (H40 = '1' and SP1_X = 160-1) or (H40 = '0' and SP1_X = 128-1) then
+--						SP1C <= SP1C_DONE;
+--					else
+--						SP1_X <= SP1_X + 1;
+--						SP1C <= SP1C_LOOP;
+--					end if;
+--					SP1_SEL <= '0';
 				end if;
 			
 			when SP1C_Y_RD =>
@@ -1552,7 +1552,14 @@ begin
 					OBJ_Y_D <= "0000000" & SP1_VRAM_DO(8 downto 0);
 					OBJ_Y_WE <= '1';
 					
-					SP1C <= SP1C_LOOP;
+					if (H40 = '1' and SP1_X = 160-1) or (H40 = '0' and SP1_X = 128-1) then
+						SP1C <= SP1C_DONE;
+					else
+						SP1_X <= SP1_X + 1;
+						SP1C <= SP1C_LOOP;
+					end if;
+					SP1_SEL <= '0';
+--					SP1C <= SP1C_LOOP;
 				end if;
 			
 			when SP1C_SZL_RD =>
@@ -1564,7 +1571,15 @@ begin
 					OBJ_SZ_LINK_WE <= '1';					
 					
 					OBJ_CUR <= SP1_VRAM_DO(6 downto 0);
-					SP1C <= SP1C_LOOP;
+
+					if (H40 = '1' and SP1_X = 160-1) or (H40 = '0' and SP1_X = 128-1) then
+						SP1C <= SP1C_DONE;
+					else
+						SP1_X <= SP1_X + 1;
+						SP1C <= SP1C_LOOP;
+					end if;
+					SP1_SEL <= '0';
+--					SP1C <= SP1C_LOOP;
 				end if;
 			
 			when others => -- SP1C_DONE
@@ -1586,7 +1601,7 @@ end process;
 ----------------------------------------------------------------
 -- SPRITE ENGINE - PART TWO
 ----------------------------------------------------------------
-process( RST_N, CLK )
+process( RST_N, MEMCLK )
 -- variable V_SZ_LINK		: std_logic_vector(10 downto 0);
 begin
 	if RST_N = '0' then
@@ -1601,7 +1616,7 @@ begin
 		SCOL_SET <= '0';
 		SOVR_SET <= '0';
 		
-	elsif rising_edge(CLK) then
+	elsif rising_edge(MEMCLK) then
 	
 		SCOL_SET <= '0';
 		SOVR_SET <= '0';
@@ -1848,7 +1863,21 @@ begin
 			when SP2C_TILE_RD =>
 				if early_ack_sp2='0' then
 --				if SP2_DTACK_N = '0' then
-					SP2C <= SP2C_LOOP;
+					case OBJ_X_OFS(1 downto 0) is
+					when "00" =>
+						OBJ_COLNO <= SP2_VRAM_DO(15 downto 12);
+					when "01" =>
+						OBJ_COLNO <= SP2_VRAM_DO(11 downto 8);
+					when "10" =>
+						OBJ_COLNO <= SP2_VRAM_DO(7 downto 4);						
+					when others =>
+						OBJ_COLNO <= SP2_VRAM_DO(3 downto 0);
+					end case;
+					-- if OBJ_POS < 320 then
+						-- T_PREV_OBJ_COLINFO <= OBJ_COLINFO( CONV_INTEGER(OBJ_POS) );
+					-- end if;					
+					SP2C <= SP2C_PLOT;
+--					SP2C <= SP2C_LOOP;
 				end if;
 			
 			when SP2C_NEXT =>
@@ -2083,7 +2112,7 @@ begin
 		end if;
 
 		-- SPRITE ENGINE PART ONE ACTIVE
-		if H_CNT = H_DISP_START+(H_DISP_CLOCKS/2) and PRE_V_ACTIVE = '1' then
+		if H_CNT = H_DISP_START+(3*H_DISP_CLOCKS/4) and PRE_V_ACTIVE = '1' then
 			SP1E_ACTIVE <= '1';
 		elsif H_CNT = H_DISP_START+H_DISP_CLOCKS then
 		-- elsif H_CNT = H_DISP_START+(3*H_DISP_CLOCKS/4) then
@@ -2093,7 +2122,7 @@ begin
 		-- SPRITE ENGINE PART TWO ACTIVE
 		-- if H_CNT = H_DISP_START+H_DISP_CLOCKS and PRE_V_ACTIVE = '1' then
 		-- if H_CNT = H_DISP_START+(3*H_DISP_CLOCKS/4) and PRE_V_ACTIVE = '1' then
-		if H_CNT = H_DISP_START+(H_DISP_CLOCKS/2)+2 and PRE_V_ACTIVE = '1' then
+		if H_CNT = H_DISP_START+(3*H_DISP_CLOCKS/4)+2 and PRE_V_ACTIVE = '1' then
 			SP2E_ACTIVE <= '1';
 		elsif H_CNT = H_DISP_START then
 			SP2E_ACTIVE <= '0';

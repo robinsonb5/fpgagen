@@ -756,7 +756,7 @@ port map(
 -- FM
 fm_mixer:jt12_mixer
 port map(
-	rst			=> '1', -- not MRST_N,
+	rst			=> not MRST_N,
 	clk			=> MCLK,
 	sample		=> FM_SAMPLE,
 	left_in 	=> FM_MUX_LEFT,
@@ -781,7 +781,7 @@ port map(
 
 fm : jt12
 port map(
-	rst		=> '1', -- RST_VCLK,	-- gen-hw.txt line 328
+	rst		=> RST_VCLK,	-- gen-hw.txt line 328
 	clk		=> VCLK,
 	clk_out	=> FM_CLKOUT,
 	

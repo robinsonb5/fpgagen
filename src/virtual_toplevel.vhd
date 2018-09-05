@@ -233,9 +233,17 @@ signal TG68_UDS_N	: std_logic;
 signal TG68_LDS_N	: std_logic;
 signal TG68_RNW		: std_logic;
 signal TG68_INTACK	: std_logic;
+signal TG68_STATE	: std_logic_vector(1 downto 0);
+signal TG68_FC	        : std_logic_vector(2 downto 0);
 
 signal TG68_ENARDREG	: std_logic;
 signal TG68_ENAWRREG	: std_logic;
+
+signal TG68_ENA: std_logic;
+signal TG68_ENA_DIV: std_logic_vector(1 downto 0);
+signal TG68_WR: std_logic;
+signal TG68_RD: std_logic;
+signal TG68_IO: std_logic;
 
 -- Z80
 signal T80_RESET_N	: std_logic;
@@ -599,25 +607,63 @@ zr : entity work.zram port map (
 -- -----------------------------------------------------------------------
 -- -----------------------------------------------------------------------
 
+-- a full cpu cycle consists of 4 TG68_ENARDREG "bus" cycles
+process(MRST_N, MCLK)
+begin
+	if MRST_N = '0' then
+		TG68_ENA_DIV <= "00";
+		TG68_AS_N <= '1';
+	elsif rising_edge( MCLK ) then
+		if TG68_ENAWRREG = '1' then
+			TG68_ENA_DIV <= TG68_ENA_DIV + 1;
+
+			-- activate AS
+			if TG68_IO = '1' and TG68_ENA_DIV = "00" then
+				TG68_AS_N <= '0';
+			end if;
+			
+		end if;
+		if TG68_ENARDREG = '1' then
+			-- de-activate as in bus cycle 3 if dtack is ok
+			if TG68_ENA_DIV = "11" and TG68_DTACK_N = '0' then
+				TG68_AS_N <= '1';
+			end if;
+		end if;		
+	end if;
+end process;
+	
+TG68_WR <= '1' when TG68_STATE = "11" else '0';      -- data wr
+TG68_RD <= '1' when TG68_STATE = "00" or TG68_STATE = "10" else '0';   -- inst or data rd
+TG68_IO <= '1' when TG68_WR = '1' or TG68_RD = '1' else '0';
+-- clock enable signal for tg68k. Effectively clock/16 -> 3.375 MHz
+TG68_ENA <= '1' when TG68_ENARDREG = '1' and TG68_ENA_DIV = "11" and TG68_DTACK_N = '0' else '0';
+TG68_INTACK <= '1' when TG68_ENA = '1' and TG68_FC = "111" else '0';
+
 -- 68K
-tg68 : entity work.TG68 
+tg68 : entity work.TG68KdotC_Kernel
+generic map(
+   SR_Read => 0,           --0=>user,   1=>privileged,      2=>switchable with CPU(0)
+   VBR_Stackframe => 0,    --0=>no,     1=>yes/extended,    2=>switchable with CPU(0)
+   extAddr_Mode => 0,      --0=>no,     1=>yes,             2=>switchable with CPU(1)
+   MUL_Mode => 0,          --0=>16Bit,  1=>32Bit,           2=>switchable with CPU(1),  3=>no MUL,  
+   DIV_Mode => 0,          --0=>16Bit,  1=>32Bit,           2=>switchable with CPU(1),  3=>no DIV, 
+   BitField => 0           --0=>no,     1=>yes,             2=>switchable with CPU(1)
+)
 port map(
-	-- clk			=> TG68_CLK,
-	clk			=> MCLK,
-	reset			=> TG68_RES_N,
-	clkena_in	=> '1',
-	data_in		=> TG68_DI,
-	IPL			=> TG68_IPL_N,
-	dtack			=> TG68_DTACK_N,
-	addr			=> TG68_A,
-	data_out		=> TG68_DO,
-	as				=> TG68_AS_N,
-	uds			=> TG68_UDS_N,
-	lds			=> TG68_LDS_N,
-	rw				=> TG68_RNW,
-	enaRDreg		=> TG68_ENARDREG,
-	enaWRreg		=> TG68_ENAWRREG,
-	intack		=> TG68_INTACK
+        clk		=> MCLK,
+	nReset		=> TG68_RES_N,
+	clkena_in	=> TG68_ENA,
+ 	data_in		=> TG68_DI,
+ 	IPL		=> TG68_IPL_N,
+	IPL_autovector  => '1',
+	berr            => '0',
+ 	addr		=> TG68_A,
+	data_write	=> TG68_DO,
+	nUDS		=> TG68_UDS_N,
+	nLDS		=> TG68_LDS_N,
+	nWr		=> TG68_RNW,
+	busstate        => TG68_STATE,
+	FC              => TG68_FC
 );
 
 -- Z80

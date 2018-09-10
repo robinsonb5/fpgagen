@@ -40,8 +40,8 @@ package vdp_common is
 
 constant CLOCKS_PER_LINE		: integer := 3420;
 constant H_DISP_CLOCKS			: integer := 2560;
---constant H_DISP_START			: integer := 612;	-- (3.77 + 1.89) * 2 * 54
-constant H_DISP_START			: integer := 580;
+constant H_DISP_START			: integer := 612;	-- (3.77 + 1.89) * 2 * 54
+--constant H_DISP_START			: integer := 580;
 
 constant HS_CLOCKS				: integer := 254; -- 4.7 us
 constant VGA_HS_CLOCKS			: integer := 204;	-- 3.77 us

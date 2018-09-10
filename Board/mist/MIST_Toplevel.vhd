@@ -62,6 +62,14 @@ signal vga_tvs		: std_logic;
 signal vga_window : std_logic;
 signal vid_15khz	: std_logic;
 
+-- 
+signal vga_red_o : unsigned(5 downto 0);
+signal vga_green_o : unsigned(5 downto 0);
+signal vga_blue_o : unsigned(5 downto 0);
+signal vga_y_o : unsigned(5 downto 0);
+signal vga_pb_o : unsigned(5 downto 0);
+signal vga_pr_o : unsigned(5 downto 0);
+
 -- user_io
 signal buttons: std_logic_vector(1 downto 0);
 signal status:  std_logic_vector(7 downto 0);
@@ -75,6 +83,7 @@ signal joy_ana_1: std_logic_vector(15 downto 0);
 signal txd:     std_logic;
 signal par_out_data: std_logic_vector(7 downto 0);
 signal par_out_strobe: std_logic;
+signal ypbpr: std_logic;
 
 -- signals to connect sd card emulation with io controller
 signal sd_lba:  std_logic_vector(31 downto 0);
@@ -163,6 +172,18 @@ COMPONENT video_vga_dither
 	);
 END COMPONENT;
   
+-- 
+COMPONENT rgb2ypbpr
+	PORT
+	(
+		red		:	 IN UNSIGNED(5 DOWNTO 0);
+		green		:	 IN UNSIGNED(5 DOWNTO 0);
+		blue		:	 IN UNSIGNED(5 DOWNTO 0);
+		y		:	 OUT UNSIGNED(5 DOWNTO 0);
+		pb		:	 OUT UNSIGNED(5 DOWNTO 0);
+		pr		:	 OUT UNSIGNED(5 DOWNTO 0)
+	);
+END COMPONENT;
 
 component user_io 
 	generic ( STRLEN : integer := 0 );
@@ -180,6 +201,7 @@ component user_io
            status: out std_logic_vector(7 downto 0);
            switches : out std_logic_vector(1 downto 0);
            buttons : out std_logic_vector(1 downto 0);
+			  ypbpr: out std_logic;
 			  sd_lba : in std_logic_vector(31 downto 0);
 			  sd_rd : in std_logic;
 			  sd_wr : in std_logic;
@@ -407,6 +429,7 @@ user_io_d : user_io
       SPI_MOSI => SPI_DI,
       conf_str => "00000000",   -- no config string -> no osd
       status => status,
+		ypbpr => ypbpr,
 		
  		-- connection to io controller
 		sd_lba  => sd_lba,
@@ -451,14 +474,30 @@ mydither : component video_vga_dither
 		iRed => vga_tred,
 		iGreen => vga_tgreen,
 		iBlue => vga_tblue,
-		std_logic_vector(oRed) => VGA_R,
-		std_logic_vector(oGreen) => VGA_G,
-		std_logic_vector(oBlue) => VGA_B
+		std_logic_vector(oRed) => vga_red_o,
+		std_logic_vector(oGreen) => vga_green_o,
+		std_logic_vector(oBlue) => vga_blue_o
+	);
+ 
+ --
+-- Do we have audio?  If so, instantiate a two DAC channels.
+rgb2component: component rgb2ypbpr
+	port map
+	(
+	   red => vga_red_o,
+	   green => vga_green_o,
+	   blue => vga_blue_o,
+	   y => vga_y_o,
+	   pb => vga_pb_o,
+	   pr => vga_pr_o
 	);
  
  -- If 15kHz Video - composite sync to VGA_HS and VGA_VS high for MiST RGB cable
-VGA_HS <= not (vga_ths xor vga_tvs) when vid_15khz='1' else vga_ths;
-VGA_VS <= '1' when vid_15khz='1' else vga_tvs;
+VGA_HS <= not (vga_ths xor vga_tvs) when vid_15khz='1' or ypbpr='1' else vga_ths;
+VGA_VS <= '1' when vid_15khz='1' or ypbpr='1' else vga_tvs;
+VGA_R <= vga_pr_o when ypbpr='1' else vga_red_o;
+VGA_G <= vga_y_o  when ypbpr='1' else vga_green_o;
+VGA_B <= vga_pb_o when ypbpr='1' else vga_blue_o;
 
 -- Do we have audio?  If so, instantiate a two DAC channels.
 leftsd: component hybrid_pwm_sd

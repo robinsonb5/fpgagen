@@ -75,9 +75,6 @@ signal buttons: std_logic_vector(1 downto 0);
 signal status:  std_logic_vector(7 downto 0);
 signal joy_0: std_logic_vector(7 downto 0);
 signal joy_1: std_logic_vector(7 downto 0);
-signal joy_2: std_logic_vector(7 downto 0);
-signal joy_3: std_logic_vector(7 downto 0);
-signal joy_4: std_logic_vector(7 downto 0);
 signal joy_ana_0: std_logic_vector(15 downto 0);
 signal joy_ana_1: std_logic_vector(15 downto 0);
 signal txd:     std_logic;
@@ -86,21 +83,19 @@ signal par_out_strobe: std_logic;
 signal ypbpr: std_logic;
 
 -- signals to connect sd card emulation with io controller
-signal sd_lba:  std_logic_vector(31 downto 0);
-signal sd_rd:   std_logic;
-signal sd_wr:   std_logic;
-signal sd_ack:  std_logic;
-signal sd_conf: std_logic;
-signal sd_sdhc: std_logic;
-signal sd_allow_sdhc: std_logic;
-signal sd_allow_sdhcD: std_logic;
-signal sd_allow_sdhcD2: std_logic;
-signal sd_allow_sdhc_changed: std_logic;
+signal sd_lba:       std_logic_vector(31 downto 0);
+signal sd_rd:        std_logic;
+signal sd_wr:        std_logic;
+signal sd_ack:       std_logic;
+signal sd_ack_conf:  std_logic;
+signal sd_conf:      std_logic;
+signal sd_sdhc:      std_logic;
 -- data from io controller to sd card emulation
 signal sd_data_in: std_logic_vector(7 downto 0);
 signal sd_data_in_strobe:  std_logic;
 signal sd_data_out: std_logic_vector(7 downto 0);
 signal sd_data_out_strobe:  std_logic;
+signal sd_buff_addr: std_logic_vector(8 downto 0);
 
 -- sd card emulation
 signal sd_cs:	std_logic;
@@ -108,41 +103,17 @@ signal sd_sck:	std_logic;
 signal sd_sdi:	std_logic;
 signal sd_sdo:	std_logic;
 
--- PS/2
-signal ps2_clk : std_logic;
-signal ps2counter : unsigned(10 downto 0);
-
 -- PS/2 Keyboard
 signal ps2_keyboard_clk_in : std_logic;
 signal ps2_keyboard_dat_in : std_logic;
-signal ps2_keyboard_clk_mix : std_logic;
 signal ps2_keyboard_clk_out : std_logic;
 signal ps2_keyboard_dat_out : std_logic;
 
 -- PS/2 Mouse
 signal ps2_mouse_clk_in : std_logic;
 signal ps2_mouse_dat_in : std_logic;
-signal ps2_mouse_clk_mix : std_logic;
 signal ps2_mouse_clk_out : std_logic;
 signal ps2_mouse_dat_out : std_logic;
-
--- spi clock recovery
-signal spirecoveryclock : std_logic;  -- High frequency clock
-signal uc_sysclk : std_logic;
-signal spisck_d : std_logic;
-signal spirec : std_logic;
-signal spirecoveredclock : std_logic;
-signal pll2_locked : std_logic;
-
--- Fast filter for SPI clock conditioning
-COMPONENT fastfilter
-	PORT
-	(
-		recoveryclock	: IN STD_LOGIC;
-		d	:	IN STD_LOGIC;
-		q	:	out STD_LOGIC
-	);
-END COMPONENT;
 
 -- Sigma Delta audio
 COMPONENT hybrid_pwm_sd
@@ -188,37 +159,37 @@ END COMPONENT;
 component user_io 
 	generic ( STRLEN : integer := 0 );
    port (
-			  SPI_CLK, SPI_SS_IO, SPI_MOSI :in std_logic;
-           SPI_MISO : out std_logic;
-           conf_str : in std_logic_vector(8*STRLEN-1 downto 0);
-           joystick_0 : out std_logic_vector(7 downto 0);
-           joystick_1 : out std_logic_vector(7 downto 0);
-           joystick_2 : out std_logic_vector(7 downto 0);
-           joystick_3 : out std_logic_vector(7 downto 0);
-           joystick_4 : out std_logic_vector(7 downto 0);
-           joystick_analog_0 : out std_logic_vector(15 downto 0);
-           joystick_analog_1 : out std_logic_vector(15 downto 0);
-           status: out std_logic_vector(7 downto 0);
-           switches : out std_logic_vector(1 downto 0);
-           buttons : out std_logic_vector(1 downto 0);
-			  ypbpr: out std_logic;
-			  sd_lba : in std_logic_vector(31 downto 0);
-			  sd_rd : in std_logic;
-			  sd_wr : in std_logic;
-			  sd_ack : out std_logic;
-			  sd_conf : in std_logic;
-			  sd_sdhc : in std_logic;
-			  sd_dout : out std_logic_vector(7 downto 0);
-			  sd_dout_strobe : out std_logic;
-			  sd_din : in std_logic_vector(7 downto 0);
-			  sd_din_strobe : out std_logic;
-           ps2_clk : in std_logic;
-           ps2_kbd_clk : out std_logic;
-           ps2_kbd_data : out std_logic;
-           ps2_mouse_clk : out std_logic;
-           ps2_mouse_data : out std_logic;
-			  serial_data : in std_logic_vector(7 downto 0);
-           serial_strobe : in std_logic
+        clk_sys : in std_logic;
+        clk_sd  : in std_logic;
+        SPI_CLK, SPI_SS_IO, SPI_MOSI :in std_logic;
+        SPI_MISO : out std_logic;
+        conf_str : in std_logic_vector(8*STRLEN-1 downto 0);
+        joystick_0 : out std_logic_vector(7 downto 0);
+        joystick_1 : out std_logic_vector(7 downto 0);
+        joystick_analog_0 : out std_logic_vector(15 downto 0);
+        joystick_analog_1 : out std_logic_vector(15 downto 0);
+        status: out std_logic_vector(7 downto 0);
+        switches : out std_logic_vector(1 downto 0);
+        buttons : out std_logic_vector(1 downto 0);
+        ypbpr: out std_logic;
+        sd_lba : in std_logic_vector(31 downto 0);
+        sd_rd : in std_logic;
+        sd_wr : in std_logic;
+        sd_ack : out std_logic;
+        sd_ack_conf : out std_logic;
+        sd_conf : in std_logic;
+        sd_sdhc : in std_logic;
+        sd_dout : out std_logic_vector(7 downto 0);
+        sd_dout_strobe : out std_logic;
+        sd_din : in std_logic_vector(7 downto 0);
+        sd_din_strobe : out std_logic;
+        sd_buff_addr: out std_logic_vector(8 downto 0);
+        ps2_kbd_clk : out std_logic;
+        ps2_kbd_data : out std_logic;
+        ps2_mouse_clk : out std_logic;
+        ps2_mouse_data : out std_logic;
+        serial_data : in std_logic_vector(7 downto 0);
+        serial_strobe : in std_logic
       );
   end component user_io;
   
@@ -234,58 +205,37 @@ component mist_console
 
 component sd_card
    port (
-			  spiclk : in std_logic;
-			  fpga_sysclk : in std_logic;
-			  uc_sysclk : in std_logic;
-			  io_lba 	: out std_logic_vector(31 downto 0);
-			  io_rd  	: out std_logic;
-			  io_wr  	: out std_logic;
-			  io_ack 	: in std_logic;
-			  io_sdhc 	: out std_logic;
-			  io_conf 	: out std_logic;
-			  io_din 	: in std_logic_vector(7 downto 0);
-			  io_din_strobe : in std_logic;
-			  io_dout 	: out std_logic_vector(7 downto 0);
-			  io_dout_strobe : in std_logic;
+        clk_sys      : in  std_logic;
+        sd_lba       : out std_logic_vector(31 downto 0);
+        sd_rd        : out std_logic;
+        sd_wr        : out std_logic;
+        sd_ack       : in  std_logic;
+        sd_ack_conf  : in  std_logic;
+        sd_sdhc 	 : out std_logic;
+        sd_conf 	 : out std_logic;
+        sd_buff_dout : in  std_logic_vector(7 downto 0);
+        sd_buff_wr   : in  std_logic;
+        sd_buff_din  : out std_logic_vector(7 downto 0);
+        sd_buff_addr : in  std_logic_vector(8 downto 0);
 
-			  allow_sdhc : in std_logic;
-			  
-           sd_cs 		:	in std_logic;
-           sd_sck 	:	in std_logic;
-           sd_sdi 	:	in std_logic;
-           sd_sdo 	:	out std_logic
+        allow_sdhc   : in std_logic;
+
+        sd_cs        : in std_logic;
+        sd_sck       : in std_logic;
+        sd_sdi 	     : in std_logic;
+        sd_sdo 	     : out std_logic
   );
   end component sd_card;
 
 begin
 
 
-myrecoveryclock : entity work.SPIRecoveryClock
-port map
-(
-	inclk0 => CLOCK_27(0),
-	c0 => spirecoveryclock,
-	c1 => uc_sysclk,
-	locked => pll2_locked
-);
-
-myclockfilter : component fastfilter
-port map
-(
-	recoveryclock => spirecoveryclock,
-	d => SPI_SCK,
-	q => spirecoveredclock
-);
-
-
-
-  U00 : entity work.pll
+U00 : entity work.pll
     port map(
-      inclk0 => CLOCK_27(0),	-- 27 MHz external
-      c0     => MCLK,			-- 54 MHz internal
-		c1     => open,
-      c2     => memclk,			-- 108 Mhz
-      c3     => SDRAM_CLK,		-- 108 Mhz external
+        inclk0 => CLOCK_27(0),	-- 27 MHz external
+        c0     => MCLK,			-- 54 MHz internal
+        c2     => memclk,			-- 108 Mhz
+        c3     => SDRAM_CLK,		-- 108 Mhz external
 		locked => pll_locked
     );
 
@@ -299,23 +249,8 @@ port map
 process(MCLK)
 begin
 	if rising_edge(MCLK) then
-		reset_d<=not (status(0) or status(2) or buttons(1)) and pll_locked and pll2_locked;
+		reset_d<=not (status(0) or status(2) or buttons(1)) and pll_locked;
 		reset<=reset_d;
-	end if;
-end process;
-
--- MCLK?
-process(MCLK)
-begin
---	ps2_keyboard_clk_mix <= ps2_keyboard_clk_in and (ps2_clk or ps2_keyboard_dat_out);
-	ps2_keyboard_clk_mix <= ps2_keyboard_clk_in; -- and (ps2_clk or ps2_keyboard_dat_out);
-	ps2_mouse_clk_mix <= ps2_mouse_clk_in; -- and (ps2_clk or ps2_mouse_dat_out);
-	if rising_edge(MCLK) then
-		ps2counter<=ps2counter+1;
-		if ps2counter=1200 then
-			ps2_clk<=not ps2_clk;
-			ps2counter<=(others => '0');
-		end if;
 	end if;
 end process;
 
@@ -396,69 +331,67 @@ mist_console_d: component mist_console
 sd_card_d: component sd_card
 	port map
 	(
-		spiclk => spirecoveredclock,
-		uc_sysclk => uc_sysclk,
-		fpga_sysclk => memclk,
- 		-- connection to io controller
- 		io_lba => sd_lba,
- 		io_rd  => sd_rd,
-		io_wr  => sd_wr,
- 		io_ack => sd_ack,
-		io_conf => sd_conf,
-		io_sdhc => sd_sdhc,
- 		io_din => sd_data_in,
- 		io_din_strobe => sd_data_in_strobe,
-		io_dout => sd_data_out,
-		io_dout_strobe => sd_data_out_strobe,
- 
+        clk_sys => MCLK,
+        -- connection to io controller
+        sd_lba => sd_lba,
+        sd_rd  => sd_rd,
+        sd_wr  => sd_wr,
+        sd_ack => sd_ack,
+        sd_ack_conf => sd_ack_conf,
+        sd_conf => sd_conf,
+        sd_sdhc => sd_sdhc,
+        sd_buff_din => sd_data_out,
+        sd_buff_dout => sd_data_in,
+        sd_buff_wr => sd_data_in_strobe,
+        sd_buff_addr => sd_buff_addr,
+
 		allow_sdhc  => '1',
-		
+
  		-- connection to host
  		sd_cs  => sd_cs,
  		sd_sck => sd_sck,
 		sd_sdi => sd_sdi,
 		sd_sdo => sd_sdo		
 	);
-	
+
 user_io_d : user_io
     generic map (STRLEN => 1)
     port map (
-      SPI_CLK => spirecoveredclock,
-      SPI_SS_IO => CONF_DATA0,
-      SPI_MISO => SPI_DO,
-      SPI_MOSI => SPI_DI,
-      conf_str => "00000000",   -- no config string -> no osd
-      status => status,
-		ypbpr => ypbpr,
-		
- 		-- connection to io controller
-		sd_lba  => sd_lba,
-		sd_rd   => sd_rd,
-		sd_wr   => sd_wr,
-		sd_ack  => sd_ack,
-		sd_sdhc => sd_sdhc,
-		sd_conf => sd_conf,
- 		sd_dout => sd_data_in,
- 		sd_dout_strobe => sd_data_in_strobe,
-		sd_din => sd_data_out,
-		sd_din_strobe => sd_data_out_strobe,
+        clk_sys => MCLK,
+        clk_sd => MCLK,
+        SPI_CLK => SPI_SCK,
+        SPI_SS_IO => CONF_DATA0,
+        SPI_MISO => SPI_DO,
+        SPI_MOSI => SPI_DI,
+        conf_str => "00000000",   -- no config string -> no osd
+        status => status,
+        ypbpr => ypbpr,
 
-      joystick_0 => joy_0,
-      joystick_1 => joy_1,
-      joystick_2 => joy_2,
-      joystick_3 => joy_3,
-      joystick_4 => joy_4,
-      joystick_analog_0 => joy_ana_0,
-      joystick_analog_1 => joy_ana_1,
+ 		-- connection to io controller
+        sd_lba  => sd_lba,
+        sd_rd   => sd_rd,
+        sd_wr   => sd_wr,
+        sd_ack  => sd_ack,
+        sd_ack_conf => sd_ack_conf,
+        sd_sdhc => sd_sdhc,
+        sd_conf => sd_conf,
+        sd_dout => sd_data_in,
+        sd_dout_strobe => sd_data_in_strobe,
+        sd_din  => sd_data_out,
+        sd_buff_addr => sd_buff_addr,
+
+        joystick_0 => joy_0,
+        joystick_1 => joy_1,
+        joystick_analog_0 => joy_ana_0,
+        joystick_analog_1 => joy_ana_1,
 --      switches => switches,
-       BUTTONS => buttons,
-		ps2_clk => ps2_clk,
-      ps2_kbd_clk => ps2_keyboard_clk_in,
-      ps2_kbd_data => ps2_keyboard_dat_in,
-      ps2_mouse_clk => ps2_mouse_clk_in,
-      ps2_mouse_data => ps2_mouse_dat_in,
- 		serial_data => par_out_data,
- 		serial_strobe => par_out_strobe
+        BUTTONS => buttons,
+        ps2_kbd_clk => ps2_keyboard_clk_in,
+        ps2_kbd_data => ps2_keyboard_dat_in,
+        ps2_mouse_clk => ps2_mouse_clk_in,
+        ps2_mouse_data => ps2_mouse_dat_in,
+        serial_data => par_out_data,
+        serial_strobe => par_out_strobe
  );
 
 vga_window<='1';

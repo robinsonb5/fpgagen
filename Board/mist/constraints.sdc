@@ -41,19 +41,6 @@ set_time_format -unit ns -decimal_places 3
 create_clock -name clk_27 -period 37.037 [get_ports {CLOCK_27[0]}]
 create_clock -name {SPI_SCK}  -period 41.666 -waveform { 20.8 41.666 } [get_ports {SPI_SCK}]
 
-create_clock -name fm_clk3 -period 388.9 -waveform { 0 129.64 } [get_nets {virtualtoplevel|fm|u_clksync|u_clkgen|cnt3[0]}]
-
-#create_clock -name fm_clk6 -period 777.8 [get_nets {virtualtoplevel|fm|u_clksync|u_clkgen|clk_n6}]
-#create_clock -name VCLK -period 129.6 [get_nets {virtualtoplevel|VCLK}]
-
-create_generated_clock -name VCLK -source [get_nets {U00|altpll_component|auto_generated|wire_pll1_clk[0]}] -divide_by 7 -duty_cycle 57.1 [get_nets {virtualtoplevel|VCLK}]
-# romrd_req is identified as a clock, it should not run faster than MCLK/2
-create_generated_clock -name romrd_req -source [get_nets {U00|altpll_component|auto_generated|wire_pll1_clk[0]}] -divide_by 7  [get_nets {virtualtoplevel|romrd_req}]
-create_generated_clock -name fm_clk6 -source [get_nets {virtualtoplevel|VCLK}] -divide_by 6 -duty_cycle 50 -phase 0 [get_nets {virtualtoplevel|fm|u_clksync|u_clkgen|clk_n6}]
-create_generated_clock -name ZCLK -source [get_nets {virtualtoplevel|VCLK}] -divide_by 14 -duty_cycle 50 [get_nets {virtualtoplevel|ZCLK}]
-create_generated_clock -name psg_clk -source [get_nets {virtualtoplevel|ZCLK}] -divide_by 32 [get_nets {virtualtoplevel|u_psg|clk_divide[4]}]
-#create_generated_clock -name psg_noise -source [get_nets {virtualtoplevel|u_psg|clk_divide[4]}] -divide_by 2 [get_nets {virtualtoplevel|u_psg|t3|v}]
-
 #**************************************************************
 # Create Generated Clock
 #**************************************************************
@@ -115,15 +102,6 @@ set_clock_groups -asynchronous -group [get_clocks {SPI_SCK}] -group [get_clocks 
 #**************************************************************
 # Set False Path
 #**************************************************************
-
-# Asynchronous signal, so not important timing-wise
-# JT12 internal clock uses synchronizers:
-set_false_path  -from  [get_clocks {VCLK}]  -to  [get_clocks {fm_clk6}]
-
-#JT12 output is not synchronous to the DAC:
-set_false_path  -from  [get_clocks {fm_clk6}]  -to  [get_clocks {U00|altpll_component|auto_generated|pll1|clk[2]}]
-
-# set_false_path -from [get_registers {Virtual_Toplevel:virtualtoplevel|jt12:fm|jt12_clksync:u_clksync|write_copy}] -to [get_nets {virtualtoplevel|fm|u_clksync|write}]
 
 set_false_path -to [get_ports {UART_TX}]
 set_false_path -to [get_ports {AUDIO_L}]

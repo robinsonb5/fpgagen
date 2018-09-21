@@ -277,36 +277,12 @@ set_global_assignment -name ROUTER_TIMING_OPTIMIZATION_LEVEL MAXIMUM
 set_global_assignment -name ROUTER_CLOCKING_TOPOLOGY_ANALYSIS ON
 set_global_assignment -name OPTIMIZE_POWER_DURING_SYNTHESIS OFF
 set_global_assignment -name SEED 2
+set_instance_assignment -name FAST_INPUT_REGISTER ON -to SDRAM_DQ[*]
+set_global_assignment -name QIP_FILE ../../jt12/jt12.qip
 set_global_assignment -name SYSTEMVERILOG_FILE ../../Board/mist/rgb2ypbpr.sv
-set_global_assignment -name VERILOG_FILE ../../jt12/hdl/jt12_interpol.v
-set_global_assignment -name VERILOG_FILE ../../jt12/hdl/jt12_mixer.v
-set_global_assignment -name VERILOG_FILE ../../jt12/hdl/jt12_fir.v
-set_global_assignment -name VERILOG_FILE ../../jt12/hdl/jt12_fir4.v
-set_global_assignment -name VERILOG_FILE ../../jt12/hdl/jt12_sumch.v
 set_global_assignment -name VHDL_FILE ../../src/psg/psg_tone.vhd
 set_global_assignment -name VHDL_FILE ../../src/psg/psg_noise.vhd
 set_global_assignment -name VHDL_FILE ../../src/psg/psg.vhd
-set_global_assignment -name VERILOG_FILE ../../jt12/hdl/jt12_amp.v
-set_global_assignment -name VERILOG_FILE ../../jt12/hdl/jt12.v
-set_global_assignment -name VERILOG_FILE ../../jt12/hdl/jt12_acc.v
-set_global_assignment -name VERILOG_FILE ../../jt12/hdl/jt12_clk.v
-set_global_assignment -name VERILOG_FILE ../../jt12/hdl/jt12_clksync.v
-set_global_assignment -name VERILOG_FILE ../../jt12/hdl/jt12_kon.v
-set_global_assignment -name VERILOG_FILE ../../jt12/hdl/jt12_fm.v
-set_global_assignment -name VERILOG_FILE ../../jt12/hdl/jt12_eg.v
-set_global_assignment -name VERILOG_FILE ../../jt12/hdl/jt12_mmr.v
-set_global_assignment -name VERILOG_FILE ../../jt12/hdl/jt12_op.v
-set_global_assignment -name VERILOG_FILE ../../jt12/hdl/jt12_mod24.v
-set_global_assignment -name VERILOG_FILE ../../jt12/hdl/jt12_opsync.v
-set_global_assignment -name VERILOG_FILE ../../jt12/hdl/jt12_lfo.v
-set_global_assignment -name VERILOG_FILE ../../jt12/hdl/jt12_mod6.v
-set_global_assignment -name VERILOG_FILE ../../jt12/hdl/jt12_pg.v
-set_global_assignment -name VERILOG_FILE ../../jt12/hdl/jt12_reg.v
-set_global_assignment -name VERILOG_FILE ../../jt12/hdl/jt12_sh.v
-set_global_assignment -name VERILOG_FILE ../../jt12/hdl/jt12_sh_rst.v
-set_global_assignment -name VERILOG_FILE ../../jt12/hdl/jt12_timers.v
-set_global_assignment -name VERILOG_FILE ../../jt12/hdl/jt12_sh6_rst.v
-set_global_assignment -name VERILOG_FILE ../../jt12/hdl/jt12_sh24.v
 set_global_assignment -name VHDL_FILE ../../src/TG68KdotC_Kernel.vhd
 set_global_assignment -name VHDL_FILE ../../src/TG68K_Pack.vhd
 set_global_assignment -name VHDL_FILE ../../src/TG68K_ALU.vhd
@@ -355,5 +331,4 @@ set_global_assignment -name SIGNALTAP_FILE stp2.stp
 set_global_assignment -name VERILOG_FILE ../../src/TwoWayCache.v
 set_global_assignment -name VHDL_FILE ../../src/DualPortRAM.vhd
 set_global_assignment -name SDC_FILE ../../Board/mist/constraints.sdc
-set_instance_assignment -name FAST_INPUT_REGISTER ON -to SDRAM_DQ[*]
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top

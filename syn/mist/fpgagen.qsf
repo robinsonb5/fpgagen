@@ -279,7 +279,13 @@ set_global_assignment -name OPTIMIZE_POWER_DURING_SYNTHESIS OFF
 set_global_assignment -name SEED 2
 set_instance_assignment -name FAST_INPUT_REGISTER ON -to SDRAM_DQ[*]
 set_global_assignment -name QIP_FILE ../../jt12/jt12.qip
+set_global_assignment -name VHDL_FILE ../../../Board/mist/MIST_Toplevel.vhd
 set_global_assignment -name SYSTEMVERILOG_FILE ../../Board/mist/rgb2ypbpr.sv
+set_global_assignment -name VERILOG_FILE ../../Board/mist/data_io.v
+set_global_assignment -name VERILOG_FILE ../../../Board/mist/user_io.v
+set_global_assignment -name VERILOG_FILE ../../../Board/mist/osd.v
+set_global_assignment -name VERILOG_FILE ../../Board/mist/hybrid_pwm_sd.v
+set_global_assignment -name VERILOG_FILE ../../../Board/mist/mist_console.v
 set_global_assignment -name VHDL_FILE ../../src/psg/psg_tone.vhd
 set_global_assignment -name VHDL_FILE ../../src/psg/psg_noise.vhd
 set_global_assignment -name VHDL_FILE ../../src/psg/psg.vhd
@@ -307,12 +313,6 @@ set_global_assignment -name VHDL_FILE ../../src/zram.vhd
 set_global_assignment -name VHDL_FILE ../../CtrlModule/RTL/OnScreenDisplay.vhd
 set_global_assignment -name VHDL_FILE ../../CtrlModule/RTL/OSD_Overlay.vhd
 set_global_assignment -name VHDL_FILE ../../CtrlModule/RTL/DualPortRAM_2Read_Unreg.vhd
-set_global_assignment -name VERILOG_FILE ../../../Board/mist/user_io.v
-set_global_assignment -name VERILOG_FILE ../../../Board/mist/sd_card.v
-set_global_assignment -name VERILOG_FILE ../../../Board/mist/osd.v
-set_global_assignment -name VERILOG_FILE ../../Board/mist/hybrid_pwm_sd.v
-set_global_assignment -name VERILOG_FILE ../../../Board/mist/mist_console.v
-set_global_assignment -name VHDL_FILE ../../../Board/mist/MIST_Toplevel.vhd
 set_global_assignment -name VHDL_FILE ../../CtrlModule/RTL/spi.vhd
 set_global_assignment -name VHDL_FILE ../../CtrlModule/RTL/simple_uart.vhd
 set_global_assignment -name VHDL_FILE ../../CtrlModule/RTL/io_ps2_com.vhd

@@ -82,7 +82,7 @@ set_global_assignment -name ASSIGNMENT_GROUP_MEMBER DRAM_UDQM -section_id DRAM_O
 set_global_assignment -name ASSIGNMENT_GROUP_MEMBER DRAM_WE_N -section_id DRAM_Other
 set_global_assignment -name POWER_PRESET_COOLING_SOLUTION "NO HEAT SINK WITH STILL AIR"
 set_global_assignment -name POWER_BOARD_THERMAL_MODEL "NONE (CONSERVATIVE)"
-set_global_assignment -name USE_CONFIGURATION_DEVICE ON
+set_global_assignment -name USE_CONFIGURATION_DEVICE OFF
 
 set_global_assignment -name SMART_RECOMPILE ON
 set_global_assignment -name CYCLONEII_RESERVE_NCEO_AFTER_CONFIGURATION "USE AS REGULAR IO"
@@ -269,6 +269,47 @@ set_instance_assignment -name FAST_INPUT_REGISTER ON -to SDRAM_DQ[3]
 set_instance_assignment -name FAST_INPUT_REGISTER ON -to SDRAM_DQ[2]
 set_instance_assignment -name FAST_INPUT_REGISTER ON -to SDRAM_DQ[1]
 set_instance_assignment -name FAST_INPUT_REGISTER ON -to SDRAM_DQ[0]
+
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_A[0]
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_A[1]
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_A[2]
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_A[3]
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_A[4]
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_A[5]
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_A[6]
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_A[7]
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_A[8]
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_A[9]
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_A[10]
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_A[11]
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_A[12]
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_DQ[0]
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_DQ[1]
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_DQ[2]
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_DQ[3]
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_DQ[4]
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_DQ[5]
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_DQ[6]
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_DQ[7]
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_DQ[8]
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_DQ[9]
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_DQ[10]
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_DQ[11]
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_DQ[12]
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_DQ[13]
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_DQ[14]
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_DQ[15]
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_BA[0]
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_BA[1]
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_DQML
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_DQMH
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_nRAS
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_nCAS
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_nWE
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_nCS
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_CKE
+set_instance_assignment -name CURRENT_STRENGTH_NEW "MAXIMUM CURRENT" -to SDRAM_CLK
+
 set_global_assignment -name OPTIMIZE_HOLD_TIMING "ALL PATHS"
 set_global_assignment -name OPTIMIZE_MULTI_CORNER_TIMING ON
 set_global_assignment -name OPTIMIZE_POWER_DURING_FITTING OFF
@@ -279,7 +320,13 @@ set_global_assignment -name OPTIMIZE_POWER_DURING_SYNTHESIS OFF
 set_global_assignment -name SEED 2
 set_instance_assignment -name FAST_INPUT_REGISTER ON -to SDRAM_DQ[*]
 set_global_assignment -name QIP_FILE ../../jt12/jt12.qip
+set_global_assignment -name VHDL_FILE ../../../Board/mist/MIST_Toplevel.vhd
 set_global_assignment -name SYSTEMVERILOG_FILE ../../Board/mist/rgb2ypbpr.sv
+set_global_assignment -name VERILOG_FILE ../../Board/mist/data_io.v
+set_global_assignment -name VERILOG_FILE ../../../Board/mist/user_io.v
+set_global_assignment -name VERILOG_FILE ../../../Board/mist/osd.v
+set_global_assignment -name VERILOG_FILE ../../Board/mist/hybrid_pwm_sd.v
+set_global_assignment -name VERILOG_FILE ../../../Board/mist/mist_console.v
 set_global_assignment -name VHDL_FILE ../../src/psg/psg_tone.vhd
 set_global_assignment -name VHDL_FILE ../../src/psg/psg_noise.vhd
 set_global_assignment -name VHDL_FILE ../../src/psg/psg.vhd
@@ -307,12 +354,6 @@ set_global_assignment -name VHDL_FILE ../../src/zram.vhd
 set_global_assignment -name VHDL_FILE ../../CtrlModule/RTL/OnScreenDisplay.vhd
 set_global_assignment -name VHDL_FILE ../../CtrlModule/RTL/OSD_Overlay.vhd
 set_global_assignment -name VHDL_FILE ../../CtrlModule/RTL/DualPortRAM_2Read_Unreg.vhd
-set_global_assignment -name VERILOG_FILE ../../../Board/mist/user_io.v
-set_global_assignment -name VERILOG_FILE ../../../Board/mist/sd_card.v
-set_global_assignment -name VERILOG_FILE ../../../Board/mist/osd.v
-set_global_assignment -name VERILOG_FILE ../../Board/mist/hybrid_pwm_sd.v
-set_global_assignment -name VERILOG_FILE ../../../Board/mist/mist_console.v
-set_global_assignment -name VHDL_FILE ../../../Board/mist/MIST_Toplevel.vhd
 set_global_assignment -name VHDL_FILE ../../CtrlModule/RTL/spi.vhd
 set_global_assignment -name VHDL_FILE ../../CtrlModule/RTL/simple_uart.vhd
 set_global_assignment -name VHDL_FILE ../../CtrlModule/RTL/io_ps2_com.vhd
@@ -331,4 +372,10 @@ set_global_assignment -name SIGNALTAP_FILE stp2.stp
 set_global_assignment -name VERILOG_FILE ../../src/TwoWayCache.v
 set_global_assignment -name VHDL_FILE ../../src/DualPortRAM.vhd
 set_global_assignment -name SDC_FILE ../../Board/mist/constraints.sdc
+set_location_assignment PLL_1 -to "pll:U00|altpll:altpll_component|pll_altpll:auto_generated"
+set_global_assignment -name ENABLE_CONFIGURATION_PINS OFF
+set_global_assignment -name ENABLE_NCE_PIN OFF
+set_global_assignment -name ENABLE_BOOT_SEL_PIN OFF
+set_global_assignment -name CYCLONEIII_CONFIGURATION_SCHEME "PASSIVE SERIAL"
+set_global_assignment -name FORCE_CONFIGURATION_VCCIO ON
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top

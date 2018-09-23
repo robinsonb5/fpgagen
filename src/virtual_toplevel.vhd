@@ -90,7 +90,23 @@ entity Virtual_Toplevel is
 		spi_miso		: in std_logic := '1';
 		spi_mosi		: out std_logic;
 		spi_clk		: out std_logic;
-		spi_cs 		: out std_logic
+		spi_cs 		: out std_logic;
+
+        -- external/built-in OSD/ROM Loader
+		ext_controller : in std_logic := '0';
+		ext_reset_n    : in std_logic := '1';
+		ext_bootdone   : in std_logic := '0';
+
+		-- Host boot data
+		ext_data       : in std_logic_vector(15 downto 0) := (others => '0');
+		ext_data_req   : out std_logic;
+		ext_data_ack   : in std_logic := '0';
+
+        -- DIP switches
+		ext_sw         : in std_logic_vector(15 downto 0) -- 0 - scandoubler
+														  -- 2 - joy swap
+														  -- 3 - PSG EN
+														  -- 4 - FM EN
 	);
 end entity;
 
@@ -491,11 +507,11 @@ type bootStates is (BOOT_READ_1, BOOT_WRITE_1, BOOT_WRITE_2, BOOT_DONE);
 signal bootState : bootStates := BOOT_READ_1;
 
 signal host_reset_n : std_logic;
-signal host_bootdone : std_logic;
+signal host_bootdone : std_logic := '0';
 signal rommap : std_logic_vector(1 downto 0);
 
-signal boot_req : std_logic;
-signal boot_ack : std_logic;
+signal boot_req : std_logic := '0';
+signal boot_ack : std_logic := '0';
 signal boot_data : std_logic_vector(15 downto 0);
 signal FL_DQ : std_logic_vector(15 downto 0);
 
@@ -505,11 +521,14 @@ signal osd_pixel : std_logic;
 type romStates is (ROM_IDLE, ROM_READ);
 signal romState : romStates := ROM_IDLE;
 
+signal int_SW : std_logic_vector(15 downto 0);
 signal SW : std_logic_vector(15 downto 0);
 signal KEY : std_logic_vector(3 downto 0);
 
 signal gp1emu : std_logic_vector(7 downto 0);
 signal gp2emu : std_logic_vector(7 downto 0);
+signal int_gp1emu : std_logic_vector(7 downto 0);
+signal int_gp2emu : std_logic_vector(7 downto 0);
 
 signal MASTER_VOLUME : std_logic_vector(2 downto 0);
 
@@ -524,7 +543,7 @@ begin
 -- -----------------------------------------------------------------------
 
 -- Reset
-PRE_RESET_N <= reset and SDR_INIT_DONE and host_reset_n;
+PRE_RESET_N <= reset and SDR_INIT_DONE and (host_reset_n or ext_controller) and (ext_reset_n or not ext_controller);
 process(MRST_N,MCLK)
 begin
 	if rising_edge(MCLK) then
@@ -536,6 +555,12 @@ end process;
 JOY_SWAP <= SW(2);
 JOY_1 <= joyb when JOY_SWAP = '1' else joya;
 JOY_2 <= joya when JOY_SWAP = '1' else joyb;
+
+gp1emu <= ( others => '1' ) when ext_controller = '1' else int_gp1emu;
+gp2emu <= ( others => '1' ) when ext_controller = '1' else int_gp2emu;
+
+-- DIP Switches
+SW <= ext_sw when ext_controller = '1' else int_sw;
 
 -- SDRAM
 DRAM_CKE <= '1';
@@ -1031,7 +1056,7 @@ VBUS_DATA <= DMA_FLASH_D when DMA_FLASH_SEL = '1'
 	else x"FFFF";
 
 -- 68K INPUTS
-TG68_RES_N <= MRST_N and host_bootdone;
+TG68_RES_N <= MRST_N and (host_bootdone or ext_bootdone);
 --TG68_CLK <= VCLK;
 --TG68_CLKE <= '1';
 
@@ -2150,7 +2175,7 @@ end process;
 
 -- Boot process
 
-FL_DQ<=boot_data;
+FL_DQ <= boot_data when ext_controller = '0' else ext_data;
 
 process( SDR_CLK )
 begin
@@ -2158,6 +2183,7 @@ begin
 		if PRE_RESET_N = '0' then
 				
 			boot_req <='0';
+			ext_data_req <= '0';
 			
 			romwr_req <= '0';
 			romwr_a <= to_unsigned(0, 21);
@@ -2167,12 +2193,15 @@ begin
 			case bootState is 
 				when BOOT_READ_1 =>
 					boot_req<='1';
-					if boot_ack='1' then
+					ext_data_req <= '1';
+					if boot_ack='1' or ext_data_ack ='1' then
 						boot_req<='0';
+						ext_data_req <= '0';
 						bootState <= BOOT_WRITE_1;
 					end if;
-					if host_bootdone='1' then
+					if host_bootdone='1' or ext_bootdone = '1' then
 						boot_req<='0';
+						ext_data_req <= '0';
 						bootState <= BOOT_DONE;
 					end if;
 				when BOOT_WRITE_1 =>
@@ -2198,8 +2227,8 @@ mycontrolmodule : entity work.CtrlModule
 		sysclk_frequency => 540 -- Sysclk frequency * 10
 	)
 	port map (
-		clk => MCLK,
-		osdclk => SDR_CLK,
+		clk => MCLK and not ext_controller,
+		osdclk => SDR_CLK and not ext_controller,
 		reset_n => reset,
 
 		-- SPI signals
@@ -2213,7 +2242,7 @@ mycontrolmodule : entity work.CtrlModule
 		txd => RS232_TXD,
 		
 		-- DIP switches
-		dipswitches => SW,
+		dipswitches => int_sw,
 
 		-- PS2 keyboard
 		ps2k_clk_in => ps2k_clk_in,
@@ -2240,8 +2269,8 @@ mycontrolmodule : entity work.CtrlModule
 		vol_master => MASTER_VOLUME,
 		
 		-- Gamepad emulation
-		gp1emu => gp1emu,
-		gp2emu => gp2emu
+		gp1emu => int_gp1emu,
+		gp2emu => int_gp2emu
 );
 
 

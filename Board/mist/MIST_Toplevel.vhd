@@ -124,7 +124,7 @@ signal ext_sw           : std_logic_vector( 15 downto 0); --DIP switches
 signal core_led         : std_logic;
 
 constant CONF_STR : string :=
-    "GENESYS;BINGENMD ;"&
+    "GENESIS;BINGENMD ;"&
     "O4,FM Sound,Enable,Disable;"&
     "O5,PSG Sound,Enable,Disable;"&
     "O6,Joystick swap,Off,On;"&

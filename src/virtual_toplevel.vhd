@@ -90,30 +90,46 @@ entity Virtual_Toplevel is
 		spi_miso		: in std_logic := '1';
 		spi_mosi		: out std_logic;
 		spi_clk		: out std_logic;
-		spi_cs 		: out std_logic
+		spi_cs 		: out std_logic;
+
+        -- external/built-in OSD/ROM Loader
+		ext_controller : in std_logic := '0';
+		ext_reset_n    : in std_logic := '1';
+		ext_bootdone   : in std_logic := '0';
+
+		-- Host boot data
+		ext_data       : in std_logic_vector(15 downto 0) := (others => '0');
+		ext_data_req   : out std_logic;
+		ext_data_ack   : in std_logic := '0';
+
+        -- DIP switches
+		ext_sw         : in std_logic_vector(15 downto 0) -- 0 - scandoubler
+														  -- 2 - joy swap
+														  -- 3 - PSG EN
+														  -- 4 - FM EN
 	);
 end entity;
 
 architecture rtl of Virtual_Toplevel is
 component jt12 port(
-	rst	: in std_logic;
-	clk : in std_logic;
-	din : in std_logic_vector(7 downto 0);
-	addr: in std_logic_vector(1 downto 0);
-	cs_n: in std_logic;
-	wr_n: in std_logic;	
-	limiter_en: in std_logic;
+	rst	    : in std_logic;
+	cpu_clk   : in std_logic;
+	cpu_din   : in std_logic_vector(7 downto 0);
+	cpu_dout  : out std_logic_vector(7 downto 0);
+	cpu_addr  : in std_logic_vector(1 downto 0);
+	cpu_cs_n  : in std_logic;
+	cpu_wr_n  : in std_logic;
+	cpu_irq_n : out std_logic;
+	cpu_limiter_en: in std_logic;
 	
-	dout: out std_logic_vector(7 downto 0);
-	snd_right:out std_logic_vector(11 downto 0);
-	snd_left:out std_logic_vector(11 downto 0);
-	clk_out : out std_logic;
-	sample	: out std_logic;	
+	syn_clk   : in std_logic;
+	syn_snd_right:out std_logic_vector(11 downto 0);
+	syn_snd_left:out std_logic_vector(11 downto 0);
+	syn_snd_sample	: out std_logic;
 	-- Mux'ed output
-	mux_right	:out std_logic_vector(8 downto 0);
-	mux_left	:out std_logic_vector(8 downto 0);
-	mux_sample	:out std_logic;
-    irq_n:out std_logic
+	syn_mux_right	:out std_logic_vector(8 downto 0);
+	syn_mux_left	:out std_logic_vector(8 downto 0);
+	syn_mux_sample	:out std_logic
 );
 end component;
 
@@ -139,6 +155,14 @@ component jt12_mixer port(
 	enable_psg	: in std_logic;
 	left_out	: out std_logic_vector(15 downto 0);
 	right_out	: out std_logic_vector(15 downto 0) );	
+end component;
+
+component audio_mixer port(
+	left_in 		: in  std_logic_vector(11 downto 0);
+	right_in		: in  std_logic_vector(11 downto 0);
+	psg			: in  std_logic_vector(5 downto 0);
+	left_out		: out std_logic_vector(15 downto 0);
+	right_out	: out std_logic_vector(15 downto 0) );
 end component;
 
 -- "FLASH"
@@ -233,9 +257,17 @@ signal TG68_UDS_N	: std_logic;
 signal TG68_LDS_N	: std_logic;
 signal TG68_RNW		: std_logic;
 signal TG68_INTACK	: std_logic;
+signal TG68_STATE	: std_logic_vector(1 downto 0);
+signal TG68_FC	        : std_logic_vector(2 downto 0);
 
 signal TG68_ENARDREG	: std_logic;
 signal TG68_ENAWRREG	: std_logic;
+
+signal TG68_ENA: std_logic;
+signal TG68_ENA_DIV: std_logic_vector(1 downto 0);
+signal TG68_WR: std_logic;
+signal TG68_RD: std_logic;
+signal TG68_IO: std_logic;
 
 -- Z80
 signal T80_RESET_N	: std_logic;
@@ -256,6 +288,10 @@ signal T80_BUSAK_N         : std_logic;
 signal T80_A               : std_logic_vector(15 downto 0);
 signal T80_DI              : std_logic_vector(7 downto 0);
 signal T80_DO              : std_logic_vector(7 downto 0);
+
+signal SCLK_EN		: std_logic;
+signal FCLK_EN		: std_logic;
+signal SCLKCNT		: std_logic_vector(5 downto 0);
 
 -- CLOCK GENERATION
 signal VCLK			: std_logic;
@@ -371,8 +407,8 @@ signal FM_CLKOUT		: std_logic;
 signal FM_SAMPLE		: std_logic;
 signal FM_LEFT			: std_logic_vector(11 downto 0);
 signal FM_RIGHT			: std_logic_vector(11 downto 0);
-signal FM_MUX_LEFT		: std_logic_vector(8 downto 0);
-signal FM_MUX_RIGHT		: std_logic_vector(8 downto 0);
+signal FM_MUX_LEFT		: std_logic_vector(11 downto 0);
+signal FM_MUX_RIGHT		: std_logic_vector(11 downto 0);
 signal FM_ENABLE		: std_logic;
 signal FM_AMP_LEFT		: std_logic_vector(11 downto 0);
 signal FM_AMP_RIGHT		: std_logic_vector(11 downto 0);
@@ -383,6 +419,7 @@ signal T80_PSG_SEL		: std_logic;
 signal TG68_PSG_SEL		: std_logic;
 signal PSG_DI			: std_logic_vector(7 downto 0);
 signal PSG_SND			: std_logic_vector(5 downto 0);
+signal PSG_MUX_SND		: std_logic_vector(5 downto 0);
 signal PSG_ENABLE		: std_logic;
 
 --signal FM_DTACK_N			: std_logic;
@@ -470,11 +507,11 @@ type bootStates is (BOOT_READ_1, BOOT_WRITE_1, BOOT_WRITE_2, BOOT_DONE);
 signal bootState : bootStates := BOOT_READ_1;
 
 signal host_reset_n : std_logic;
-signal host_bootdone : std_logic;
+signal host_bootdone : std_logic := '0';
 signal rommap : std_logic_vector(1 downto 0);
 
-signal boot_req : std_logic;
-signal boot_ack : std_logic;
+signal boot_req : std_logic := '0';
+signal boot_ack : std_logic := '0';
 signal boot_data : std_logic_vector(15 downto 0);
 signal FL_DQ : std_logic_vector(15 downto 0);
 
@@ -484,11 +521,14 @@ signal osd_pixel : std_logic;
 type romStates is (ROM_IDLE, ROM_READ);
 signal romState : romStates := ROM_IDLE;
 
+signal int_SW : std_logic_vector(15 downto 0);
 signal SW : std_logic_vector(15 downto 0);
 signal KEY : std_logic_vector(3 downto 0);
 
 signal gp1emu : std_logic_vector(7 downto 0);
 signal gp2emu : std_logic_vector(7 downto 0);
+signal int_gp1emu : std_logic_vector(7 downto 0);
+signal int_gp2emu : std_logic_vector(7 downto 0);
 
 signal MASTER_VOLUME : std_logic_vector(2 downto 0);
 
@@ -503,7 +543,7 @@ begin
 -- -----------------------------------------------------------------------
 
 -- Reset
-PRE_RESET_N <= reset and SDR_INIT_DONE and host_reset_n;
+PRE_RESET_N <= reset and SDR_INIT_DONE and (host_reset_n or ext_controller) and (ext_reset_n or not ext_controller);
 process(MRST_N,MCLK)
 begin
 	if rising_edge(MCLK) then
@@ -515,6 +555,12 @@ end process;
 JOY_SWAP <= SW(2);
 JOY_1 <= joyb when JOY_SWAP = '1' else joya;
 JOY_2 <= joya when JOY_SWAP = '1' else joyb;
+
+gp1emu <= ( others => '1' ) when ext_controller = '1' else int_gp1emu;
+gp2emu <= ( others => '1' ) when ext_controller = '1' else int_gp2emu;
+
+-- DIP Switches
+SW <= ext_sw when ext_controller = '1' else int_sw;
 
 -- SDRAM
 DRAM_CKE <= '1';
@@ -599,25 +645,63 @@ zr : entity work.zram port map (
 -- -----------------------------------------------------------------------
 -- -----------------------------------------------------------------------
 
+-- a full cpu cycle consists of 4 TG68_ENARDREG "bus" cycles
+process(MRST_N, MCLK)
+begin
+	if MRST_N = '0' then
+		TG68_ENA_DIV <= "00";
+		TG68_AS_N <= '1';
+	elsif rising_edge( MCLK ) then
+		if TG68_ENAWRREG = '1' then
+			TG68_ENA_DIV <= TG68_ENA_DIV + 1;
+
+			-- activate AS
+			if TG68_IO = '1' and TG68_ENA_DIV = "00" then
+				TG68_AS_N <= '0';
+			end if;
+			
+		end if;
+		if TG68_ENARDREG = '1' then
+			-- de-activate as in bus cycle 3 if dtack is ok
+			if TG68_ENA_DIV = "11" and TG68_DTACK_N = '0' then
+				TG68_AS_N <= '1';
+			end if;
+		end if;		
+	end if;
+end process;
+	
+TG68_WR <= '1' when TG68_STATE = "11" else '0';      -- data wr
+TG68_RD <= '1' when TG68_STATE = "00" or TG68_STATE = "10" else '0';   -- inst or data rd
+TG68_IO <= '1' when TG68_WR = '1' or TG68_RD = '1' else '0';
+-- clock enable signal for tg68k. Effectively clock/16 -> 3.375 MHz
+TG68_ENA <= '1' when TG68_ENARDREG = '1' and TG68_ENA_DIV = "11" and TG68_DTACK_N = '0' else '0';
+TG68_INTACK <= '1' when TG68_ENA = '1' and TG68_FC = "111" else '0';
+
 -- 68K
-tg68 : entity work.TG68 
+tg68 : entity work.TG68KdotC_Kernel
+generic map(
+   SR_Read => 0,           --0=>user,   1=>privileged,      2=>switchable with CPU(0)
+   VBR_Stackframe => 0,    --0=>no,     1=>yes/extended,    2=>switchable with CPU(0)
+   extAddr_Mode => 0,      --0=>no,     1=>yes,             2=>switchable with CPU(1)
+   MUL_Mode => 0,          --0=>16Bit,  1=>32Bit,           2=>switchable with CPU(1),  3=>no MUL,  
+   DIV_Mode => 0,          --0=>16Bit,  1=>32Bit,           2=>switchable with CPU(1),  3=>no DIV, 
+   BitField => 0           --0=>no,     1=>yes,             2=>switchable with CPU(1)
+)
 port map(
-	-- clk			=> TG68_CLK,
-	clk			=> MCLK,
-	reset			=> TG68_RES_N,
-	clkena_in	=> '1',
-	data_in		=> TG68_DI,
-	IPL			=> TG68_IPL_N,
-	dtack			=> TG68_DTACK_N,
-	addr			=> TG68_A,
-	data_out		=> TG68_DO,
-	as				=> TG68_AS_N,
-	uds			=> TG68_UDS_N,
-	lds			=> TG68_LDS_N,
-	rw				=> TG68_RNW,
-	enaRDreg		=> TG68_ENARDREG,
-	enaWRreg		=> TG68_ENAWRREG,
-	intack		=> TG68_INTACK
+        clk		=> MCLK,
+	nReset		=> TG68_RES_N,
+	clkena_in	=> TG68_ENA,
+ 	data_in		=> TG68_DI,
+ 	IPL		=> TG68_IPL_N,
+	IPL_autovector  => '1',
+	berr            => '0',
+ 	addr		=> TG68_A,
+	data_write	=> TG68_DO,
+	nUDS		=> TG68_UDS_N,
+	nLDS		=> TG68_LDS_N,
+	nWr		=> TG68_RNW,
+	busstate        => TG68_STATE,
+	FC              => TG68_FC
 );
 
 -- Z80
@@ -754,48 +838,28 @@ port map(
 );
 
 -- FM
-fm_mixer:jt12_mixer
-port map(
-	rst			=> not MRST_N,
-	clk			=> MCLK,
-	sample		=> FM_SAMPLE,
-	left_in 	=> FM_MUX_LEFT,
-	right_in	=> FM_MUX_RIGHT,
-	psg			=> PSG_SND,
-	enable_psg	=> PSG_ENABLE,
-	left_out	=> DAC_LDATA,
-	right_out	=> DAC_RDATA
-);
---fm_amp : jt12_amp_stereo
---port map(
---	clk			=> FM_CLKOUT,
---	volume		=> MASTER_VOLUME,
---	sample		=> FM_SAMPLE,
---	psg			=> PSG_SND,
---	enable_psg	=> PSG_ENABLE,
---	fmleft		=> FM_AMP_LEFT,
---	fmright		=> FM_AMP_RIGHT,
---	postleft		=> DAC_LDATA,
---	postright	=> DAC_RDATA
---);
-
 fm : jt12
 port map(
-	rst		=> RST_VCLK,	-- gen-hw.txt line 328
-	clk		=> VCLK,
-	clk_out	=> FM_CLKOUT,
-	
-	limiter_en => not SW(5),
-	cs_n	=> not FM_SEL,
-	addr	=> FM_A,
-	wr_n	=> FM_RNW,
-	din			=> FM_DI,
-	dout		=> FM_DO,
-	mux_left	=> FM_MUX_LEFT,
-	mux_right	=> FM_MUX_RIGHT,
-	mux_sample	=> FM_SAMPLE
+	rst		      => RST_VCLK,	-- gen-hw.txt line 328
+	cpu_clk	      => MCLK and FCLK_EN,
+	cpu_limiter_en => '1',
+	cpu_cs_n	      => not FM_SEL,
+	cpu_addr	      => FM_A,
+	cpu_wr_n	      => FM_RNW,
+	cpu_din	      => FM_DI,
+	cpu_dout	      => FM_DO,
+
+	syn_clk	      => MCLK and SCLK_EN,
+	syn_snd_left   => FM_LEFT,
+	syn_snd_right  => FM_RIGHT
 );
 
+FM_MUX_LEFT <= FM_LEFT when FM_ENABLE = '1' else "000000000000";
+FM_MUX_RIGHT <= FM_RIGHT when FM_ENABLE = '1' else "000000000000";
+PSG_MUX_SND <= PSG_SND when PSG_ENABLE = '1' else "000000";
+
+DAC_LDATA <= std_logic_vector(signed(FM_MUX_LEFT(11)&FM_MUX_LEFT&"000") + signed("0"&PSG_MUX_SND&"0000000"));
+DAC_RDATA <= std_logic_vector(signed(FM_MUX_RIGHT(11)&FM_MUX_RIGHT&"000") + signed("0"&PSG_MUX_SND&"0000000"));
 
 -- #############################################################################
 -- #############################################################################
@@ -942,6 +1006,33 @@ end process;
 process( MRST_N, MCLK )
 begin
 	if MRST_N = '0' then
+		SCLK_EN <= '1';
+		SCLKCNT <= "000001";
+	elsif falling_edge(MCLK) then
+
+		SCLKCNT <= SCLKCNT + 1;
+		if SCLKCNT = X"29" then
+			SCLKCNT <= (others => '0');
+		end if;
+
+		if SCLKCNT = "0" then
+			SCLK_EN <= '1';
+		else
+			SCLK_EN <= '0';
+		end if;
+
+		if VCLKCNT = "001" then
+			FCLK_EN <= '1';
+		else
+			FCLK_EN <= '0';
+		end if;
+
+	end if;
+end process;
+
+process( MRST_N, MCLK )
+begin
+	if MRST_N = '0' then
 		T80_CLKEN <= '1';
 		ZCLKCNT <= (others => '0');
 	elsif rising_edge(MCLK ) then
@@ -965,7 +1056,7 @@ VBUS_DATA <= DMA_FLASH_D when DMA_FLASH_SEL = '1'
 	else x"FFFF";
 
 -- 68K INPUTS
-TG68_RES_N <= MRST_N and host_bootdone;
+TG68_RES_N <= MRST_N and (host_bootdone or ext_bootdone);
 --TG68_CLK <= VCLK;
 --TG68_CLKE <= '1';
 
@@ -2084,7 +2175,7 @@ end process;
 
 -- Boot process
 
-FL_DQ<=boot_data;
+FL_DQ <= boot_data when ext_controller = '0' else ext_data;
 
 process( SDR_CLK )
 begin
@@ -2092,6 +2183,7 @@ begin
 		if PRE_RESET_N = '0' then
 				
 			boot_req <='0';
+			ext_data_req <= '0';
 			
 			romwr_req <= '0';
 			romwr_a <= to_unsigned(0, 21);
@@ -2101,12 +2193,15 @@ begin
 			case bootState is 
 				when BOOT_READ_1 =>
 					boot_req<='1';
-					if boot_ack='1' then
+					ext_data_req <= '1';
+					if boot_ack='1' or ext_data_ack ='1' then
 						boot_req<='0';
+						ext_data_req <= '0';
 						bootState <= BOOT_WRITE_1;
 					end if;
-					if host_bootdone='1' then
+					if host_bootdone='1' or ext_bootdone = '1' then
 						boot_req<='0';
+						ext_data_req <= '0';
 						bootState <= BOOT_DONE;
 					end if;
 				when BOOT_WRITE_1 =>
@@ -2132,8 +2227,8 @@ mycontrolmodule : entity work.CtrlModule
 		sysclk_frequency => 540 -- Sysclk frequency * 10
 	)
 	port map (
-		clk => MCLK,
-		osdclk => SDR_CLK,
+		clk => MCLK and not ext_controller,
+		osdclk => SDR_CLK and not ext_controller,
 		reset_n => reset,
 
 		-- SPI signals
@@ -2147,7 +2242,7 @@ mycontrolmodule : entity work.CtrlModule
 		txd => RS232_TXD,
 		
 		-- DIP switches
-		dipswitches => SW,
+		dipswitches => int_sw,
 
 		-- PS2 keyboard
 		ps2k_clk_in => ps2k_clk_in,
@@ -2174,8 +2269,8 @@ mycontrolmodule : entity work.CtrlModule
 		vol_master => MASTER_VOLUME,
 		
 		-- Gamepad emulation
-		gp1emu => gp1emu,
-		gp2emu => gp2emu
+		gp1emu => int_gp1emu,
+		gp2emu => int_gp2emu
 );
 
 

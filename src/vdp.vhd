@@ -199,6 +199,7 @@ signal IM			: std_logic;
 signal IM2			: std_logic;
 signal ODD			: std_logic;
 
+signal HV8			: std_logic;
 signal HV			: std_logic_vector(15 downto 0);
 signal STATUS		: std_logic_vector(15 downto 0);
 
@@ -322,7 +323,7 @@ signal DISP_ACTIVE	: std_logic;
 -- HV COUNTERS
 signal HV_PIXDIV	: std_logic_vector(3 downto 0);
 signal HV_HCNT		: std_logic_vector(8 downto 0); 
-signal HV_VCNT		: std_logic_vector(9 downto 0); 
+signal HV_VCNT		: std_logic_vector(8 downto 0); 
 
 ----------------------------------------------------------------
 -- VRAM CONTROLLER
@@ -697,7 +698,8 @@ ODD <= FIELD when IM = '1' else '0';
 IN_DMA <= DMA_FILL or DMA_COPY or DMA_VBUS;
 
 STATUS <= "111111" & FIFO_EMPTY & FIFO_FULL & VINT_TG68_PENDING & SOVR & SCOL & ODD & IN_VBL & IN_HBL & IN_DMA & V30;
-HV <= HV_VCNT(8 downto 1) & HV_HCNT(8 downto 1);	-- TODO : Interlace mode
+HV8 <= HV_VCNT(8) when INTERLACE = '1' else HV_VCNT(0);
+HV <= HV_VCNT(7 downto 1) & HV8 & HV_HCNT(8 downto 1);
 
 ----------------------------------------------------------------
 -- CPU INTERFACE
@@ -842,11 +844,9 @@ begin
 					SOVR_CLR <= '1';
 					SCOL_CLR <= '1';
 					FF_DTACK_N <= '0';
-				elsif A(3 downto 2) = "10" then
+				elsif A(3) = '1' then
 					-- HV Counter
 					FF_DO <= HV;
-					FF_DTACK_N <= '0';
-				else
 					FF_DTACK_N <= '0';
 				end if;
 

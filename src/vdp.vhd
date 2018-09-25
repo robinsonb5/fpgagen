@@ -1922,6 +1922,7 @@ end process;
 ----------------------------------------------------------------
 -- COUNTERS AND INTERRUPTS
 process( RST_N, CLK )
+    variable hcnt1, hcnt2, hcnt3, hcnt4, hcnt5: std_logic_vector(8 downto 0);
 begin
 	if RST_N = '0' then
 		H_CNT <= (others => '0');
@@ -1957,6 +1958,20 @@ begin
 		VINT_TG68_PENDING_SET <= '0';
 		VINT_T80_SET <= '0';
 		VINT_T80_CLR <= '0';
+        
+        if (H40 = '1') then
+            hcnt1 := x"A7" & "0";
+            hcnt2 := x"02" & "0";
+            hcnt3 := x"B5" & "1";
+            hcnt4 := x"08" & "1";
+            hcnt5 := x"E4" & "0";
+        else
+            hcnt1 := x"85" & "0";
+            hcnt2 := x"00" & "0";
+            hcnt3 := x"93" & "1";
+            hcnt4 := x"06" & "0";
+            hcnt5 := x"E9" & "0";
+        end if;
 		
 		-- H-Counter seems fine in H32 mode (342px x 10 = 3420 cycles)
 		-- but not so much in H40 mode (420px x 8 = 3360 cycles)
@@ -1971,7 +1986,8 @@ begin
 			end if;
 		else
 			HV_PIXDIV <= HV_PIXDIV + 1;
-			if H40 = '1' and HV_PIXDIV = 8-1 then				
+			if (H40 = '1' and HV_PIXDIV = 8-1) or
+			   (H40 = '0' and HV_PIXDIV = 10-1) then
 				HV_PIXDIV <= (others => '0');
 				HV_HCNT <= HV_HCNT + 1;
 
@@ -1984,9 +2000,13 @@ begin
 	-- HINT_PENDING_SET <= '1';
 -- end if;
 				
-				if HV_HCNT = x"A7" & "0" then
+				if HV_HCNT = hcnt1 then
+					if V_CNT = (NTSC_LINES*2)-1 then
+						HV_VCNT <= conv_std_logic_vector(-NTSC_V_DISP_START, 9);
+					else
+						HV_VCNT <= HV_VCNT + 1;
+					end if;
 					if V_CNT = NTSC_V_DISP_START*2-1 then
-						HV_VCNT <= (others => '0');
 						if HIT = 0 then
 							HINT_PENDING_SET <= '1';
 							HINT_COUNT <= (others => '0');
@@ -1995,7 +2015,6 @@ begin
 						end if;
 						IN_VBL <= '0';
 					else
-						HV_VCNT <= HV_VCNT + 1;
 						if ( V_CNT > NTSC_V_DISP_START*2-1 )
 						and ( ( V30 = '0' and V_CNT <= (NTSC_V_DISP_START+224)*2-1 ) or ( V30 = '1' and V_CNT <= (NTSC_V_DISP_START+240)*2-1 ) )
 						then
@@ -2006,8 +2025,8 @@ begin
 								HINT_COUNT <= HINT_COUNT - 1;
 							end if;
 						end if;
-					end if;					
-				elsif HV_HCNT = x"02" & "0" then
+					end if;
+				elsif HV_HCNT = hcnt2 then
 					if ( V30 = '0' and V_CNT = (NTSC_V_DISP_START+224)*2 ) 
 					or ( V30 = '1' and V_CNT = (NTSC_V_DISP_START+240)*2 )
 					then
@@ -2019,64 +2038,15 @@ begin
 					then
 						VINT_T80_CLR <= '1';
 					end if;
-				elsif HV_HCNT = x"B5" & "1" then
-					HV_HCNT <= x"E4" & "0";
+				elsif HV_HCNT = hcnt3 then
+					HV_HCNT <= hcnt5;
 					if (V_CNT >= NTSC_V_DISP_START*2-1 )
 					and ( ( V30 = '0' and V_CNT <= (NTSC_V_DISP_START+224)*2-1 ) or ( V30 = '1' and V_CNT <= (NTSC_V_DISP_START+240)*2-1 ) )
 					then
 						IN_HBL <= '1';
 					end if;
-				elsif HV_HCNT = x"08" & "1" then
+				elsif HV_HCNT = hcnt4 then
 					IN_HBL <= '0';
-				end if;
-			elsif H40 = '0' and HV_PIXDIV = 10-1 then				
-				HV_PIXDIV <= (others => '0');
-				HV_HCNT <= HV_HCNT + 1;
-				if HV_HCNT = x"85" & "0" then
-					if V_CNT = NTSC_V_DISP_START*2-1 then
-						HV_VCNT <= (others => '0');
-						HINT_COUNT <= HIT;
-						if HIT = 0 then
-							HINT_PENDING_SET <= '1';
-							HINT_COUNT <= (others => '0');
-						else
-							HINT_COUNT <= HIT - 1;
-						end if;						
-						IN_VBL <= '0';
-					else
-						HV_VCNT <= HV_VCNT + 1;
-						if ( V_CNT > NTSC_V_DISP_START*2-1 )
-						and ( ( V30 = '0' and V_CNT <= (NTSC_V_DISP_START+224)*2-1 ) or ( V30 = '1' and V_CNT <= (NTSC_V_DISP_START+240)*2-1 ) )
-						then
-							if HINT_COUNT = 0 then
-								HINT_PENDING_SET <= '1';
-								HINT_COUNT <= HIT;
-							else
-								HINT_COUNT <= HINT_COUNT - 1;
-							end if;
-						end if;
-					end if;
-				elsif HV_HCNT = x"00" & "0" then
-					if ( V30 = '0' and V_CNT = (NTSC_V_DISP_START+224)*2 ) 
-					or ( V30 = '1' and V_CNT = (NTSC_V_DISP_START+240)*2 )
-					then
-						VINT_TG68_PENDING_SET <= '1';
-						VINT_T80_SET <= '1';
-						IN_VBL <= '1';
-					elsif ( V30 = '0' and V_CNT = (NTSC_V_DISP_START+224)*2+2 ) 
-					or ( V30 = '1' and V_CNT = (NTSC_V_DISP_START+240)*2+2 )
-					then
-						VINT_T80_CLR <= '1';
-					end if;
-				elsif HV_HCNT = x"93" & "1" then
-					HV_HCNT <= x"E9" & "0";
-					if (V_CNT >= NTSC_V_DISP_START*2-1 )
-					and ( ( V30 = '0' and V_CNT <= (NTSC_V_DISP_START+224)*2-1 ) or ( V30 = '1' and V_CNT <= (NTSC_V_DISP_START+240)*2-1 ) )
-					then
-						IN_HBL <= '1';
-					end if;
-				elsif HV_HCNT = x"06" & "0" then
-					IN_HBL <= '0';	
 				end if;
 			end if;		
 		end if;

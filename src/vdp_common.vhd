@@ -51,6 +51,6 @@ constant VS_LINES				: integer := 3;
 
 constant NTSC_LINES			: integer := 262;
 -- constant NTSC_V_DISP_START	: integer := 16;
-constant NTSC_V_DISP_START	: integer := 28;
+constant NTSC_V_DISP_START	: integer := 24;
 
 end vdp_common;

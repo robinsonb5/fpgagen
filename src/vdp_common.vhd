@@ -38,19 +38,37 @@ library IEEE;
 
 package vdp_common is
 
-constant CLOCKS_PER_LINE		: integer := 3420;
-constant H_DISP_CLOCKS			: integer := 2560;
-constant H_DISP_START			: integer := 632;	-- 612 -- (3.77 + 1.89) * 2 * 54
---constant H_DISP_START			: integer := 580;
+constant H_DISP_CLOCKS          : integer := 2560;
 
-constant HS_CLOCKS				: integer := 254; -- 4.7 us
-constant VGA_HS_CLOCKS			: integer := 204;	-- 3.77 us
+constant CLOCKS_PER_LINE_MAX    : integer := 3420;
+constant CLOCKS_PER_LINE_H32    : integer := 342*10;
+constant CLOCKS_PER_LINE_H40    : integer := 427*8; -- 3416
 
-constant VGA_VS_LINES		: integer := 1;		-- 0.06 ms
-constant VS_LINES				: integer := 3;
+constant HS_CLOCKS              : integer := 254; -- 4.7 us
+constant VGA_HS_CLOCKS          : integer := 204;       -- 3.77 us
 
-constant NTSC_LINES			: integer := 262;
--- constant NTSC_V_DISP_START	: integer := 16;
-constant NTSC_V_DISP_START	: integer := 26;
+constant VGA_VS_LINES           : integer := 1;         -- 0.06 ms
+constant VS_LINES               : integer := 3;
+
+constant H_DISP_START_H32       : integer := HS_CLOCKS + 46*10;
+constant H_DISP_START_H40       : integer := HS_CLOCKS + 46*8;
+
+constant HBLANK_START_H32       : integer := 264; -- in cells
+constant HBLANK_START_H40       : integer := 328;
+
+constant HBLANK_END_H32         : integer := 1; -- in cells
+constant HBLANK_END_H40         : integer := 1;
+
+constant HINT_H32               : integer := 294; -- in cells
+constant HINT_H40               : integer := 349;
+
+constant V_DISP_HEIGHT_V28      : integer := 224;
+constant V_DISP_HEIGHT_V30      : integer := 240;
+
+constant V_DISP_START_V28       : integer := 27;
+constant V_DISP_START_V30       : integer := 46;
+
+constant NTSC_LINES             : integer := 262;
+constant PAL_LINES              : integer := 312;
 
 end vdp_common;

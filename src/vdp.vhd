@@ -89,6 +89,7 @@ entity vdp is
 		VBUS_SEL		: out std_logic;
 		VBUS_DTACK_N	: in std_logic;
 
+		PAL		: in std_logic := '0';
 		R		: out std_logic_vector(3 downto 0);
 		G		: out std_logic_vector(3 downto 0);
 		B		: out std_logic_vector(3 downto 0);
@@ -339,6 +340,7 @@ signal HBLANK_START	: std_logic_vector(8 downto 0);
 signal HBLANK_END	: std_logic_vector(8 downto 0);
 signal V_DISP_START : std_logic_vector(8 downto 0);
 signal V_DISP_HEIGHT: std_logic_vector(8 downto 0);
+signal V_TOTAL_HEIGHT: std_logic_vector(8 downto 0);
 
 ----------------------------------------------------------------
 -- VRAM CONTROLLER
@@ -708,7 +710,7 @@ SATB <= REG(5)(6 downto 0);
 ODD <= FIELD when IM = '1' else '0';
 IN_DMA <= DMA_FILL or DMA_COPY or DMA_VBUS;
 
-STATUS <= "111111" & FIFO_EMPTY & FIFO_FULL & VINT_TG68_PENDING & SOVR & SCOL & ODD & IN_VBL & IN_HBL & IN_DMA & V30;
+STATUS <= "111111" & FIFO_EMPTY & FIFO_FULL & VINT_TG68_PENDING & SOVR & SCOL & ODD & IN_VBL & IN_HBL & IN_DMA & PAL;
 HV8 <= HV_VCNT(8) when INTERLACE = '1' else HV_VCNT(0);
 HV <= HV_VCNT(7 downto 1) & HV8 & HV_HCNT(8 downto 1);
 
@@ -1943,6 +1945,8 @@ V_DISP_HEIGHT <= conv_std_logic_vector(V_DISP_HEIGHT_V30, 9) when V30='1'
             else conv_std_logic_vector(V_DISP_HEIGHT_V28, 9);
 V_DISP_START  <= conv_std_logic_vector(-V_DISP_START_V30, 9) when V30='1'
             else conv_std_logic_vector(-V_DISP_START_V28, 9);
+V_TOTAL_HEIGHT <= conv_std_logic_vector(PAL_LINES, 9) when PAL='1'
+             else conv_std_logic_vector(NTSC_LINES, 9);
 
 -- COUNTERS AND INTERRUPTS
 process( RST_N, CLK )
@@ -2001,7 +2005,7 @@ begin
 -- end if;
 
 				if HV_HCNT = HINT_START then
-					if HV_VCNT = V_DISP_START + NTSC_LINES - 1 then --VDISP_START is negative
+					if HV_VCNT = V_DISP_START + V_TOTAL_HEIGHT - 1 then --VDISP_START is negative
 						--just after VSYNC
 						HV_VCNT <= V_DISP_START;
 						FIELD <= not FIELD;
@@ -2226,7 +2230,7 @@ begin
 			H_VGA_CNT <= (others => '0');
 			V_CNT <= V_CNT + 1;
 		end if;
-		if HV_VCNT = V_DISP_START + NTSC_LINES - VS_LINES*2 then
+		if HV_VCNT = V_DISP_START + V_TOTAL_HEIGHT - VS_LINES*2 then
 			V_CNT <= (others => '0');
 		end if;
 	end if;

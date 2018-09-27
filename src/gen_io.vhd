@@ -68,7 +68,10 @@ entity gen_io is
 		LDS_N		: in std_logic;
 		DI			: in std_logic_vector(15 downto 0);
 		DO			: out std_logic_vector(15 downto 0);
-		DTACK_N	: out std_logic		
+		DTACK_N	: out std_logic;
+
+		PAL		: in std_logic;
+		MODEL   : in std_logic
 	);
 end gen_io;
 architecture rtl of gen_io is
@@ -104,13 +107,13 @@ DTACK_N <= FF_DTACK_N;
 REG <= A(4 downto 1);
 WD <= DI(7 downto 0) when LDS_N = '0' else DI(15 downto 8);
 
+VERS <= MODEL & PAL & "10" & x"0";
+
 process( RST_N, CLK )
 begin
 	if RST_N = '0' then
 		FF_DTACK_N <= '1';
 		RD <= (others => '1');
-
-		VERS <= x"A0";
 
 		DATA <= x"7F";
 		DATB <= x"7F";
@@ -141,7 +144,7 @@ begin
 				-- Write
 				case REG is
 				when x"0" =>
-					VERS <= WD; -- Will be set by OS
+					null;--VERS <= WD; -- Read only
 				when x"1" =>
 					DATA(7) <= WD(7);
 					if CTLA(6) = '1' then DATA(6) <= WD(6); end if;

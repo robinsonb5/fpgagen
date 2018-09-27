@@ -75,7 +75,7 @@ signal vga_pr_o : std_logic_vector(5 downto 0);
 
 -- user_io
 signal buttons: std_logic_vector(1 downto 0);
-signal status:  std_logic_vector(7 downto 0);
+signal status:  std_logic_vector(31 downto 0);
 signal joy_0: std_logic_vector(7 downto 0);
 signal joy_1: std_logic_vector(7 downto 0);
 signal joy_ana_0: std_logic_vector(15 downto 0);
@@ -125,9 +125,11 @@ signal core_led         : std_logic;
 
 constant CONF_STR : string :=
     "GENESIS;BINGENMD ;"&
+    "O7,Display,NTSC,PAL;"&
+    "O6,Joystick swap,Off,On;"&
     "O4,FM Sound,Enable,Disable;"&
     "O5,PSG Sound,Enable,Disable;"&
-    "O6,Joystick swap,Off,On;"&
+    "O8,Model,Export,Domestic;"&
     "T0,Reset;";
 
 -- convert string to std_logic_vector to be given to user_io
@@ -198,7 +200,7 @@ component user_io
         joystick_1 : out std_logic_vector(7 downto 0);
         joystick_analog_0 : out std_logic_vector(15 downto 0);
         joystick_analog_1 : out std_logic_vector(15 downto 0);
-        status: out std_logic_vector(7 downto 0);
+        status: out std_logic_vector(31 downto 0);
         switches : out std_logic_vector(1 downto 0);
         buttons : out std_logic_vector(1 downto 0);
         scandoubler_disable: out std_logic;
@@ -289,6 +291,8 @@ ext_sw(0) <= scandoubler_disable;
 ext_sw(2) <= status(6); --joy swap
 ext_sw(3) <= status(5); --psg en
 ext_sw(4) <= status(4); --fm en
+ext_sw(5) <= status(7); --PAL
+ext_sw(6) <= not status(8); --model
 
 --SDRAM_A(12)<='0';
 virtualtoplevel : entity work.Virtual_Toplevel

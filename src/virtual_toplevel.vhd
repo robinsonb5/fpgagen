@@ -107,6 +107,8 @@ entity Virtual_Toplevel is
 														  -- 2 - joy swap
 														  -- 3 - PSG EN
 														  -- 4 - FM EN
+														  -- 5 - PAL
+														  -- 6 - Export model
 	);
 end entity;
 
@@ -530,6 +532,9 @@ signal gp2emu : std_logic_vector(7 downto 0);
 signal int_gp1emu : std_logic_vector(7 downto 0);
 signal int_gp2emu : std_logic_vector(7 downto 0);
 
+signal PAL : std_logic;
+signal model: std_logic;
+
 signal MASTER_VOLUME : std_logic_vector(2 downto 0);
 
 -- DEBUG
@@ -558,6 +563,9 @@ JOY_2 <= joya when JOY_SWAP = '1' else joyb;
 
 gp1emu <= ( others => '1' ) when ext_controller = '1' else int_gp1emu;
 gp2emu <= ( others => '1' ) when ext_controller = '1' else int_gp2emu;
+
+PAL <= SW(5);
+model <= SW(6);
 
 -- DIP Switches
 SW <= ext_sw when ext_controller = '1' else int_sw;
@@ -766,7 +774,10 @@ port map(
 	LDS_N		=> IO_LDS_N,
 	DI			=> IO_DI,
 	DO			=> IO_DO,
-	DTACK_N		=> IO_DTACK_N
+	DTACK_N		=> IO_DTACK_N,
+
+	PAL			=> PAL,
+	MODEL		=> model
 );
 
 -- VDP
@@ -811,7 +822,8 @@ port map(
 		
 	VBUS_SEL			=> VBUS_SEL,
 	VBUS_DTACK_N	=> VBUS_DTACK_N,
-	
+
+	PAL					=> PAL,
 	R					=> VDP_RED,
 	G					=> VDP_GREEN,
 	B					=> VDP_BLUE,

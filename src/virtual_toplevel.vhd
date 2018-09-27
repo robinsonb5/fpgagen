@@ -1641,25 +1641,14 @@ end process;
 -- PSG AREA
 -- Z80: 7F11h
 -- 68k: C00011
+
+T80_PSG_SEL <= '1' when T80_A(15 downto 3) = x"7F1"&'0' and T80_MREQ_N = '0' and T80_WR_N = '0' else '0';
+TG68_PSG_SEL <= '1' when TG68_A(31 downto 3) = x"C0001"&'0' and TG68_AS_N = '0' and TG68_RNW='0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') else '0';
+
 process( MRST_N, MCLK, TG68_AS_N, 
 	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
 	BAR, T80_A, T80_MREQ_N, T80_WR_N )
 begin
-	if T80_A = x"7F11" 
-		and T80_MREQ_N = '0' and T80_WR_N = '0'
-	then
-		T80_PSG_SEL <= '1';			
-	else
-		T80_PSG_SEL <= '0';
-	end if;	
-
-	if TG68_A = x"C00011"
-		and TG68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') 
-	then	
-		TG68_PSG_SEL <= '1';		
-	else
-		TG68_PSG_SEL <= '0';
-	end if;	
 	
 	if MRST_N = '0' then
 		PSG_SEL<= '0';

@@ -32,6 +32,12 @@
 -- make sure that this is not a derivative work and that
 -- you have the latest version of this file.
 
+-- TODOs/Known issues (according to http://md.squee.co/VDP)
+-- - highlight and shadow completely missing
+--    - needs 1 additional color bit in the entire video chain
+-- - only bit 0..8 of the 10 bit vertical sprite position are processed
+-- - window has priority over sprites
+
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.STD_LOGIC_ARITH.ALL;
@@ -1571,6 +1577,7 @@ begin
 					OBJ_CUR <= SP1_VRAM_DO(6 downto 0);
 
 					-- check a total of 80 sprites in H40 mode and 64 sprites in H32 mode
+					--  FIXME: This should not be necessary since SP2 also limits this
 					if ((H40 = '1' and SP1_X(7 downto 1) = 80) or 
 						 (H40 = '0' and SP1_X(7 downto 1) = 64)) then
 						SP1C <= SP1C_DONE;
@@ -1884,13 +1891,14 @@ begin
 				OBJ_TOT <= OBJ_TOT + 1;
 				OBJ_NEXT <= OBJ_LINK;
 
-				if (H40 = '1' and OBJ_TOT = 79) or (H40 = '0' and OBJ_TOT = 63) then
-					SP2C <= SP2C_DONE;
-					SOVR_SET <= '1';
-				elsif (H40 = '1' and OBJ_NB >= 20) or (H40 = '0' and OBJ_NB >= 16) then
-					SP2C <= SP2C_DONE;
-					SOVR_SET <= '1';
-				elsif (H40 = '1' and OBJ_PIX >= 320) or (H40 = '0' and OBJ_PIX >= 256) then
+				-- 1) limit number of sprites per frame to 80 / 64
+				-- FIXME: This is supposed to pass test 9 of the sprite
+				--        masking and overflow test rom. But it doesn't in H32
+		      -- 2) limit number of sprites per line to 20 / 16
+ 		      -- 3) limit sprite pixels per line to 320 / 256
+				if (H40 = '1' and OBJ_TOT >=  79) or (H40 = '0' and OBJ_TOT >=  63) or
+				   (H40 = '1' and OBJ_NB  >=  20) or (H40 = '0' and OBJ_NB  >=  16) or
+				   (H40 = '1' and OBJ_PIX >= 320) or (H40 = '0' and OBJ_PIX >= 256) then
 					SP2C <= SP2C_DONE;
 					SOVR_SET <= '1';
 				elsif OBJ_LINK = "0000000" then

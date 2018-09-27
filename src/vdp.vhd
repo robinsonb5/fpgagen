@@ -1305,18 +1305,22 @@ begin
 			when BGAC_CALC_BASE =>
 				if WIN_H = '1' or WIN_V = '1' then
 					V_BGA_XBASE := (NTWB & "00000000000") + (BGA_POS(9 downto 3) & "0");
+					if H40 = '0' then -- WIN is 32 tiles wide in H32 mode
+						V_BGA_BASE := V_BGA_XBASE + (BGA_Y(9 downto 3) & "00000" & "0");
+					else              -- WIN is 64 tiles wide in H40 mode
+						V_BGA_BASE := V_BGA_XBASE + (BGA_Y(9 downto 3) & "000000" & "0");
+					end if;
 			   else
 					V_BGA_XBASE := (NTAB & "0000000000000") + (BGA_X(9 downto 3) & "0");
-				end if;
-				
-				case HSIZE is
+					case HSIZE is
 					when "00" => -- HS 32 cells
 						V_BGA_BASE := V_BGA_XBASE + (BGA_Y(9 downto 3) & "00000" & "0");
 					when "01" => -- HS 64 cells
 						V_BGA_BASE := V_BGA_XBASE + (BGA_Y(9 downto 3) & "000000" & "0");
 					when others => -- HS 128 cells
 						V_BGA_BASE := V_BGA_XBASE + (BGA_Y(9 downto 3) & "0000000" & "0");
-				end case;
+					end case;
+				end if;
 				
 				BGA_VRAM_ADDR <= V_BGA_BASE(15 downto 1);
 				BGA_SEL <= '1';

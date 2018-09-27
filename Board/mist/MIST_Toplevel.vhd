@@ -228,6 +228,7 @@ component data_io
     end component data_io;
 
 component osd
+ 	 generic ( OSD_COLOR : integer := 1 );  -- blue
     port (  clk_sys     : in std_logic;
 
             R_in        : in std_logic_vector(5 downto 0);

@@ -332,10 +332,12 @@ signal HV_HCNT		: std_logic_vector(8 downto 0);
 signal HV_VCNT		: std_logic_vector(8 downto 0);
 
 -- TIMING VALUES
+signal CLOCKS_PER_LINE : std_logic_vector(11 downto 0);
 signal H_DISP_START : std_logic_vector(11 downto 0);
 signal HINT_START	: std_logic_vector(8 downto 0);
 signal HBLANK_START	: std_logic_vector(8 downto 0);
 signal HBLANK_END	: std_logic_vector(8 downto 0);
+signal V_DISP_START : std_logic_vector(8 downto 0);
 signal V_DISP_HEIGHT: std_logic_vector(8 downto 0);
 
 ----------------------------------------------------------------
@@ -1927,6 +1929,8 @@ end process;
 ----------------------------------------------------------------
 -- VIDEO COUNTING
 ----------------------------------------------------------------
+CLOCKS_PER_LINE <= conv_std_logic_vector(CLOCKS_PER_LINE_H40, 12) when H40='1'
+              else conv_std_logic_vector(CLOCKS_PER_LINE_H32, 12);
 H_DISP_START  <= conv_std_logic_vector(H_DISP_START_H40, 12) when H40='1'
             else conv_std_logic_vector(H_DISP_START_H32, 12);
 HINT_START    <= conv_std_logic_vector(HINT_H40, 9) when H40='1'
@@ -1937,16 +1941,14 @@ HBLANK_END    <= conv_std_logic_vector(HBLANK_END_H40, 9) when H40='1'
             else conv_std_logic_vector(HBLANK_END_H32, 9);
 V_DISP_HEIGHT <= conv_std_logic_vector(V_DISP_HEIGHT_V30, 9) when V30='1'
             else conv_std_logic_vector(V_DISP_HEIGHT_V28, 9);
+V_DISP_START  <= conv_std_logic_vector(-V_DISP_START_V30, 9) when V30='1'
+            else conv_std_logic_vector(-V_DISP_START_V28, 9);
 
 -- COUNTERS AND INTERRUPTS
 process( RST_N, CLK )
-    variable hline_start, vdisp_start: std_logic_vector(8 downto 0);
-    variable hclocks: integer;
 begin
 	if RST_N = '0' then
 		H_CNT <= (others => '0');
-		H_VGA_CNT <= (others => '0');
-		V_CNT <= (others => '0');
 		FIELD <= '0';
 
 		HV_PIXDIV <= (others => '0');
@@ -1963,34 +1965,10 @@ begin
 
 	elsif rising_edge(CLK) then
 
-		if (H40 = '1') then
-			hclocks := CLOCKS_PER_LINE_H40;
-			hline_start  := conv_std_logic_vector(-(H_DISP_START_H40-HS_CLOCKS)/8, 9);
-		else
-			hclocks := CLOCKS_PER_LINE_H32;
-			hline_start  := conv_std_logic_vector(-(H_DISP_START_H32-HS_CLOCKS)/10, 9);
-		end if;
-
-		if (V30 = '1') then
-			vdisp_start := conv_std_logic_vector(-V_DISP_START_V30, 9);
-		else
-			vdisp_start := conv_std_logic_vector(-V_DISP_START_V28, 9);
-		end if;
-
-		if H_CNT = hclocks-1 then
+		if H_CNT = CLOCKS_PER_LINE-1 then
 			H_CNT <= (others => '0');
 		else
 			H_CNT <= H_CNT + 1;
-		end if;
-
-		H_VGA_CNT <= H_VGA_CNT + 1;
-		if H_VGA_CNT = (hclocks/2)-1 then
-			H_VGA_CNT <= (others => '0');
-			V_CNT <= V_CNT + 1;			
-			if V_CNT = (NTSC_LINES*2)-1 then
-				V_CNT <= (others => '0');
-				FIELD <= not FIELD;
-			end if;
 		end if;
 
 		HINT_PENDING_SET <= '0';
@@ -2000,7 +1978,11 @@ begin
 
 		if H_CNT = HS_CLOCKS then
 			-- we're just after HSYNC
-			HV_HCNT <= hline_start;
+			if (H40 = '1') then
+				HV_HCNT <= conv_std_logic_vector(-(H_DISP_START_H40-HS_CLOCKS)/8, 9);
+			else
+				HV_HCNT <= conv_std_logic_vector(-(H_DISP_START_H32-HS_CLOCKS)/10, 9);
+			end if;
 			HV_PIXDIV <= (others => '0');
 		else
 			HV_PIXDIV <= HV_PIXDIV + 1;
@@ -2019,9 +2001,10 @@ begin
 -- end if;
 
 				if HV_HCNT = HINT_START then
-					if V_CNT = VS_LINES * 2 then
+					if HV_VCNT = V_DISP_START + NTSC_LINES - 1 then --VDISP_START is negative
 						--just after VSYNC
-						HV_VCNT <= vdisp_start;
+						HV_VCNT <= V_DISP_START;
+						FIELD <= not FIELD;
 					else
 						HV_VCNT <= HV_VCNT + 1;
 					end if;
@@ -2054,7 +2037,7 @@ begin
 						VINT_T80_CLR <= '1';
 					end if;
 				elsif HV_HCNT = HBLANK_START then
-                    if (HV_VCNT >= 0) and (HV_VCNT < V_DISP_HEIGHT)
+					if (HV_VCNT >= 0) and (HV_VCNT < V_DISP_HEIGHT)
 					then
 						IN_HBL <= '1';
 					end if;
@@ -2232,6 +2215,22 @@ end process;
 -- VIDEO OUTPUT
 ----------------------------------------------------------------
 -- SCANDOUBLER
+process( RST_N, CLK )
+begin
+	if RST_N = '0' then
+		H_VGA_CNT <= (others => '0');
+		V_CNT <= (others => '0');
+	elsif rising_edge(CLK) then
+		H_VGA_CNT <= H_VGA_CNT + 1;
+		if H_VGA_CNT = CLOCKS_PER_LINE(11 downto 1)-1 then
+			H_VGA_CNT <= (others => '0');
+			V_CNT <= V_CNT + 1;
+		end if;
+		if HV_VCNT = V_DISP_START + NTSC_LINES - VS_LINES*2 then
+			V_CNT <= (others => '0');
+		end if;
+	end if;
+end process;
 
 -- 15KHZ WRITES
 process( CLK )

@@ -115,8 +115,8 @@ signal ps2_mouse_clk_out : std_logic;
 signal ps2_mouse_dat_out : std_logic;
 
 -- external controller signals
-signal ext_reset_n      : std_logic := '1';
-signal ext_bootdone     : std_logic := '0';
+signal ext_reset_n      : std_logic_vector(2 downto 0) := "111";
+signal ext_bootdone     : std_logic_vector(2 downto 0) := "000";
 signal ext_data         : std_logic_vector(15 downto 0);
 signal ext_data_req     : std_logic;
 signal ext_data_ack     : std_logic := '0';
@@ -353,8 +353,8 @@ virtualtoplevel : entity work.Virtual_Toplevel
     RS232_TXD => UART_TX,
      
     ext_controller => '1', --Use MiST OSD and ROM loader
-    ext_reset_n  => ext_reset_n,
-    ext_bootdone => ext_bootdone,
+    ext_reset_n  => ext_reset_n(2) and ext_reset_n(1) and ext_reset_n(0),
+    ext_bootdone => ext_bootdone(2) or ext_bootdone(1) or ext_bootdone(0),
     ext_data     => ext_data,
     ext_data_req => ext_data_req,
     ext_data_ack => ext_data_ack,
@@ -424,17 +424,17 @@ process(memclk)
 begin
     if rising_edge( memclk ) then
         downloadingD <= downloading;
-        ext_reset_n <= '1';
-        ext_bootdone <= '0';
+        ext_reset_n <= ext_reset_n(1 downto 0)&'1'; --stretch reset
+        ext_bootdone <= ext_bootdone(1 downto 0)&'0';
         ext_data_ack <= '0';
         if (downloadingD = '0' and downloading = '1') then
             -- ROM downloading start
-            ext_reset_n <= '0';
+            ext_reset_n(0) <= '0';
             d_state <= "00";
             data_io_clkref <= '1';
         elsif (downloading = '0') then
             -- ROM downloading finished
-            ext_bootdone <= '1';
+            ext_bootdone(0) <= '1';
             data_io_clkref <= '0';
         elsif (downloading = '1') then
             -- ROM downloading in progress

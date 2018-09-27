@@ -476,14 +476,14 @@ signal SP1C		: sp1c_t;
 -- signal OBJ_SZ_LINK	: obj_sz_link_t;
 
 signal OBJ_Y_D				: std_logic_vector(15 downto 0);
-signal OBJ_Y_ADDR_RD		: std_logic_vector(8 downto 0);
-signal OBJ_Y_ADDR_WR		: std_logic_vector(8 downto 0);
+signal OBJ_Y_ADDR_RD		: std_logic_vector(6 downto 0);
+signal OBJ_Y_ADDR_WR		: std_logic_vector(6 downto 0);
 signal OBJ_Y_WE				: std_logic;
 signal OBJ_Y_Q				: std_logic_vector(15 downto 0);
 
 signal OBJ_SZ_LINK_D		: std_logic_vector(15 downto 0);
-signal OBJ_SZ_LINK_ADDR_RD	: std_logic_vector(8 downto 0);
-signal OBJ_SZ_LINK_ADDR_WR	: std_logic_vector(8 downto 0);
+signal OBJ_SZ_LINK_ADDR_RD	: std_logic_vector(6 downto 0);
+signal OBJ_SZ_LINK_ADDR_WR	: std_logic_vector(6 downto 0);
 signal OBJ_SZ_LINK_WE		: std_logic;
 signal OBJ_SZ_LINK_Q		: std_logic_vector(15 downto 0);
 
@@ -1512,6 +1512,10 @@ end process;
 ----------------------------------------------------------------
 -- SPRITE ENGINE - PART ONE
 ----------------------------------------------------------------
+
+-- Scan through the linked chain of sprites and read their y position
+-- and size from the sprite attribute table.
+
 process( RST_N, MEMCLK )
 begin
 	if RST_N = '0' then
@@ -1545,52 +1549,36 @@ begin
 					SP1_VRAM_ADDR <= (SATB & "00000000") + (OBJ_CUR & "01");
 					SP1_SEL <= '1';
 					SP1C <= SP1C_SZL_RD;
---				else
---					if (H40 = '1' and SP1_X = 160-1) or (H40 = '0' and SP1_X = 128-1) then
---						SP1C <= SP1C_DONE;
---					else
---						SP1_X <= SP1_X + 1;
---						SP1C <= SP1C_LOOP;
---					end if;
---					SP1_SEL <= '0';
 				end if;
 			
 			when SP1C_Y_RD =>
 				if early_ack_sp1='0' then
---				if SP1_DTACK_N = '0' then
-					-- OBJ_Y( CONV_INTEGER( SP1_X(7 downto 1) ) ) <= SP1_VRAM_DO(8 downto 0);
-					OBJ_Y_ADDR_WR <= "00" & SP1_X(7 downto 1);
+					OBJ_Y_ADDR_WR <= SP1_X(7 downto 1);
 					OBJ_Y_D <= "0000000" & SP1_VRAM_DO(8 downto 0);
 					OBJ_Y_WE <= '1';
-					
-					if (H40 = '1' and SP1_X = 160-1) or (H40 = '0' and SP1_X = 128-1) then
-						SP1C <= SP1C_DONE;
-					else
-						SP1_X <= SP1_X + 1;
-						SP1C <= SP1C_LOOP;
-					end if;
+
+					SP1_X <= SP1_X + 1;
+					SP1C <= SP1C_LOOP;
 					SP1_SEL <= '0';
---					SP1C <= SP1C_LOOP;
 				end if;
 			
 			when SP1C_SZL_RD =>
 				if early_ack_sp1='0' then
---				if SP1_DTACK_N = '0' then
-					-- OBJ_SZ_LINK( CONV_INTEGER( SP1_X(7 downto 1) ) ) <= SP1_VRAM_DO(11 downto 8) & SP1_VRAM_DO(6 downto 0);
-					OBJ_SZ_LINK_ADDR_WR <= "00" & SP1_X(7 downto 1);
+					OBJ_SZ_LINK_ADDR_WR <= SP1_X(7 downto 1);
 					OBJ_SZ_LINK_D <= "00000" & SP1_VRAM_DO(11 downto 8) & SP1_VRAM_DO(6 downto 0);
 					OBJ_SZ_LINK_WE <= '1';					
 					
 					OBJ_CUR <= SP1_VRAM_DO(6 downto 0);
 
-					if (H40 = '1' and SP1_X = 160-1) or (H40 = '0' and SP1_X = 128-1) then
+					-- check a total of 80 sprites in H40 mode and 64 sprites in H32 mode
+					if ((H40 = '1' and SP1_X(7 downto 1) = 80) or 
+						 (H40 = '0' and SP1_X(7 downto 1) = 64)) then
 						SP1C <= SP1C_DONE;
 					else
 						SP1_X <= SP1_X + 1;
 						SP1C <= SP1C_LOOP;
 					end if;
 					SP1_SEL <= '0';
---					SP1C <= SP1C_LOOP;
 				end if;
 			
 			when others => -- SP1C_DONE
@@ -1652,8 +1640,8 @@ begin
 				-- OBJ_VS <= V_SZ_LINK(8 downto 7);
 				-- OBJ_LINK <= V_SZ_LINK(6 downto 0);				
 				-- SP2C <= SP2C_Y_TST;
-				OBJ_Y_ADDR_RD <= "00" & OBJ_TOT;
-				OBJ_SZ_LINK_ADDR_RD <= "00" & OBJ_TOT;
+				OBJ_Y_ADDR_RD <= OBJ_TOT;
+				OBJ_SZ_LINK_ADDR_RD <= OBJ_TOT;
 				SP2C <= SP2C_Y_RD2;
 			
 			when SP2C_Y_RD2 =>

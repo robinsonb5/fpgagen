@@ -200,6 +200,8 @@ signal HIT			: std_logic_vector(7 downto 0);
 signal IE1			: std_logic;
 signal IE0			: std_logic;
 
+signal M3			: std_logic;
+
 signal DMA			: std_logic;
 
 signal IM			: std_logic;
@@ -662,6 +664,8 @@ HIT <= REG(10);
 IE1 <= REG(0)(4);
 IE0 <= REG(1)(5);
 
+M3 <= REG(0)(1);
+
 DMA <= REG(1)(4);
 
 IM <= REG(12)(1);
@@ -679,8 +683,6 @@ ODD <= FIELD when IM = '1' else '0';
 IN_DMA <= DMA_FILL or DMA_COPY or DMA_VBUS;
 
 STATUS <= "111111" & FIFO_EMPTY & FIFO_FULL & VINT_TG68_PENDING & SOVR & SCOL & ODD & IN_VBL & IN_HBL & IN_DMA & PAL;
-HV8 <= HV_VCNT(8) when INTERLACE = '1' else HV_VCNT(0);
-HV <= HV_VCNT(7 downto 1) & HV8 & HV_HCNT(8 downto 1);
 
 ----------------------------------------------------------------
 -- CPU INTERFACE
@@ -1889,6 +1891,7 @@ V_DISP_START  <= conv_std_logic_vector(-V_DISP_START_V30, 9) when V30='1'
             else conv_std_logic_vector(-V_DISP_START_V28, 9);
 V_TOTAL_HEIGHT <= conv_std_logic_vector(PAL_LINES, 9) when PAL='1'
              else conv_std_logic_vector(NTSC_LINES, 9);
+HV8 <= HV_VCNT(8) when INTERLACE = '1' else HV_VCNT(0);
 
 -- COUNTERS AND INTERRUPTS
 process( RST_N, CLK )
@@ -1910,6 +1913,10 @@ begin
 		IN_VBL <= '1';
 
 	elsif rising_edge(CLK) then
+
+		if M3='0' then
+			HV <= HV_VCNT(7 downto 1) & HV8 & HV_HCNT(8 downto 1);
+		end if;
 
 		if H_CNT = CLOCKS_PER_LINE-1 then
 			H_CNT <= (others => '0');

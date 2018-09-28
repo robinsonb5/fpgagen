@@ -512,9 +512,6 @@ signal SP2E_ACTIVE	: std_logic;
 type sp2c_t is (
 	SP2C_INIT,
 	SP2C_Y_RD,
-	SP2C_Y_RD2,
-	SP2C_Y_RD3,
-	SP2C_Y_RD4,
 	SP2C_Y_TST,
 	SP2C_SHOW,
 	SP2C_X_RD,
@@ -1574,6 +1571,7 @@ end process;
 ----------------------------------------------------------------
 process( RST_N, MEMCLK )
 -- variable V_SZ_LINK		: std_logic_vector(10 downto 0);
+variable Y_OFS: std_logic_vector(8 downto 0);
 begin
 	if RST_N = '0' then
 		SP2_SEL <= '0';
@@ -1600,43 +1598,36 @@ begin
 				OBJ_NEXT <= (others => '0');
 				OBJ_NB <= (others => '0');
 				OBJ_PIX <= (others => '0');
-				
 				SP2C <= SP2C_Y_RD;
 			
 			when SP2C_Y_RD =>
 				OBJ_COLINFO_WE_A <= '0';
 				OBJ_OBJINFO_ADDR_RD <= OBJ_TOT;
-				SP2C <= SP2C_Y_RD2;
+				SP2C <= SP2C_Y_TST;
 			
-			when SP2C_Y_RD2 =>
-				SP2C <= SP2C_Y_RD3;
-			when SP2C_Y_RD3 =>
-				SP2C <= SP2C_Y_RD4;
-			
-			when SP2C_Y_RD4 =>
-				OBJ_Y_OFS <= "010000000" + ("0" & SP2_Y) - OBJ_OBJINFO_Q(19 downto 11);
+			when SP2C_Y_TST =>
+				Y_OFS := "010000000" + ("0" & SP2_Y) - OBJ_OBJINFO_Q(19 downto 11);
+				OBJ_Y_OFS <= Y_OFS;
 				OBJ_HS <= OBJ_OBJINFO_Q(10 downto 9);
 				OBJ_VS <= OBJ_OBJINFO_Q(8 downto 7);
 				OBJ_LINK <= OBJ_OBJINFO_Q(6 downto 0);
-				SP2C <= SP2C_Y_TST;
-
-			when SP2C_Y_TST =>
 				SP2C <= SP2C_NEXT;
+
 				case OBJ_VS is
 				when "00" =>	-- 8 pixels
-					if OBJ_Y_OFS(8 downto 3) = "000000" then
+					if Y_OFS(8 downto 3) = "000000" then
 						SP2C <= SP2C_SHOW;
 					end if;
 				when "01" =>	-- 16 pixels
-					if OBJ_Y_OFS(8 downto 4) = "00000" then
+					if Y_OFS(8 downto 4) = "00000" then
 						SP2C <= SP2C_SHOW;
 					end if;
 				when "11" =>	-- 32 pixels
-					if OBJ_Y_OFS(8 downto 5) = "0000" then
+					if Y_OFS(8 downto 5) = "0000" then
 						SP2C <= SP2C_SHOW;
 					end if;
 				when others =>	-- 24 pixels
-					if OBJ_Y_OFS(8 downto 5) = "0000" and OBJ_Y_OFS(4 downto 3) /= "11" then
+					if Y_OFS(8 downto 5) = "0000" and Y_OFS(4 downto 3) /= "11" then
 						SP2C <= SP2C_SHOW;
 					end if;
 				end case;

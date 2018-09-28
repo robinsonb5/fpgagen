@@ -2180,8 +2180,9 @@ begin
 			H_VGA_CNT <= (others => '0');
 			V_CNT <= V_CNT + 1;
 		end if;
-		if HV_VCNT = V_DISP_START + V_TOTAL_HEIGHT - VS_LINES*2 then
+		if HV_VCNT = V_DISP_START + V_TOTAL_HEIGHT - VS_LINES then
 			V_CNT <= (others => '0');
+			H_VGA_CNT <= (others => '0');
 		end if;
 	end if;
 end process;

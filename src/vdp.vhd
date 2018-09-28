@@ -475,30 +475,20 @@ type sp1c_t is (
 	SP1C_INIT,
 	SP1C_LOOP,
 	SP1C_Y_RD,
+	SP1C_CONT,
 	SP1C_SZL_RD,
 	SP1C_DONE
 );
 signal SP1C		: sp1c_t;
 
--- type obj_y_t is array(0 to 80) of std_logic_vector(8 downto 0);
--- type obj_sz_link_t is array(0 to 80) of std_logic_vector(10 downto 0);	-- HS & VS & LINK
--- signal OBJ_Y		: obj_y_t;
--- signal OBJ_SZ_LINK	: obj_sz_link_t;
+signal OBJ_Y				: std_logic_vector(8 downto 0);
 
-signal OBJ_Y_D				: std_logic_vector(15 downto 0);
-signal OBJ_Y_ADDR_RD		: std_logic_vector(6 downto 0);
-signal OBJ_Y_ADDR_WR		: std_logic_vector(6 downto 0);
-signal OBJ_Y_WE				: std_logic;
-signal OBJ_Y_Q				: std_logic_vector(15 downto 0);
+signal OBJ_OBJINFO_D		   : std_logic_vector(31 downto 0);
+signal OBJ_OBJINFO_ADDR_RD	: std_logic_vector(6 downto 0);
+signal OBJ_OBJINFO_ADDR_WR	: std_logic_vector(6 downto 0);
+signal OBJ_OBJINFO_WE		: std_logic;
+signal OBJ_OBJINFO_Q		   : std_logic_vector(31 downto 0);
 
-signal OBJ_SZ_LINK_D		: std_logic_vector(15 downto 0);
-signal OBJ_SZ_LINK_ADDR_RD	: std_logic_vector(6 downto 0);
-signal OBJ_SZ_LINK_ADDR_WR	: std_logic_vector(6 downto 0);
-signal OBJ_SZ_LINK_WE		: std_logic;
-signal OBJ_SZ_LINK_Q		: std_logic_vector(15 downto 0);
-
-
--- signal OBJ_COLINFO		: colinfo_t;
 signal OBJ_COLINFO_ADDR_A	: std_logic_vector(8 downto 0);
 signal OBJ_COLINFO_ADDR_B	: std_logic_vector(8 downto 0);
 signal OBJ_COLINFO_D_A		: std_logic_vector(6 downto 0);
@@ -507,15 +497,6 @@ signal OBJ_COLINFO_WE_A		: std_logic;
 signal OBJ_COLINFO_WE_B		: std_logic;
 signal OBJ_COLINFO_Q_A		: std_logic_vector(6 downto 0);
 signal OBJ_COLINFO_Q_B		: std_logic_vector(6 downto 0);
-
--- signal OBJ_COLINFO_ADDR_A_SP1	: std_logic_vector(8 downto 0);
--- signal OBJ_COLINFO_D_A_SP1		: std_logic_vector(6 downto 0);
--- signal OBJ_COLINFO_WE_A_SP1		: std_logic;
--- signal OBJ_COLINFO_ADDR_A_SP2	: std_logic_vector(8 downto 0);
--- signal OBJ_COLINFO_D_A_SP2		: std_logic_vector(6 downto 0);
--- signal OBJ_COLINFO_WE_A_SP2		: std_logic;
-
-signal SP1_X		: std_logic_vector(7 downto 0);
 
 signal SP1_VRAM_ADDR	: std_logic_vector(14 downto 0);
 signal SP1_VRAM_DO	: std_logic_vector(15 downto 0);
@@ -649,24 +630,14 @@ port map(
 	q_b			=> OBJ_COLINFO_Q_B
 );
 
-obj_oi_y : entity work.vdp_objinfo
+obj_oi : entity work.vdp_objinfo
 port map(
-	clock		=> MEMCLK,
-	data		=> OBJ_Y_D,
-	rdaddress	=> OBJ_Y_ADDR_RD,
-	wraddress	=> OBJ_Y_ADDR_WR,
-	wren		=> OBJ_Y_WE,
-	q			=> OBJ_Y_Q
-);
-
-obj_oi_sl : entity work.vdp_objinfo
-port map(
-	clock		=> MEMCLK,
-	data		=> OBJ_SZ_LINK_D,
-	rdaddress	=> OBJ_SZ_LINK_ADDR_RD,
-	wraddress	=> OBJ_SZ_LINK_ADDR_WR,
-	wren		=> OBJ_SZ_LINK_WE,
-	q			=> OBJ_SZ_LINK_Q
+	clock		  => MEMCLK,
+	data		  => OBJ_OBJINFO_D,
+	rdaddress  => OBJ_OBJINFO_ADDR_RD,
+	wraddress  => OBJ_OBJINFO_ADDR_WR,
+	wren		  => OBJ_OBJINFO_WE,
+	q			  => OBJ_OBJINFO_Q
 );
 
 
@@ -1523,87 +1494,77 @@ end process;
 -- SPRITE ENGINE - PART ONE
 ----------------------------------------------------------------
 
--- Scan through the linked chain of sprites and read their y position
--- and size from the sprite attribute table.
+-- Scan through the sprite attribute table and read y position,
+-- size and link from the sprite attribute table and store it in objinfo ram.
 
 process( RST_N, MEMCLK )
 begin
 	if RST_N = '0' then
+		OBJ_OBJINFO_WE <= '0';
 		SP1_SEL <= '0';
 		SP1C <= SP1C_INIT;
 		
-		OBJ_Y_WE <= '0';
-		OBJ_SZ_LINK_WE <= '0';
-		OBJ_Y_ADDR_WR <= (others => '0');
-		OBJ_SZ_LINK_ADDR_WR <= (others => '0');
-		
 	elsif rising_edge(MEMCLK) then
-		-- if SP1E_ACTIVE = '1' and SP2E_ACTIVE = '0' then
 		if SP1E_ACTIVE = '1' then
 			case SP1C is
 			when SP1C_INIT =>
-				SP1_X <= (others => '0');
+				OBJ_OBJINFO_ADDR_WR <= (others => '1');
 				OBJ_CUR <= (others => '0');
 				SP1C <= SP1C_LOOP;
-			
+
 			when SP1C_LOOP =>
-			
-				OBJ_Y_WE <= '0';
-				OBJ_SZ_LINK_WE <= '0';
-			
-				if SP1_X(0) = '0' and SP1_SEL = '0' then
-					SP1_VRAM_ADDR <= (SATB & "00000000") + (OBJ_CUR & "00");
-					SP1_SEL <= '1';
-					SP1C <= SP1C_Y_RD;
-				elsif SP1_X(0) = '1' and SP1_SEL = '0' then
-					SP1_VRAM_ADDR <= (SATB & "00000000") + (OBJ_CUR & "01");
-					SP1_SEL <= '1';
-					SP1C <= SP1C_SZL_RD;
-				end if;
-			
+				OBJ_OBJINFO_WE <= '0';
+				OBJ_OBJINFO_ADDR_WR <= OBJ_OBJINFO_ADDR_WR + 1;
+				SP1_VRAM_ADDR <= (SATB & "00000000") + (OBJ_CUR & "00");
+				SP1_SEL <= '1';
+				SP1C <= SP1C_Y_RD;
+
 			when SP1C_Y_RD =>
 				if early_ack_sp1='0' then
-					OBJ_Y_ADDR_WR <= SP1_X(7 downto 1);
-					OBJ_Y_D <= "0000000" & SP1_VRAM_DO(8 downto 0);
-					OBJ_Y_WE <= '1';
-
-					SP1_X <= SP1_X + 1;
-					SP1C <= SP1C_LOOP;
+					OBJ_Y <= SP1_VRAM_DO(8 downto 0);
 					SP1_SEL <= '0';
+					SP1C <= SP1C_CONT;
 				end if;
-			
+
+			when SP1C_CONT =>
+				SP1_VRAM_ADDR(0) <= '1';
+				SP1_SEL <= '1';
+				SP1C <= SP1C_SZL_RD;
+
 			when SP1C_SZL_RD =>
 				if early_ack_sp1='0' then
-					OBJ_SZ_LINK_ADDR_WR <= SP1_X(7 downto 1);
-					OBJ_SZ_LINK_D <= "00000" & SP1_VRAM_DO(11 downto 8) & SP1_VRAM_DO(6 downto 0);
-					OBJ_SZ_LINK_WE <= '1';					
-					
-					OBJ_CUR <= SP1_VRAM_DO(6 downto 0);
+					OBJ_OBJINFO_D(19 downto 11) <= OBJ_Y;
+					OBJ_OBJINFO_D(10 downto 7) <= SP1_VRAM_DO(11 downto 8);
+					OBJ_OBJINFO_D(6 downto 0) <= SP1_VRAM_DO(6 downto 0);
+					OBJ_OBJINFO_WE <= '1';
 
-					-- check a total of 80 sprites in H40 mode and 64 sprites in H32 mode
-					--  FIXME: This should not be necessary since SP2 also limits this
-					if ((H40 = '1' and SP1_X(7 downto 1) = 80) or 
-						 (H40 = '0' and SP1_X(7 downto 1) = 64)) then
-						SP1C <= SP1C_DONE;
-					else
-						SP1_X <= SP1_X + 1;
-						SP1C <= SP1C_LOOP;
-					end if;
+					OBJ_CUR <= SP1_VRAM_DO(6 downto 0);
+					SP1C <= SP1C_LOOP;
 					SP1_SEL <= '0';
+
+					-- process max 80 sprites in H40 mode and 64 sprites in H32 mode
+					if ((H40 = '1' and OBJ_OBJINFO_ADDR_WR = 79) or 
+						 (H40 = '0' and OBJ_OBJINFO_ADDR_WR = 63) or
+
+						 -- The following two are inspired by the gens-ii emulator.
+				       -- It fixes test 9 of the sprite masking and overflow test rom.
+						 (H40 = '1' and SP1_VRAM_DO(6 downto 0) > 79) or
+						 (H40 = '0' and SP1_VRAM_DO(6 downto 0) > 63) or
+
+						 (SP1_VRAM_DO(6 downto 0) = "0000000")) then
+						OBJ_OBJINFO_D(6 downto 0) <= (others => '0');
+						SP1C <= SP1C_DONE;
+					end if;
 				end if;
 			
 			when others => -- SP1C_DONE
 				SP1_SEL <= '0';
+				OBJ_OBJINFO_WE <= '0';
 			end case;
 		else	-- SP1E_ACTIVE = '0'
 			SP1_SEL <= '0';
 			SP1C <= SP1C_INIT;
-
-			OBJ_Y_WE <= '0';
-			OBJ_SZ_LINK_WE <= '0';
-			OBJ_Y_ADDR_WR <= (others => '0');
-			OBJ_SZ_LINK_ADDR_WR <= (others => '0');
-			
+			OBJ_OBJINFO_WE <= '0';
 		end if;
 	end if;
 end process;
@@ -1620,8 +1581,7 @@ begin
 		OBJ_COLINFO_ADDR_A <= (others => '0');
 		OBJ_COLINFO_WE_A <= '0';		
 		
-		OBJ_Y_ADDR_RD <= (others => '0');
-		OBJ_SZ_LINK_ADDR_RD <= (others => '0');
+		OBJ_OBJINFO_ADDR_RD <= (others => '0');
 		
 		SCOL_SET <= '0';
 		SOVR_SET <= '0';
@@ -1645,14 +1605,7 @@ begin
 			
 			when SP2C_Y_RD =>
 				OBJ_COLINFO_WE_A <= '0';
-				-- OBJ_Y_OFS <= "010000000" + ("0" & SP2_Y) - OBJ_Y( CONV_INTEGER( OBJ_TOT ) );
-				-- V_SZ_LINK := OBJ_SZ_LINK( CONV_INTEGER(OBJ_TOT) );
-				-- OBJ_HS <= V_SZ_LINK(10 downto 9);
-				-- OBJ_VS <= V_SZ_LINK(8 downto 7);
-				-- OBJ_LINK <= V_SZ_LINK(6 downto 0);				
-				-- SP2C <= SP2C_Y_TST;
-				OBJ_Y_ADDR_RD <= OBJ_TOT;
-				OBJ_SZ_LINK_ADDR_RD <= OBJ_TOT;
+				OBJ_OBJINFO_ADDR_RD <= OBJ_TOT;
 				SP2C <= SP2C_Y_RD2;
 			
 			when SP2C_Y_RD2 =>
@@ -1661,10 +1614,10 @@ begin
 				SP2C <= SP2C_Y_RD4;
 			
 			when SP2C_Y_RD4 =>
-				OBJ_Y_OFS <= "010000000" + ("0" & SP2_Y) - OBJ_Y_Q(8 downto 0);
-				OBJ_HS <= OBJ_SZ_LINK_Q(10 downto 9);
-				OBJ_VS <= OBJ_SZ_LINK_Q(8 downto 7);
-				OBJ_LINK <= OBJ_SZ_LINK_Q(6 downto 0);				
+				OBJ_Y_OFS <= "010000000" + ("0" & SP2_Y) - OBJ_OBJINFO_Q(19 downto 11);
+				OBJ_HS <= OBJ_OBJINFO_Q(10 downto 9);
+				OBJ_VS <= OBJ_OBJINFO_Q(8 downto 7);
+				OBJ_LINK <= OBJ_OBJINFO_Q(6 downto 0);
 				SP2C <= SP2C_Y_TST;
 
 			when SP2C_Y_TST =>
@@ -1895,13 +1848,11 @@ begin
 				OBJ_TOT <= OBJ_TOT + 1;
 				OBJ_NEXT <= OBJ_LINK;
 
-				-- 1) limit number of sprites per frame to 80 / 64
-				-- FIXME: This is supposed to pass test 9 of the sprite
-				--        masking and overflow test rom. But it doesn't in H32
+				-- 1) limit number of sprites per frame to 80 / 64. This
+				--    already happens in SP1
 		      -- 2) limit number of sprites per line to 20 / 16
  		      -- 3) limit sprite pixels per line to 320 / 256
-				if (H40 = '1' and OBJ_TOT >=  79) or (H40 = '0' and OBJ_TOT >=  63) or
-				   (H40 = '1' and OBJ_NB  >=  20) or (H40 = '0' and OBJ_NB  >=  16) or
+				if (H40 = '1' and OBJ_NB  >=  20) or (H40 = '0' and OBJ_NB  >=  16) or
 				   (H40 = '1' and OBJ_PIX >= 320) or (H40 = '0' and OBJ_PIX >= 256) then
 					SP2C <= SP2C_DONE;
 					SOVR_SET <= '1';
@@ -1922,8 +1873,7 @@ begin
 			OBJ_COLINFO_WE_A <= '0';		
 			OBJ_COLINFO_ADDR_A <= (others => '0');
 		
-			OBJ_Y_ADDR_RD <= (others => '0');
-			OBJ_SZ_LINK_ADDR_RD <= (others => '0');
+			OBJ_OBJINFO_ADDR_RD <= (others => '0');
 		end if;
 	end if;
 end process;

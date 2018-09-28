@@ -43,21 +43,21 @@ ENTITY vdp_objinfo IS
 	PORT
 	(
 		clock		: IN STD_LOGIC  := '1';
-		data		: IN STD_LOGIC_VECTOR (15 DOWNTO 0);
+		data		: IN STD_LOGIC_VECTOR (31 DOWNTO 0);
 		rdaddress		: IN STD_LOGIC_VECTOR (6 DOWNTO 0);
 		wraddress		: IN STD_LOGIC_VECTOR (6 DOWNTO 0);
 		wren		: IN STD_LOGIC  := '0';
-		q		: OUT STD_LOGIC_VECTOR (15 DOWNTO 0)
+		q		: OUT STD_LOGIC_VECTOR (31 DOWNTO 0)
 	);
 END vdp_objinfo;
 
 
 ARCHITECTURE SYN OF vdp_objinfo IS
 
-	SIGNAL sub_wire0	: STD_LOGIC_VECTOR (15 DOWNTO 0);
+	SIGNAL sub_wire0	: STD_LOGIC_VECTOR (31 DOWNTO 0);
 
 BEGIN
-	q    <= sub_wire0(15 DOWNTO 0);
+	q    <= sub_wire0(31 DOWNTO 0);
 
 	altsyncram_component : altsyncram
 	GENERIC MAP (
@@ -77,8 +77,8 @@ BEGIN
 		read_during_write_mode_mixed_ports => "DONT_CARE",
 		widthad_a => 7,
 		widthad_b => 7,
-		width_a => 16,
-		width_b => 16,
+		width_a => 32,
+		width_b => 32,
 		width_byteena_a => 1
 	)
 	PORT MAP (
@@ -127,7 +127,7 @@ END SYN;
 -- Retrieval info: PRIVATE: JTAG_ENABLED NUMERIC "0"
 -- Retrieval info: PRIVATE: JTAG_ID STRING "NONE"
 -- Retrieval info: PRIVATE: MAXIMUM_DEPTH NUMERIC "0"
--- Retrieval info: PRIVATE: MEMSIZE NUMERIC "2048"
+-- Retrieval info: PRIVATE: MEMSIZE NUMERIC "4096"
 -- Retrieval info: PRIVATE: MEM_IN_BITS NUMERIC "0"
 -- Retrieval info: PRIVATE: MIFfilename STRING ""
 -- Retrieval info: PRIVATE: OPERATION_MODE NUMERIC "2"
@@ -147,10 +147,10 @@ END SYN;
 -- Retrieval info: PRIVATE: USE_DIFF_CLKEN NUMERIC "0"
 -- Retrieval info: PRIVATE: UseDPRAM NUMERIC "1"
 -- Retrieval info: PRIVATE: VarWidth NUMERIC "0"
--- Retrieval info: PRIVATE: WIDTH_READ_A NUMERIC "16"
--- Retrieval info: PRIVATE: WIDTH_READ_B NUMERIC "16"
--- Retrieval info: PRIVATE: WIDTH_WRITE_A NUMERIC "16"
--- Retrieval info: PRIVATE: WIDTH_WRITE_B NUMERIC "16"
+-- Retrieval info: PRIVATE: WIDTH_READ_A NUMERIC "32"
+-- Retrieval info: PRIVATE: WIDTH_READ_B NUMERIC "32"
+-- Retrieval info: PRIVATE: WIDTH_WRITE_A NUMERIC "32"
+-- Retrieval info: PRIVATE: WIDTH_WRITE_B NUMERIC "32"
 -- Retrieval info: PRIVATE: WRADDR_ACLR_B NUMERIC "0"
 -- Retrieval info: PRIVATE: WRADDR_REG_B NUMERIC "0"
 -- Retrieval info: PRIVATE: WRCTRL_ACLR_B NUMERIC "0"
@@ -173,21 +173,21 @@ END SYN;
 -- Retrieval info: CONSTANT: READ_DURING_WRITE_MODE_MIXED_PORTS STRING "DONT_CARE"
 -- Retrieval info: CONSTANT: WIDTHAD_A NUMERIC "7"
 -- Retrieval info: CONSTANT: WIDTHAD_B NUMERIC "7"
--- Retrieval info: CONSTANT: WIDTH_A NUMERIC "16"
--- Retrieval info: CONSTANT: WIDTH_B NUMERIC "16"
+-- Retrieval info: CONSTANT: WIDTH_A NUMERIC "32"
+-- Retrieval info: CONSTANT: WIDTH_B NUMERIC "32"
 -- Retrieval info: CONSTANT: WIDTH_BYTEENA_A NUMERIC "1"
 -- Retrieval info: USED_PORT: clock 0 0 0 0 INPUT VCC "clock"
--- Retrieval info: USED_PORT: data 0 0 16 0 INPUT NODEFVAL "data[15..0]"
--- Retrieval info: USED_PORT: q 0 0 16 0 OUTPUT NODEFVAL "q[15..0]"
+-- Retrieval info: USED_PORT: data 0 0 32 0 INPUT NODEFVAL "data[31..0]"
+-- Retrieval info: USED_PORT: q 0 0 32 0 OUTPUT NODEFVAL "q[31..0]"
 -- Retrieval info: USED_PORT: rdaddress 0 0 7 0 INPUT NODEFVAL "rdaddress[6..0]"
 -- Retrieval info: USED_PORT: wraddress 0 0 7 0 INPUT NODEFVAL "wraddress[6..0]"
 -- Retrieval info: USED_PORT: wren 0 0 0 0 INPUT GND "wren"
 -- Retrieval info: CONNECT: @address_a 0 0 7 0 wraddress 0 0 7 0
 -- Retrieval info: CONNECT: @address_b 0 0 7 0 rdaddress 0 0 7 0
 -- Retrieval info: CONNECT: @clock0 0 0 0 0 clock 0 0 0 0
--- Retrieval info: CONNECT: @data_a 0 0 16 0 data 0 0 16 0
+-- Retrieval info: CONNECT: @data_a 0 0 32 0 data 0 0 32 0
 -- Retrieval info: CONNECT: @wren_a 0 0 0 0 wren 0 0 0 0
--- Retrieval info: CONNECT: q 0 0 16 0 @q_b 0 0 16 0
+-- Retrieval info: CONNECT: q 0 0 32 0 @q_b 0 0 32 0
 -- Retrieval info: GEN_FILE: TYPE_NORMAL vdp_objinfo.vhd TRUE
 -- Retrieval info: GEN_FILE: TYPE_NORMAL vdp_objinfo.inc FALSE
 -- Retrieval info: GEN_FILE: TYPE_NORMAL vdp_objinfo.cmp TRUE

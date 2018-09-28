@@ -1570,9 +1570,10 @@ end process;
 -- SPRITE ENGINE - PART TWO
 ----------------------------------------------------------------
 process( RST_N, MEMCLK )
--- variable V_SZ_LINK		: std_logic_vector(10 downto 0);
 variable Y_OFS: std_logic_vector(8 downto 0);
 begin
+	Y_OFS := "010000000" + ("0" & SP2_Y) - OBJ_OBJINFO_Q(19 downto 11);
+
 	if RST_N = '0' then
 		SP2_SEL <= '0';
 		SP2C <= SP2C_INIT;
@@ -1604,16 +1605,16 @@ begin
 				OBJ_COLINFO_WE_A <= '0';
 				OBJ_OBJINFO_ADDR_RD <= OBJ_TOT;
 				SP2C <= SP2C_Y_TST;
-			
+
 			when SP2C_Y_TST =>
-				Y_OFS := "010000000" + ("0" & SP2_Y) - OBJ_OBJINFO_Q(19 downto 11);
 				OBJ_Y_OFS <= Y_OFS;
 				OBJ_HS <= OBJ_OBJINFO_Q(10 downto 9);
 				OBJ_VS <= OBJ_OBJINFO_Q(8 downto 7);
 				OBJ_LINK <= OBJ_OBJINFO_Q(6 downto 0);
+
 				SP2C <= SP2C_NEXT;
 
-				case OBJ_VS is
+				case OBJ_OBJINFO_Q(8 downto 7) is
 				when "00" =>	-- 8 pixels
 					if Y_OFS(8 downto 3) = "000000" then
 						SP2C <= SP2C_SHOW;

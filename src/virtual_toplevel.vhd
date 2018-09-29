@@ -76,28 +76,12 @@ entity Virtual_Toplevel is
 		
 		LED : out std_logic;
 
-		RS232_RXD : in std_logic;
-		RS232_TXD : out std_logic;
-
-		ps2k_clk_out : out std_logic;
-		ps2k_dat_out : out std_logic;
-		ps2k_clk_in : in std_logic;
-		ps2k_dat_in : in std_logic;
-		
 		joya : in std_logic_vector(7 downto 0) := (others =>'1');
 		joyb : in std_logic_vector(7 downto 0) := (others =>'1');
 
-		spi_miso		: in std_logic := '1';
-		spi_mosi		: out std_logic;
-		spi_clk		: out std_logic;
-		spi_cs 		: out std_logic;
-
-        -- external/built-in OSD/ROM Loader
-		ext_controller : in std_logic := '0';
+        -- ROM Loader / Host boot data
 		ext_reset_n    : in std_logic := '1';
 		ext_bootdone   : in std_logic := '0';
-
-		-- Host boot data
 		ext_data       : in std_logic_vector(15 downto 0) := (others => '0');
 		ext_data_req   : out std_logic;
 		ext_data_ack   : in std_logic := '0';
@@ -412,8 +396,6 @@ signal FM_RIGHT			: std_logic_vector(11 downto 0);
 signal FM_MUX_LEFT		: std_logic_vector(11 downto 0);
 signal FM_MUX_RIGHT		: std_logic_vector(11 downto 0);
 signal FM_ENABLE		: std_logic;
-signal FM_AMP_LEFT		: std_logic_vector(11 downto 0);
-signal FM_AMP_RIGHT		: std_logic_vector(11 downto 0);
 
 -- PSG
 signal PSG_SEL			: std_logic;
@@ -490,13 +472,6 @@ signal VGA_BLUE			: std_logic_vector(7 downto 0);
 signal VGA_VS_N			: std_logic;
 signal VGA_HS_N			: std_logic;
 
--- current video signal (switchable between TV and VGA)
-signal vga_red_i : std_logic_vector(7 downto 0);
-signal vga_green_i : std_logic_vector(7 downto 0);
-signal vga_blue_i	: std_logic_vector(7 downto 0);		
-signal vga_vsync_i : std_logic;
-signal vga_hsync_i : std_logic;
-
 -- Joystick signals
 signal JOY_SWAP	: std_logic;
 signal JOY_1 		: std_logic_vector(7 downto 0);
@@ -508,13 +483,6 @@ signal PRE_RESET_N	: std_logic;
 type bootStates is (BOOT_READ_1, BOOT_WRITE_1, BOOT_WRITE_2, BOOT_DONE);
 signal bootState : bootStates := BOOT_READ_1;
 
-signal host_reset_n : std_logic;
-signal host_bootdone : std_logic := '0';
-signal rommap : std_logic_vector(1 downto 0);
-
-signal boot_req : std_logic := '0';
-signal boot_ack : std_logic := '0';
-signal boot_data : std_logic_vector(15 downto 0);
 signal FL_DQ : std_logic_vector(15 downto 0);
 
 signal osd_window : std_logic;
@@ -523,19 +491,11 @@ signal osd_pixel : std_logic;
 type romStates is (ROM_IDLE, ROM_READ);
 signal romState : romStates := ROM_IDLE;
 
-signal int_SW : std_logic_vector(15 downto 0);
 signal SW : std_logic_vector(15 downto 0);
 signal KEY : std_logic_vector(3 downto 0);
 
-signal gp1emu : std_logic_vector(7 downto 0);
-signal gp2emu : std_logic_vector(7 downto 0);
-signal int_gp1emu : std_logic_vector(7 downto 0);
-signal int_gp2emu : std_logic_vector(7 downto 0);
-
 signal PAL : std_logic;
 signal model: std_logic;
-
-signal MASTER_VOLUME : std_logic_vector(2 downto 0);
 
 -- DEBUG
 signal HEXVALUE			: std_logic_vector(15 downto 0);
@@ -548,7 +508,7 @@ begin
 -- -----------------------------------------------------------------------
 
 -- Reset
-PRE_RESET_N <= reset and SDR_INIT_DONE and (host_reset_n or ext_controller) and (ext_reset_n or not ext_controller);
+PRE_RESET_N <= reset and SDR_INIT_DONE and ext_reset_n;
 process(MRST_N,MCLK)
 begin
 	if rising_edge(MCLK) then
@@ -561,14 +521,11 @@ JOY_SWAP <= SW(2);
 JOY_1 <= joyb when JOY_SWAP = '1' else joya;
 JOY_2 <= joya when JOY_SWAP = '1' else joyb;
 
-gp1emu <= ( others => '1' ) when ext_controller = '1' else int_gp1emu;
-gp2emu <= ( others => '1' ) when ext_controller = '1' else int_gp2emu;
-
 PAL <= SW(5);
 model <= SW(6);
 
 -- DIP Switches
-SW <= ext_sw when ext_controller = '1' else int_sw;
+SW <= ext_sw;
 
 -- SDRAM
 DRAM_CKE <= '1';
@@ -749,23 +706,23 @@ port map(
 	RST_N		=> MRST_N,
 	CLK			=> MCLK,
 
-	P1_UP		=> not JOY_1(3) and gp1emu(0),
-	P1_DOWN	=> not JOY_1(2) and gp1emu(1),
-	P1_LEFT	=> not JOY_1(1) and gp1emu(2),
-	P1_RIGHT	=> not JOY_1(0) and gp1emu(3),
-	P1_A		=> not JOY_1(4) and gp1emu(4),
-	P1_B		=> not JOY_1(5) and gp1emu(5),
-	P1_C		=> not JOY_1(6) and gp1emu(6),
-	P1_START	=> not JOY_1(7) and gp1emu(7),
+	P1_UP		=> not JOY_1(3),
+	P1_DOWN	=> not JOY_1(2),
+	P1_LEFT	=> not JOY_1(1),
+	P1_RIGHT	=> not JOY_1(0),
+	P1_A		=> not JOY_1(4),
+	P1_B		=> not JOY_1(5),
+	P1_C		=> not JOY_1(6),
+	P1_START	=> not JOY_1(7),
 		
-	P2_UP		=> not JOY_2(3) and gp2emu(0),
-	P2_DOWN	=> not JOY_2(2) and gp2emu(1),
-	P2_LEFT	=> not JOY_2(1) and gp2emu(2),
-	P2_RIGHT	=> not JOY_2(0) and gp2emu(3),
-	P2_A		=> not JOY_2(4) and gp2emu(4),
-	P2_B		=> not JOY_2(5) and gp2emu(5),
-	P2_C		=> not JOY_2(6) and gp2emu(6),
-	P2_START	=> not JOY_2(7) and gp2emu(7),
+	P2_UP		=> not JOY_2(3),
+	P2_DOWN	=> not JOY_2(2),
+	P2_LEFT	=> not JOY_2(1),
+	P2_RIGHT	=> not JOY_2(0),
+	P2_A		=> not JOY_2(4),
+	P2_B		=> not JOY_2(5),
+	P2_C		=> not JOY_2(6),
+	P2_START	=> not JOY_2(7),
 		
 	SEL		=> IO_SEL and VCLK_ENA, -- Eliminate VCLK ripple clock
 	A			=> IO_A,
@@ -865,6 +822,10 @@ port map(
 	syn_snd_left   => FM_LEFT,
 	syn_snd_right  => FM_RIGHT
 );
+
+-- Audio control
+PSG_ENABLE <= not SW(3);
+FM_ENABLE <= not SW(4);
 
 FM_MUX_LEFT <= FM_LEFT when FM_ENABLE = '1' else "000000000000";
 FM_MUX_RIGHT <= FM_RIGHT when FM_ENABLE = '1' else "000000000000";
@@ -1068,7 +1029,7 @@ VBUS_DATA <= DMA_FLASH_D when DMA_FLASH_SEL = '1'
 	else x"FFFF";
 
 -- 68K INPUTS
-TG68_RES_N <= MRST_N and (host_bootdone or ext_bootdone);
+TG68_RES_N <= MRST_N and ext_bootdone;
 --TG68_CLK <= VCLK;
 --TG68_CLKE <= '1';
 
@@ -2176,14 +2137,13 @@ end process;
 
 -- Boot process
 
-FL_DQ <= boot_data when ext_controller = '0' else ext_data;
+FL_DQ <= ext_data;
 
 process( SDR_CLK )
 begin
 	if rising_edge( SDR_CLK ) then
 		if PRE_RESET_N = '0' then
 				
-			boot_req <='0';
 			ext_data_req <= '0';
 			
 			romwr_req <= '0';
@@ -2193,15 +2153,12 @@ begin
 		else
 			case bootState is 
 				when BOOT_READ_1 =>
-					boot_req<='1';
 					ext_data_req <= '1';
-					if boot_ack='1' or ext_data_ack ='1' then
-						boot_req<='0';
+					if ext_data_ack ='1' then
 						ext_data_req <= '0';
 						bootState <= BOOT_WRITE_1;
 					end if;
-					if host_bootdone='1' or ext_bootdone = '1' then
-						boot_req<='0';
+					if ext_bootdone = '1' then
 						ext_data_req <= '0';
 						bootState <= BOOT_DONE;
 					end if;
@@ -2220,79 +2177,6 @@ begin
 	end if;
 end process;
 
-
--- Control module:
-
-mycontrolmodule : entity work.CtrlModule
-	generic map (
-		sysclk_frequency => 540 -- Sysclk frequency * 10
-	)
-	port map (
-		clk => MCLK and not ext_controller,
-		osdclk => SDR_CLK and not ext_controller,
-		reset_n => reset,
-
-		-- SPI signals
-		spi_miso	=> spi_miso,
-		spi_mosi => spi_mosi,
-		spi_clk => spi_clk,
-		spi_cs => spi_cs,
-		
-		-- UART
-		rxd => RS232_RXD,
-		txd => RS232_TXD,
-		
-		-- DIP switches
-		dipswitches => int_sw,
-
-		-- PS2 keyboard
-		ps2k_clk_in => ps2k_clk_in,
-		ps2k_dat_in => ps2k_dat_in,
-		ps2k_clk_out => ps2k_clk_out,
-		ps2k_dat_out => ps2k_dat_out,
-		
-		-- Host control
-		host_reset_n => host_reset_n,
-		host_bootdone => host_bootdone,
-		
-		-- Host boot data
-		host_bootdata => boot_data,
-		host_bootdata_req => boot_req,
-		host_bootdata_ack => boot_ack,
-		rommap => rommap,
-		
-		-- Video signals for OSD
-		vga_hsync => vga_hsync_i,
-		vga_vsync => vga_vsync_i,
-		osd_window => osd_window,
-		osd_pixel => osd_pixel,
-		
-		vol_master => MASTER_VOLUME,
-		
-		-- Gamepad emulation
-		gp1emu => int_gp1emu,
-		gp2emu => int_gp2emu
-);
-
-
-overlay : entity work.OSD_Overlay
-	port map
-	(
-		clk => SDR_CLK,
-		red_in => vga_red_i,
-		green_in => vga_green_i,
-		blue_in => vga_blue_i,
-		window_in => '1',
-		osd_window_in => osd_window,
-		osd_pixel_in => osd_pixel,
-		hsync_in => vga_hsync_i,
-		red_out => VGA_R,
-		green_out => VGA_G,
-		blue_out => VGA_B,
-		window_out => open,
-		scanline_ena => SW(1)
-	);
-
 -- Route VDP signals to outputs
 RED <= VDP_RED & VDP_RED;
 GREEN <= VDP_GREEN & VDP_GREEN;
@@ -2307,20 +2191,13 @@ VGA_HS_N <= VDP_VGA_HS_N;
 VGA_VS_N <= VDP_VGA_VS_N;
 
 -- Select between VGA and TV output	
-vga_red_i <= RED when SW(0)='1' else VGA_RED;
-vga_green_i <= GREEN when SW(0)='1' else VGA_GREEN;
-vga_blue_i <= BLUE when SW(0)='1' else VGA_BLUE;
-vga_hsync_i <= HS_N when SW(0)='1' else VGA_HS_N;
-vga_vsync_i <= VS_N when SW(0)='1' else VGA_VS_N;
-VGA_HS <= vga_hsync_i;
-VGA_VS <= vga_vsync_i;
+VGA_R <= RED when SW(0)='1' else VGA_RED;
+VGA_G <= GREEN when SW(0)='1' else VGA_GREEN;
+VGA_B <= BLUE when SW(0)='1' else VGA_BLUE;
+VGA_HS <= HS_N when SW(0)='1' else VGA_HS_N;
+VGA_VS <= VS_N when SW(0)='1' else VGA_VS_N;
 VID_15KHZ <= SW(0);
 
--- Audio control
-PSG_ENABLE <= not SW(3);
-FM_ENABLE <= not SW(4);
-FM_AMP_LEFT <= FM_LEFT when FM_ENABLE='1' else (others => '0');
-FM_AMP_RIGHT <= FM_RIGHT when FM_ENABLE='1' else (others => '0');
 
 -- #############################################################################
 -- #############################################################################

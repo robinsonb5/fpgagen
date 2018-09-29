@@ -249,16 +249,6 @@ component osd
         );
     end component osd;
 	
-component mist_console
-	generic ( CLKFREQ : integer := 100 );
-   port (  clk 	:	in std_logic;
-           n_reset:	in std_logic;
-           ser_in :	in std_logic;
-           par_out_data :	out std_logic_vector(7 downto 0);
-           par_out_strobe :	out std_logic
-  );
-  end component mist_console;
-
 begin
 
 LED <= core_led and not downloading;
@@ -296,10 +286,10 @@ ext_sw(6) <= not status(8); --model
 
 --SDRAM_A(12)<='0';
 virtualtoplevel : entity work.Virtual_Toplevel
-	generic map(
-		rasCasTiming => 3,
-		prechargeTiming => 3
-	)
+--	generic map(
+--		rasCasTiming => 3,
+--		prechargeTiming => 3
+--	)
 	port map(
 		reset => reset,
 		MCLK => MCLK,
@@ -319,21 +309,9 @@ virtualtoplevel : entity work.Virtual_Toplevel
     DRAM_ADDR => SDRAM_A,
     DRAM_DQ => SDRAM_DQ,
 
-    -- PS/2 keyboard ports
-	 ps2k_clk_out => ps2_keyboard_clk_out,
-	 ps2k_dat_out => ps2_keyboard_dat_out,
-	 ps2k_clk_in => ps2_keyboard_clk_in,
-	 ps2k_dat_in => ps2_keyboard_dat_in,
- 
 --    -- Joystick ports (Port_A, Port_B)
 	joya => joy_1,
 	joyb => joy_0,
-
-    -- SD/MMC slot ports
-	spi_clk => sd_sck,
-	spi_mosi => sd_sdi,
-	spi_cs => sd_cs,
-	spi_miso => sd_sdo,
 
 	-- Video, Audio/CMT ports
     unsigned(VGA_R) => vga_tred,
@@ -349,10 +327,6 @@ virtualtoplevel : entity work.Virtual_Toplevel
     DAC_LDATA => audiol,
     DAC_RDATA => audior,
 	 
-    RS232_RXD => UART_RX,
-    RS232_TXD => UART_TX,
-     
-    ext_controller => '1', --Use MiST OSD and ROM loader
     ext_reset_n  => ext_reset_n(2) and ext_reset_n(1) and ext_reset_n(0),
     ext_bootdone => ext_bootdone(2) or ext_bootdone(1) or ext_bootdone(0),
     ext_data     => ext_data,
@@ -361,21 +335,6 @@ virtualtoplevel : entity work.Virtual_Toplevel
     
     ext_sw       => ext_sw
 );
-
-
--- UART_TX <='1';
-
-mist_console_d: component mist_console
-	generic map
-	( CLKFREQ => 108)
-	port map
-	(
-		clk => memclk,
-		n_reset => reset,
-		ser_in => txd,
-		par_out_data => par_out_data,
-		par_out_strobe => par_out_strobe
-	);
 
 user_io_inst : user_io
     generic map (STRLEN => CONF_STR'length)

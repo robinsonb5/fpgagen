@@ -336,13 +336,11 @@ signal HV_VCNT		: std_logic_vector(8 downto 0);
 
 -- TIMING VALUES
 signal CLOCKS_PER_LINE : std_logic_vector(11 downto 0);
-signal H_DISP_START : std_logic_vector(11 downto 0);
-signal HINT_START	: std_logic_vector(8 downto 0);
-signal HBLANK_START	: std_logic_vector(8 downto 0);
-signal HBLANK_END	: std_logic_vector(8 downto 0);
-signal V_DISP_START : std_logic_vector(8 downto 0);
-signal V_DISP_HEIGHT: std_logic_vector(8 downto 0);
-signal V_TOTAL_HEIGHT: std_logic_vector(8 downto 0);
+signal H_DISP_START    : std_logic_vector(11 downto 0);
+signal H_DISP_WIDTH    : std_logic_vector(8 downto 0);
+signal V_DISP_START    : std_logic_vector(8 downto 0);
+signal V_DISP_HEIGHT   : std_logic_vector(8 downto 0);
+signal V_TOTAL_HEIGHT  : std_logic_vector(8 downto 0);
 
 ----------------------------------------------------------------
 -- VRAM CONTROLLER
@@ -682,7 +680,7 @@ SATB <= REG(5)(6 downto 0);
 ODD <= FIELD when IM = '1' else '0';
 IN_DMA <= DMA_FILL or DMA_COPY or DMA_VBUS;
 
-STATUS <= "111111" & FIFO_EMPTY & FIFO_FULL & VINT_TG68_PENDING & SOVR & SCOL & ODD & IN_VBL & IN_HBL & IN_DMA & PAL;
+STATUS <= "111111" & FIFO_EMPTY & FIFO_FULL & VINT_TG68_PENDING & SOVR & SCOL & ODD & IN_VBL & (IN_HBL and not IN_VBL) & IN_DMA & PAL;
 
 ----------------------------------------------------------------
 -- CPU INTERFACE
@@ -1877,24 +1875,22 @@ end process;
 ----------------------------------------------------------------
 CLOCKS_PER_LINE <= conv_std_logic_vector(CLOCKS_PER_LINE_H40, 12) when H40='1'
               else conv_std_logic_vector(CLOCKS_PER_LINE_H32, 12);
-H_DISP_START  <= conv_std_logic_vector(H_DISP_START_H40, 12) when H40='1'
-            else conv_std_logic_vector(H_DISP_START_H32, 12);
-HINT_START    <= conv_std_logic_vector(HINT_H40, 9) when H40='1'
-            else conv_std_logic_vector(HINT_H32, 9);
-HBLANK_START  <= conv_std_logic_vector(HBLANK_START_H40, 9) when H40='1'
-            else conv_std_logic_vector(HBLANK_START_H32, 9);
-HBLANK_END    <= conv_std_logic_vector(HBLANK_END_H40, 9) when H40='1'
-            else conv_std_logic_vector(HBLANK_END_H32, 9);
-V_DISP_HEIGHT <= conv_std_logic_vector(V_DISP_HEIGHT_V30, 9) when V30='1'
-            else conv_std_logic_vector(V_DISP_HEIGHT_V28, 9);
-V_DISP_START  <= conv_std_logic_vector(-V_DISP_START_V30, 9) when V30='1'
-            else conv_std_logic_vector(-V_DISP_START_V28, 9);
-V_TOTAL_HEIGHT <= conv_std_logic_vector(PAL_LINES, 9) when PAL='1'
-             else conv_std_logic_vector(NTSC_LINES, 9);
+H_DISP_START    <= conv_std_logic_vector(H_DISP_START_H40, 12) when H40='1'
+              else conv_std_logic_vector(H_DISP_START_H32, 12);
+H_DISP_WIDTH    <= conv_std_logic_vector(H_DISP_WIDTH_H40, 9) when H40='1'
+              else conv_std_logic_vector(H_DISP_WIDTH_H32, 9);
+V_DISP_START    <= conv_std_logic_vector(-V_DISP_START_V30, 9) when V30='1'
+              else conv_std_logic_vector(-V_DISP_START_V28, 9);
+V_DISP_HEIGHT   <= conv_std_logic_vector(V_DISP_HEIGHT_V30, 9) when V30='1'
+              else conv_std_logic_vector(V_DISP_HEIGHT_V28, 9);
+V_TOTAL_HEIGHT  <= conv_std_logic_vector(PAL_LINES, 9) when PAL='1'
+              else conv_std_logic_vector(NTSC_LINES, 9);
 HV8 <= HV_VCNT(8) when INTERLACE = '1' else HV_VCNT(0);
 
 -- COUNTERS AND INTERRUPTS
 process( RST_N, CLK )
+variable
+    hstart: std_logic_vector(8 downto 0);
 begin
 	if RST_N = '0' then
 		H_CNT <= (others => '0');
@@ -1918,6 +1914,12 @@ begin
 			HV <= HV_VCNT(7 downto 1) & HV8 & HV_HCNT(8 downto 1);
 		end if;
 
+		if (H40 = '1') then
+			hstart := conv_std_logic_vector(-(H_DISP_START_H40-HS_CLOCKS)/8, 9);
+		else
+			hstart := conv_std_logic_vector(-(H_DISP_START_H32-HS_CLOCKS)/10, 9);
+		end if;
+
 		if H_CNT = CLOCKS_PER_LINE-1 then
 			H_CNT <= (others => '0');
 		else
@@ -1931,12 +1933,15 @@ begin
 
 		if H_CNT = HS_CLOCKS then
 			-- we're just after HSYNC
-			if (H40 = '1') then
-				HV_HCNT <= conv_std_logic_vector(-(H_DISP_START_H40-HS_CLOCKS)/8, 9);
-			else
-				HV_HCNT <= conv_std_logic_vector(-(H_DISP_START_H32-HS_CLOCKS)/10, 9);
-			end if;
+			HV_HCNT <= hstart;
 			HV_PIXDIV <= (others => '0');
+			if HV_VCNT = V_DISP_START + V_TOTAL_HEIGHT - 1 then --VDISP_START is negative
+				--just after VSYNC
+				HV_VCNT <= V_DISP_START;
+				FIELD <= not FIELD;
+			else
+				HV_VCNT <= HV_VCNT + 1;
+			end if;
 		else
 			HV_PIXDIV <= HV_PIXDIV + 1;
 			if (H40 = '1' and HV_PIXDIV = 8-1) or
@@ -1944,58 +1949,43 @@ begin
 				HV_PIXDIV <= (others => '0');
 				HV_HCNT <= HV_HCNT + 1;
 
--- INTERRUPT TEST
--- if HV_HCNT = x"A7" & "0" then
-	-- VINT_TG68_PENDING_SET <= '1';
-	-- VINT_T80_SET <= '1';
--- end if;
--- if HV_HCNT = x"A0" & "0" then
-	-- HINT_PENDING_SET <= '1';
--- end if;
-
-				if HV_HCNT = HINT_START then
-					if HV_VCNT = V_DISP_START + V_TOTAL_HEIGHT - 1 then --VDISP_START is negative
-						--just after VSYNC
-						HV_VCNT <= V_DISP_START;
-						FIELD <= not FIELD;
-					else
-						HV_VCNT <= HV_VCNT + 1;
-					end if;
-					if HV_VCNT = 0 then
+				if HV_HCNT = 0 then --active display
+					-- not sure HINT should happen here
+					-- maybe a delay is missing somewhere to allow it to happen at HBLANK
+					if HV_VCNT = 0 then  
 						if HIT = 0 then
 							HINT_PENDING_SET <= '1';
 							HINT_COUNT <= (others => '0');
 						else
 							HINT_COUNT <= HIT - 1;
 						end if;
-						IN_VBL <= '0';
-					else
-						if ( HV_VCNT >0 ) and ( HV_VCNT < V_DISP_HEIGHT )
-						then
-							if HINT_COUNT = 0 then
-								HINT_PENDING_SET <= '1';
-								HINT_COUNT <= HIT;
-							else
-								HINT_COUNT <= HINT_COUNT - 1;
-							end if;
+					elsif (HV_VCNT > 0) and ( HV_VCNT < V_DISP_HEIGHT )
+					then
+						if HINT_COUNT = 0 then
+							HINT_PENDING_SET <= '1';
+							HINT_COUNT <= HIT;
+						else
+							HINT_COUNT <= HINT_COUNT - 1;
 						end if;
 					end if;
-					if HV_VCNT = V_DISP_HEIGHT
+
+					IN_HBL <= '0';
+					if HV_VCNT = 0 then
+						IN_VBL <= '0';
+					end if;
+				end if;
+
+				if HV_HCNT = H_DISP_WIDTH then -- blanking
+					IN_HBL <= '1';
+					if HV_VCNT = V_DISP_HEIGHT - 1
 					then
+						IN_VBL <= '1';
 						VINT_TG68_PENDING_SET <= '1';
 						VINT_T80_SET <= '1';
-						IN_VBL <= '1';
 					elsif HV_VCNT = V_DISP_HEIGHT + 1
 					then
 						VINT_T80_CLR <= '1';
 					end if;
-				elsif HV_HCNT = HBLANK_START then
-					if (HV_VCNT >= 0) and (HV_VCNT < V_DISP_HEIGHT)
-					then
-						IN_HBL <= '1';
-					end if;
-				elsif HV_HCNT = HBLANK_END then
-					IN_HBL <= '0';
 				end if;
 			end if;		
 		end if;
@@ -2050,18 +2040,16 @@ begin
 		DT_ACTIVE <= '1';
 		
 		-- VERTICAL DISPLAY ACTIVE
-		if HV_HCNT = HINT_START + 1 then
-			if HV_VCNT = 0 then
-				V_ACTIVE <= '1';
-			elsif HV_VCNT = V_DISP_HEIGHT then
-				V_ACTIVE <= '0';
-			end if;
+		if HV_VCNT = 0 then
+			V_ACTIVE <= '1';
+		elsif HV_VCNT = V_DISP_HEIGHT then
+			V_ACTIVE <= '0';
+		end if;
 
-			if HV_VCNT = "1"&x"FF" then
-				PRE_V_ACTIVE <= '1'; 
-			elsif HV_VCNT = V_DISP_HEIGHT - 1 then
-				PRE_V_ACTIVE <= '0';
-			end if;
+		if HV_VCNT = "1"&x"FF" then
+			PRE_V_ACTIVE <= '1';
+		elsif HV_VCNT = V_DISP_HEIGHT - 1 then
+			PRE_V_ACTIVE <= '0';
 		end if;
 	end if;
 end process;

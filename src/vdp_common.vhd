@@ -44,7 +44,7 @@ constant CLOCKS_PER_LINE_MAX    : integer := 3420;
 constant CLOCKS_PER_LINE_H32    : integer := 342*10;
 constant CLOCKS_PER_LINE_H40    : integer := 427*8; -- 3416
 
-constant HS_CLOCKS              : integer := 254; -- 4.7 us
+constant HS_CLOCKS              : integer := 240; -- multiple of 8 and 10, too
 constant VGA_HS_CLOCKS          : integer := 204;       -- 3.77 us
 
 constant VGA_VS_LINES           : integer := 1;         -- 0.06 ms
@@ -53,20 +53,14 @@ constant VS_LINES               : integer := 3;
 constant H_DISP_START_H32       : integer := HS_CLOCKS + 46*10;
 constant H_DISP_START_H40       : integer := HS_CLOCKS + 46*8;
 
-constant HBLANK_START_H32       : integer := 264; -- in cells
-constant HBLANK_START_H40       : integer := 328;
-
-constant HBLANK_END_H32         : integer := 1; -- in cells
-constant HBLANK_END_H40         : integer := 1;
-
-constant HINT_H32               : integer := 294; -- in cells
-constant HINT_H40               : integer := 349;
-
-constant V_DISP_HEIGHT_V28      : integer := 224;
-constant V_DISP_HEIGHT_V30      : integer := 240;
+constant H_DISP_WIDTH_H32       : integer := 256; -- in cells
+constant H_DISP_WIDTH_H40       : integer := 320;
 
 constant V_DISP_START_V28       : integer := 27;
 constant V_DISP_START_V30       : integer := 46;
+
+constant V_DISP_HEIGHT_V28      : integer := 224;
+constant V_DISP_HEIGHT_V30      : integer := 240;
 
 constant NTSC_LINES             : integer := 262;
 constant PAL_LINES              : integer := 312;

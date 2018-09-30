@@ -1581,9 +1581,12 @@ begin
 					OBJ_CUR <= SP1_VRAM_DO(6 downto 0);
 
 					-- check a total of 80 sprites in H40 mode and 64 sprites in H32 mode
-					--  FIXME: This should not be necessary since SP2 also limits this
 					if ((H40 = '1' and SP1_X(7 downto 1) = 80) or 
-						 (H40 = '0' and SP1_X(7 downto 1) = 64)) then
+						 (H40 = '0' and SP1_X(7 downto 1) = 64) or
+						 -- the following checks are inspired by the gens-ii emulator
+					    (H40 = '1' and SP1_VRAM_DO(6 downto 0) >= 80) or 
+						 (H40 = '0' and SP1_VRAM_DO(6 downto 0) >= 64)) then
+ 					   OBJ_SZ_LINK_D(6 downto 0) <= (others => '0');
 						SP1C <= SP1C_DONE;
 					else
 						SP1_X <= SP1_X + 1;

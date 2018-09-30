@@ -155,15 +155,15 @@ end component;
 signal romwr_req : std_logic := '0';
 signal romwr_ack : std_logic;
 signal romwr_we  : std_logic := '1';
-signal romwr_a : unsigned(21 downto 1);
+signal romwr_a : unsigned(23 downto 1);
 signal romwr_d : std_logic_vector(15 downto 0);
 signal romwr_q : std_logic_vector(15 downto 0);
 
 signal romrd_req : std_logic := '0';
 signal romrd_ack : std_logic;
-signal romrd_a : std_logic_vector(21 downto 3);
+signal romrd_a : std_logic_vector(23 downto 3);
 signal romrd_q : std_logic_vector(63 downto 0);
-signal romrd_a_cached : std_logic_vector(21 downto 3);
+signal romrd_a_cached : std_logic_vector(23 downto 3);
 signal romrd_q_cached : std_logic_vector(63 downto 0);
 type fc_t is ( FC_IDLE, 
 	FC_TG68_RD,
@@ -316,6 +316,10 @@ signal T80_SDRAM_DTACK_N	: std_logic;
 signal DMA_SDRAM_SEL		: std_logic;
 signal DMA_SDRAM_D			: std_logic_vector(15 downto 0);
 signal DMA_SDRAM_DTACK_N	: std_logic;
+
+signal SSF2_MAP             : std_logic_vector(8*6-1 downto 0);
+signal ROM_PAGE             : std_logic_vector(2 downto 0);
+signal ROM_PAGE_A           : std_logic_vector(4 downto 0); -- 16 MB only (original mapper: max. 32)
 
 -- OPERATING SYSTEM ROM
 signal TG68_OS_SEL			: std_logic;
@@ -1708,14 +1712,61 @@ end process;
 -- -----------------------------------------------------------------------
 -- -----------------------------------------------------------------------
 -- -----------------------------------------------------------------------
+-- SSF2 mapper
+process( MRST_N, MCLK )
+begin
+    if rising_edge( MCLK ) then
+        if ( MRST_N = '0' ) then
+            SSF2_MAP( 5 downto  0) <= "00"&x"0";
+            SSF2_MAP(11 downto  6) <= "00"&x"1";
+            SSF2_MAP(17 downto 12) <= "00"&x"2";
+            SSF2_MAP(23 downto 18) <= "00"&x"3";
+            SSF2_MAP(29 downto 24) <= "00"&x"4";
+            SSF2_MAP(35 downto 30) <= "00"&x"5";
+            SSF2_MAP(41 downto 36) <= "00"&x"6";
+            SSF2_MAP(47 downto 42) <= "00"&x"7";
+        elsif TG68_A(23 downto 4) = x"a130f" and TG68_AS_N = '0' and TG68_RNW = '0' then
+            case TG68_A(3 downto 1) is
+            when "000" =>
+                null; -- always 0;
+            when "001" =>
+                SSF2_MAP(11 downto 6) <= TG68_DO(5 downto 0);
+            when "010" =>
+                SSF2_MAP(17 downto 12) <= TG68_DO(5 downto 0);
+            when "011" =>
+                SSF2_MAP(23 downto 18) <= TG68_DO(5 downto 0);
+            when "100" =>
+                SSF2_MAP(29 downto 24) <= TG68_DO(5 downto 0);
+            when "101" =>
+                SSF2_MAP(35 downto 30) <= TG68_DO(5 downto 0);
+            when "110" =>
+                SSF2_MAP(41 downto 36) <= TG68_DO(5 downto 0);
+            when "111" =>
+                SSF2_MAP(47 downto 42) <= TG68_DO(5 downto 0);
+            end case;
+        end if;
+    end if;
+end process;
+
+ROM_PAGE <= TG68_A(21 downto 19) when TG68_FLASH_SEL = '1' and TG68_DTACK_N = '1'
+          else BAR(21 downto 19) when T80_FLASH_SEL = '1' and T80_FLASH_DTACK_N = '1'
+          else VBUS_ADDR(21 downto 19);
+
+ROM_PAGE_A <= SSF2_MAP(4 downto 0) when ROM_PAGE = "000" else
+              SSF2_MAP(10 downto 6) when ROM_PAGE = "001" else
+              SSF2_MAP(16 downto 12) when ROM_PAGE = "010" else
+              SSF2_MAP(22 downto 18) when ROM_PAGE = "011" else
+              SSF2_MAP(28 downto 24) when ROM_PAGE = "100" else
+              SSF2_MAP(34 downto 30) when ROM_PAGE = "101" else
+              SSF2_MAP(40 downto 36) when ROM_PAGE = "110" else
+              SSF2_MAP(46 downto 42);
 
 -- FLASH (SDRAM) CONTROL
 process( MRST_N, MCLK, TG68_AS_N, TG68_RNW,
 	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
 	BAR, T80_A, T80_MREQ_N, T80_RD_N, T80_WR_N,
-	VBUS_SEL, VBUS_ADDR	)
+	VBUS_SEL, VBUS_ADDR, CART_EN )
 begin
-
 	if TG68_A(23 downto 22) = "00" 
 		and TG68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') 
 		and TG68_RNW = '1' 
@@ -1767,9 +1818,10 @@ begin
 		case FC is
 		when FC_IDLE =>			
 			if VCLKCNT = "001" then
+
 				if TG68_FLASH_SEL = '1' and TG68_FLASH_DTACK_N = '1' then
 					-- FF_FL_ADDR <= TG68_A(21 downto 0);
-					if useCache and (TG68_A(21 downto 3) = romrd_a_cached(21 downto 3)) then
+					if useCache and (ROM_PAGE_A & TG68_A(18 downto 3) = romrd_a_cached(23 downto 3)) then
 						case TG68_A(2 downto 1) is
 						when "00" =>
 							if TG68_UDS_N = '0' then TG68_FLASH_D(15 downto 8) <= romrd_q_cached(15 downto 8); end if;
@@ -1792,13 +1844,14 @@ begin
 						TG68_FLASH_DTACK_N <= '0';
 					else
 						romrd_req <= not romrd_req;
-						romrd_a <= TG68_A(21 downto 3);
-						romrd_a_cached <= TG68_A(21 downto 3);
+						romrd_a <= ROM_PAGE_A & TG68_A(18 downto 3);
+						romrd_a_cached <= ROM_PAGE_A & TG68_A(18 downto 3);
 						FC <= FC_TG68_RD;
 					end if;
 				elsif T80_FLASH_SEL = '1' and T80_FLASH_DTACK_N = '1' then
 					-- FF_FL_ADDR <= BAR(21 downto 15) & T80_A(14 downto 0);
-					if useCache and (BAR(21 downto 15) & T80_A(14 downto 3) = romrd_a_cached(21 downto 3)) then
+
+					if useCache and (ROM_PAGE_A & BAR(18 downto 15) & T80_A(14 downto 3) = romrd_a_cached(23 downto 3)) then
 -- /!\
 						case T80_A(2 downto 0) is
 						when "001" =>
@@ -1822,13 +1875,14 @@ begin
 						T80_FLASH_DTACK_N <= '0';
 					else
 						romrd_req <= not romrd_req;
-						romrd_a <= BAR(21 downto 15) & T80_A(14 downto 3);
-						romrd_a_cached <= BAR(21 downto 15) & T80_A(14 downto 3);		
+						romrd_a <= ROM_PAGE_A & BAR(18 downto 15) & T80_A(14 downto 3);
+						romrd_a_cached <= ROM_PAGE_A & BAR(18 downto 15) & T80_A(14 downto 3);
 						FC <= FC_T80_RD;
 					end if;
 				elsif DMA_FLASH_SEL = '1' and DMA_FLASH_DTACK_N = '1' then
 					-- FF_FL_ADDR <= VBUS_ADDR(21 downto 0);
-					if useCache and (VBUS_ADDR(21 downto 3) = romrd_a_cached(21 downto 3)) then
+
+					if useCache and (ROM_PAGE_A & VBUS_ADDR(18 downto 3) = romrd_a_cached(23 downto 3)) then
 						case VBUS_ADDR(2 downto 1) is
 						when "00" =>
 							DMA_FLASH_D <= romrd_q_cached(15 downto 0);
@@ -1843,13 +1897,13 @@ begin
 						DMA_FLASH_DTACK_N <= '0';
 					else
 						romrd_req <= not romrd_req;
-						romrd_a <= VBUS_ADDR(21 downto 3);
-						romrd_a_cached <= VBUS_ADDR(21 downto 3);
+						romrd_a <= ROM_PAGE_A & VBUS_ADDR(18 downto 3);
+						romrd_a_cached <= ROM_PAGE_A & VBUS_ADDR(18 downto 3);
 						FC <= FC_DMA_RD;
-					end if;					
-				end if;				
+					end if;
+				end if;
 			end if;
-		
+
 		when FC_TG68_RD =>
 			if romrd_req = romrd_ack then
 				romrd_q_cached <= romrd_q;
@@ -1927,10 +1981,6 @@ begin
 	end if;
 
 end process;
-
-
-
-
 
 -- SDRAM (68K RAM) CONTROL
 process( MRST_N, MCLK, TG68_AS_N, TG68_RNW,
@@ -2147,7 +2197,7 @@ begin
 			ext_data_req <= '0';
 			
 			romwr_req <= '0';
-			romwr_a <= to_unsigned(0, 21);
+			romwr_a <= to_unsigned(0, 23);
 			bootState<=BOOT_READ_1;
 			
 		else

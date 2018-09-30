@@ -78,8 +78,6 @@ signal buttons: std_logic_vector(1 downto 0);
 signal status:  std_logic_vector(31 downto 0);
 signal joy_0: std_logic_vector(7 downto 0);
 signal joy_1: std_logic_vector(7 downto 0);
-signal joy_ana_0: std_logic_vector(15 downto 0);
-signal joy_ana_1: std_logic_vector(15 downto 0);
 signal txd:     std_logic;
 signal par_out_data: std_logic_vector(7 downto 0);
 signal par_out_strobe: std_logic;
@@ -90,29 +88,9 @@ signal scandoubler_disable: std_logic;
 signal downloading      : std_logic;
 signal data_io_wr       : std_logic;
 signal data_io_clkref   : std_logic;
-signal data_io_a        : std_logic_vector(24 downto 0);
 signal data_io_d        : std_logic_vector(7 downto 0);
-signal data_io_index    : std_logic_vector(7 downto 0);
 signal downloadingD     : std_logic;
 signal d_state          : std_logic_vector(1 downto 0);
-
--- sd card emulation
-signal sd_cs:	std_logic;
-signal sd_sck:	std_logic;
-signal sd_sdi:	std_logic;
-signal sd_sdo:	std_logic;
-
--- PS/2 Keyboard
-signal ps2_keyboard_clk_in : std_logic;
-signal ps2_keyboard_dat_in : std_logic;
-signal ps2_keyboard_clk_out : std_logic;
-signal ps2_keyboard_dat_out : std_logic;
-
--- PS/2 Mouse
-signal ps2_mouse_clk_in : std_logic;
-signal ps2_mouse_dat_in : std_logic;
-signal ps2_mouse_clk_out : std_logic;
-signal ps2_mouse_dat_out : std_logic;
 
 -- external controller signals
 signal ext_reset_n      : std_logic_vector(2 downto 0) := "111";
@@ -127,6 +105,7 @@ constant CONF_STR : string :=
     "GENESIS;BINGENMD ;"&
     "O7,Display,NTSC,PAL;"&
     "O6,Joystick swap,Off,On;"&
+    "O9,Swap Y axis,Off,On;"&
     "O4,FM Sound,Enable,Disable;"&
     "O5,PSG Sound,Enable,Disable;"&
     "O8,Model,Export,Domestic;"&
@@ -249,16 +228,6 @@ component osd
         );
     end component osd;
 	
-component mist_console
-	generic ( CLKFREQ : integer := 100 );
-   port (  clk 	:	in std_logic;
-           n_reset:	in std_logic;
-           ser_in :	in std_logic;
-           par_out_data :	out std_logic_vector(7 downto 0);
-           par_out_strobe :	out std_logic
-  );
-  end component mist_console;
-
 begin
 
 LED <= core_led and not downloading;
@@ -293,13 +262,14 @@ ext_sw(3) <= status(5); --psg en
 ext_sw(4) <= status(4); --fm en
 ext_sw(5) <= status(7); --PAL
 ext_sw(6) <= not status(8); --model
+ext_sw(7) <= status(9); --swap Y
 
 --SDRAM_A(12)<='0';
 virtualtoplevel : entity work.Virtual_Toplevel
-	generic map(
-		rasCasTiming => 3,
-		prechargeTiming => 3
-	)
+--	generic map(
+--		rasCasTiming => 3,
+--		prechargeTiming => 3
+--	)
 	port map(
 		reset => reset,
 		MCLK => MCLK,
@@ -319,21 +289,9 @@ virtualtoplevel : entity work.Virtual_Toplevel
     DRAM_ADDR => SDRAM_A,
     DRAM_DQ => SDRAM_DQ,
 
-    -- PS/2 keyboard ports
-	 ps2k_clk_out => ps2_keyboard_clk_out,
-	 ps2k_dat_out => ps2_keyboard_dat_out,
-	 ps2k_clk_in => ps2_keyboard_clk_in,
-	 ps2k_dat_in => ps2_keyboard_dat_in,
- 
 --    -- Joystick ports (Port_A, Port_B)
 	joya => joy_1,
 	joyb => joy_0,
-
-    -- SD/MMC slot ports
-	spi_clk => sd_sck,
-	spi_mosi => sd_sdi,
-	spi_cs => sd_cs,
-	spi_miso => sd_sdo,
 
 	-- Video, Audio/CMT ports
     unsigned(VGA_R) => vga_tred,
@@ -349,10 +307,6 @@ virtualtoplevel : entity work.Virtual_Toplevel
     DAC_LDATA => audiol,
     DAC_RDATA => audior,
 	 
-    RS232_RXD => UART_RX,
-    RS232_TXD => UART_TX,
-     
-    ext_controller => '1', --Use MiST OSD and ROM loader
     ext_reset_n  => ext_reset_n(2) and ext_reset_n(1) and ext_reset_n(0),
     ext_bootdone => ext_bootdone(2) or ext_bootdone(1) or ext_bootdone(0),
     ext_data     => ext_data,
@@ -361,21 +315,6 @@ virtualtoplevel : entity work.Virtual_Toplevel
     
     ext_sw       => ext_sw
 );
-
-
--- UART_TX <='1';
-
-mist_console_d: component mist_console
-	generic map
-	( CLKFREQ => 108)
-	port map
-	(
-		clk => memclk,
-		n_reset => reset,
-		ser_in => txd,
-		par_out_data => par_out_data,
-		par_out_strobe => par_out_strobe
-	);
 
 user_io_inst : user_io
     generic map (STRLEN => CONF_STR'length)
@@ -393,14 +332,14 @@ user_io_inst : user_io
 
         joystick_0 => joy_0,
         joystick_1 => joy_1,
-        joystick_analog_0 => joy_ana_0,
-        joystick_analog_1 => joy_ana_1,
+        joystick_analog_0 => open,
+        joystick_analog_1 => open,
 --      switches => switches,
         buttons => buttons,
-        ps2_kbd_clk => ps2_keyboard_clk_in,
-        ps2_kbd_data => ps2_keyboard_dat_in,
-        ps2_mouse_clk => ps2_mouse_clk_in,
-        ps2_mouse_data => ps2_mouse_dat_in,
+        ps2_kbd_clk => open,
+        ps2_kbd_data => open,
+        ps2_mouse_clk => open,
+        ps2_mouse_data => open,
         serial_data => par_out_data,
         serial_strobe => par_out_strobe
  );
@@ -410,10 +349,10 @@ data_io_inst: data_io
         clk     => memclk,
         clkref  => data_io_clkref,
         wr      => data_io_wr,
-        a       => data_io_a,
+        a       => open,
         d       => data_io_d,
         downloading => downloading,
-        index   => data_io_index,
+        index   => open,
 
         sck     => SPI_SCK,
         ss      => SPI_SS2,

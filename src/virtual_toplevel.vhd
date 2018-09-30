@@ -76,28 +76,12 @@ entity Virtual_Toplevel is
 		
 		LED : out std_logic;
 
-		RS232_RXD : in std_logic;
-		RS232_TXD : out std_logic;
-
-		ps2k_clk_out : out std_logic;
-		ps2k_dat_out : out std_logic;
-		ps2k_clk_in : in std_logic;
-		ps2k_dat_in : in std_logic;
-		
 		joya : in std_logic_vector(7 downto 0) := (others =>'1');
 		joyb : in std_logic_vector(7 downto 0) := (others =>'1');
 
-		spi_miso		: in std_logic := '1';
-		spi_mosi		: out std_logic;
-		spi_clk		: out std_logic;
-		spi_cs 		: out std_logic;
-
-        -- external/built-in OSD/ROM Loader
-		ext_controller : in std_logic := '0';
+        -- ROM Loader / Host boot data
 		ext_reset_n    : in std_logic := '1';
 		ext_bootdone   : in std_logic := '0';
-
-		-- Host boot data
 		ext_data       : in std_logic_vector(15 downto 0) := (others => '0');
 		ext_data_req   : out std_logic;
 		ext_data_ack   : in std_logic := '0';
@@ -109,6 +93,7 @@ entity Virtual_Toplevel is
 														  -- 4 - FM EN
 														  -- 5 - PAL
 														  -- 6 - Export model
+														  -- 7 - Swap y
 	);
 end entity;
 
@@ -171,15 +156,15 @@ end component;
 signal romwr_req : std_logic := '0';
 signal romwr_ack : std_logic;
 signal romwr_we  : std_logic := '1';
-signal romwr_a : unsigned(21 downto 1);
+signal romwr_a : unsigned(23 downto 1);
 signal romwr_d : std_logic_vector(15 downto 0);
 signal romwr_q : std_logic_vector(15 downto 0);
 
 signal romrd_req : std_logic := '0';
 signal romrd_ack : std_logic;
-signal romrd_a : std_logic_vector(21 downto 3);
+signal romrd_a : std_logic_vector(23 downto 3);
 signal romrd_q : std_logic_vector(63 downto 0);
-signal romrd_a_cached : std_logic_vector(21 downto 3);
+signal romrd_a_cached : std_logic_vector(23 downto 3);
 signal romrd_q_cached : std_logic_vector(63 downto 0);
 type fc_t is ( FC_IDLE, 
 	FC_TG68_RD,
@@ -333,6 +318,10 @@ signal DMA_SDRAM_SEL		: std_logic;
 signal DMA_SDRAM_D			: std_logic_vector(15 downto 0);
 signal DMA_SDRAM_DTACK_N	: std_logic;
 
+signal SSF2_MAP             : std_logic_vector(8*6-1 downto 0);
+signal ROM_PAGE             : std_logic_vector(2 downto 0);
+signal ROM_PAGE_A           : std_logic_vector(4 downto 0); -- 16 MB only (original mapper: max. 32)
+
 -- OPERATING SYSTEM ROM
 signal TG68_OS_SEL			: std_logic;
 signal TG68_OS_D			: std_logic_vector(15 downto 0);
@@ -412,8 +401,6 @@ signal FM_RIGHT			: std_logic_vector(11 downto 0);
 signal FM_MUX_LEFT		: std_logic_vector(11 downto 0);
 signal FM_MUX_RIGHT		: std_logic_vector(11 downto 0);
 signal FM_ENABLE		: std_logic;
-signal FM_AMP_LEFT		: std_logic_vector(11 downto 0);
-signal FM_AMP_RIGHT		: std_logic_vector(11 downto 0);
 
 -- PSG
 signal PSG_SEL			: std_logic;
@@ -490,17 +477,15 @@ signal VGA_BLUE			: std_logic_vector(7 downto 0);
 signal VGA_VS_N			: std_logic;
 signal VGA_HS_N			: std_logic;
 
--- current video signal (switchable between TV and VGA)
-signal vga_red_i : std_logic_vector(7 downto 0);
-signal vga_green_i : std_logic_vector(7 downto 0);
-signal vga_blue_i	: std_logic_vector(7 downto 0);		
-signal vga_vsync_i : std_logic;
-signal vga_hsync_i : std_logic;
-
 -- Joystick signals
-signal JOY_SWAP	: std_logic;
-signal JOY_1 		: std_logic_vector(7 downto 0);
-signal JOY_2 		: std_logic_vector(7 downto 0);
+signal JOY_SWAP	    : std_logic;
+signal JOY_Y_SWAP   : std_logic;
+signal JOY_1_UP     : std_logic;
+signal JOY_1_DOWN   : std_logic;
+signal JOY_2_UP     : std_logic;
+signal JOY_2_DOWN   : std_logic;
+signal JOY_1        : std_logic_vector(7 downto 0);
+signal JOY_2        : std_logic_vector(7 downto 0);
 
 signal SDR_INIT_DONE	: std_logic;
 signal PRE_RESET_N	: std_logic;
@@ -508,13 +493,6 @@ signal PRE_RESET_N	: std_logic;
 type bootStates is (BOOT_READ_1, BOOT_WRITE_1, BOOT_WRITE_2, BOOT_DONE);
 signal bootState : bootStates := BOOT_READ_1;
 
-signal host_reset_n : std_logic;
-signal host_bootdone : std_logic := '0';
-signal rommap : std_logic_vector(1 downto 0);
-
-signal boot_req : std_logic := '0';
-signal boot_ack : std_logic := '0';
-signal boot_data : std_logic_vector(15 downto 0);
 signal FL_DQ : std_logic_vector(15 downto 0);
 
 signal osd_window : std_logic;
@@ -523,19 +501,11 @@ signal osd_pixel : std_logic;
 type romStates is (ROM_IDLE, ROM_READ);
 signal romState : romStates := ROM_IDLE;
 
-signal int_SW : std_logic_vector(15 downto 0);
 signal SW : std_logic_vector(15 downto 0);
 signal KEY : std_logic_vector(3 downto 0);
 
-signal gp1emu : std_logic_vector(7 downto 0);
-signal gp2emu : std_logic_vector(7 downto 0);
-signal int_gp1emu : std_logic_vector(7 downto 0);
-signal int_gp2emu : std_logic_vector(7 downto 0);
-
 signal PAL : std_logic;
 signal model: std_logic;
-
-signal MASTER_VOLUME : std_logic_vector(2 downto 0);
 
 -- DEBUG
 signal HEXVALUE			: std_logic_vector(15 downto 0);
@@ -548,7 +518,7 @@ begin
 -- -----------------------------------------------------------------------
 
 -- Reset
-PRE_RESET_N <= reset and SDR_INIT_DONE and (host_reset_n or ext_controller) and (ext_reset_n or not ext_controller);
+PRE_RESET_N <= reset and SDR_INIT_DONE and ext_reset_n;
 process(MRST_N,MCLK)
 begin
 	if rising_edge(MCLK) then
@@ -558,17 +528,27 @@ end process;
 
 -- Joystick swapping
 JOY_SWAP <= SW(2);
-JOY_1 <= joyb when JOY_SWAP = '1' else joya;
-JOY_2 <= joya when JOY_SWAP = '1' else joyb;
+JOY_Y_SWAP <= SW(7);
+JOY_1_DOWN <= joya(3) when JOY_Y_SWAP = '1' else joya(2);
+JOY_1_UP <= joya(2) when JOY_Y_SWAP = '1' else joya(3);
+JOY_2_DOWN <= joyb(3) when JOY_Y_SWAP = '1' else joyb(2);
+JOY_2_UP <= joyb(2) when JOY_Y_SWAP = '1' else joyb(3);
 
-gp1emu <= ( others => '1' ) when ext_controller = '1' else int_gp1emu;
-gp2emu <= ( others => '1' ) when ext_controller = '1' else int_gp2emu;
+JOY_1(1 downto 0) <= joyb(1 downto 0) when JOY_SWAP = '1' else joya(1 downto 0);
+JOY_1(2) <= JOY_2_DOWN when JOY_SWAP = '1' else JOY_1_DOWN;
+JOY_1(3) <= JOY_2_UP when JOY_SWAP = '1' else JOY_1_UP;
+JOY_1(7 downto 4) <= joyb(7 downto 4) when JOY_SWAP = '1' else joya(7 downto 4);
+
+JOY_2(1 downto 0) <= joyb(1 downto 0) when JOY_SWAP = '0' else joya(1 downto 0);
+JOY_2(2) <= JOY_2_DOWN when JOY_SWAP = '0' else JOY_1_DOWN;
+JOY_2(3) <= JOY_2_UP when JOY_SWAP = '0' else JOY_1_UP;
+JOY_2(7 downto 4) <= joyb(7 downto 4) when JOY_SWAP = '0' else joya(7 downto 4);
 
 PAL <= SW(5);
 model <= SW(6);
 
 -- DIP Switches
-SW <= ext_sw when ext_controller = '1' else int_sw;
+SW <= ext_sw;
 
 -- SDRAM
 DRAM_CKE <= '1';
@@ -749,23 +729,23 @@ port map(
 	RST_N		=> MRST_N,
 	CLK			=> MCLK,
 
-	P1_UP		=> not JOY_1(3) and gp1emu(0),
-	P1_DOWN	=> not JOY_1(2) and gp1emu(1),
-	P1_LEFT	=> not JOY_1(1) and gp1emu(2),
-	P1_RIGHT	=> not JOY_1(0) and gp1emu(3),
-	P1_A		=> not JOY_1(4) and gp1emu(4),
-	P1_B		=> not JOY_1(5) and gp1emu(5),
-	P1_C		=> not JOY_1(6) and gp1emu(6),
-	P1_START	=> not JOY_1(7) and gp1emu(7),
+	P1_UP		=> not JOY_1(3),
+	P1_DOWN		=> not JOY_1(2),
+	P1_LEFT		=> not JOY_1(1),
+	P1_RIGHT	=> not JOY_1(0),
+	P1_A		=> not JOY_1(4),
+	P1_B		=> not JOY_1(5),
+	P1_C		=> not JOY_1(6),
+	P1_START	=> not JOY_1(7),
 		
-	P2_UP		=> not JOY_2(3) and gp2emu(0),
-	P2_DOWN	=> not JOY_2(2) and gp2emu(1),
-	P2_LEFT	=> not JOY_2(1) and gp2emu(2),
-	P2_RIGHT	=> not JOY_2(0) and gp2emu(3),
-	P2_A		=> not JOY_2(4) and gp2emu(4),
-	P2_B		=> not JOY_2(5) and gp2emu(5),
-	P2_C		=> not JOY_2(6) and gp2emu(6),
-	P2_START	=> not JOY_2(7) and gp2emu(7),
+	P2_UP		=> not JOY_2(3),
+	P2_DOWN		=> not JOY_2(2),
+	P2_LEFT		=> not JOY_2(1),
+	P2_RIGHT	=> not JOY_2(0),
+	P2_A		=> not JOY_2(4),
+	P2_B		=> not JOY_2(5),
+	P2_C		=> not JOY_2(6),
+	P2_START	=> not JOY_2(7),
 		
 	SEL		=> IO_SEL and VCLK_ENA, -- Eliminate VCLK ripple clock
 	A			=> IO_A,
@@ -865,6 +845,10 @@ port map(
 	syn_snd_left   => FM_LEFT,
 	syn_snd_right  => FM_RIGHT
 );
+
+-- Audio control
+PSG_ENABLE <= not SW(3);
+FM_ENABLE <= not SW(4);
 
 FM_MUX_LEFT <= FM_LEFT when FM_ENABLE = '1' else "000000000000";
 FM_MUX_RIGHT <= FM_RIGHT when FM_ENABLE = '1' else "000000000000";
@@ -1068,7 +1052,7 @@ VBUS_DATA <= DMA_FLASH_D when DMA_FLASH_SEL = '1'
 	else x"FFFF";
 
 -- 68K INPUTS
-TG68_RES_N <= MRST_N and (host_bootdone or ext_bootdone);
+TG68_RES_N <= MRST_N and ext_bootdone;
 --TG68_CLK <= VCLK;
 --TG68_CLKE <= '1';
 
@@ -1151,7 +1135,7 @@ T80_DI <= T80_SDRAM_D when T80_SDRAM_SEL = '1'
 TG68_OS_DTACK_N <= '0';
 OS_OEn <= '0';
 process( MRST_N, MCLK, TG68_AS_N, TG68_RNW,
-	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N )
+	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N, CART_EN )
 begin
 
 	if TG68_A(23 downto 22) = "00" 
@@ -1747,14 +1731,61 @@ end process;
 -- -----------------------------------------------------------------------
 -- -----------------------------------------------------------------------
 -- -----------------------------------------------------------------------
+-- SSF2 mapper
+process( MRST_N, MCLK )
+begin
+    if rising_edge( MCLK ) then
+        if ( MRST_N = '0' ) then
+            SSF2_MAP( 5 downto  0) <= "00"&x"0";
+            SSF2_MAP(11 downto  6) <= "00"&x"1";
+            SSF2_MAP(17 downto 12) <= "00"&x"2";
+            SSF2_MAP(23 downto 18) <= "00"&x"3";
+            SSF2_MAP(29 downto 24) <= "00"&x"4";
+            SSF2_MAP(35 downto 30) <= "00"&x"5";
+            SSF2_MAP(41 downto 36) <= "00"&x"6";
+            SSF2_MAP(47 downto 42) <= "00"&x"7";
+        elsif TG68_A(23 downto 4) = x"a130f" and TG68_AS_N = '0' and TG68_RNW = '0' then
+            case TG68_A(3 downto 1) is
+            when "000" =>
+                null; -- always 0;
+            when "001" =>
+                SSF2_MAP(11 downto 6) <= TG68_DO(5 downto 0);
+            when "010" =>
+                SSF2_MAP(17 downto 12) <= TG68_DO(5 downto 0);
+            when "011" =>
+                SSF2_MAP(23 downto 18) <= TG68_DO(5 downto 0);
+            when "100" =>
+                SSF2_MAP(29 downto 24) <= TG68_DO(5 downto 0);
+            when "101" =>
+                SSF2_MAP(35 downto 30) <= TG68_DO(5 downto 0);
+            when "110" =>
+                SSF2_MAP(41 downto 36) <= TG68_DO(5 downto 0);
+            when "111" =>
+                SSF2_MAP(47 downto 42) <= TG68_DO(5 downto 0);
+            end case;
+        end if;
+    end if;
+end process;
+
+ROM_PAGE <= TG68_A(21 downto 19) when TG68_FLASH_SEL = '1' and TG68_DTACK_N = '1'
+          else BAR(21 downto 19) when T80_FLASH_SEL = '1' and T80_FLASH_DTACK_N = '1'
+          else VBUS_ADDR(21 downto 19);
+
+ROM_PAGE_A <= SSF2_MAP(4 downto 0) when ROM_PAGE = "000" else
+              SSF2_MAP(10 downto 6) when ROM_PAGE = "001" else
+              SSF2_MAP(16 downto 12) when ROM_PAGE = "010" else
+              SSF2_MAP(22 downto 18) when ROM_PAGE = "011" else
+              SSF2_MAP(28 downto 24) when ROM_PAGE = "100" else
+              SSF2_MAP(34 downto 30) when ROM_PAGE = "101" else
+              SSF2_MAP(40 downto 36) when ROM_PAGE = "110" else
+              SSF2_MAP(46 downto 42);
 
 -- FLASH (SDRAM) CONTROL
 process( MRST_N, MCLK, TG68_AS_N, TG68_RNW,
 	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
 	BAR, T80_A, T80_MREQ_N, T80_RD_N, T80_WR_N,
-	VBUS_SEL, VBUS_ADDR	)
+	VBUS_SEL, VBUS_ADDR, CART_EN )
 begin
-
 	if TG68_A(23 downto 22) = "00" 
 		and TG68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') 
 		and TG68_RNW = '1' 
@@ -1806,9 +1837,10 @@ begin
 		case FC is
 		when FC_IDLE =>			
 			if VCLKCNT = "001" then
+
 				if TG68_FLASH_SEL = '1' and TG68_FLASH_DTACK_N = '1' then
 					-- FF_FL_ADDR <= TG68_A(21 downto 0);
-					if useCache and (TG68_A(21 downto 3) = romrd_a_cached(21 downto 3)) then
+					if useCache and (ROM_PAGE_A & TG68_A(18 downto 3) = romrd_a_cached(23 downto 3)) then
 						case TG68_A(2 downto 1) is
 						when "00" =>
 							if TG68_UDS_N = '0' then TG68_FLASH_D(15 downto 8) <= romrd_q_cached(15 downto 8); end if;
@@ -1831,13 +1863,14 @@ begin
 						TG68_FLASH_DTACK_N <= '0';
 					else
 						romrd_req <= not romrd_req;
-						romrd_a <= TG68_A(21 downto 3);
-						romrd_a_cached <= TG68_A(21 downto 3);
+						romrd_a <= ROM_PAGE_A & TG68_A(18 downto 3);
+						romrd_a_cached <= ROM_PAGE_A & TG68_A(18 downto 3);
 						FC <= FC_TG68_RD;
 					end if;
 				elsif T80_FLASH_SEL = '1' and T80_FLASH_DTACK_N = '1' then
 					-- FF_FL_ADDR <= BAR(21 downto 15) & T80_A(14 downto 0);
-					if useCache and (BAR(21 downto 15) & T80_A(14 downto 3) = romrd_a_cached(21 downto 3)) then
+
+					if useCache and (ROM_PAGE_A & BAR(18 downto 15) & T80_A(14 downto 3) = romrd_a_cached(23 downto 3)) then
 -- /!\
 						case T80_A(2 downto 0) is
 						when "001" =>
@@ -1861,13 +1894,14 @@ begin
 						T80_FLASH_DTACK_N <= '0';
 					else
 						romrd_req <= not romrd_req;
-						romrd_a <= BAR(21 downto 15) & T80_A(14 downto 3);
-						romrd_a_cached <= BAR(21 downto 15) & T80_A(14 downto 3);		
+						romrd_a <= ROM_PAGE_A & BAR(18 downto 15) & T80_A(14 downto 3);
+						romrd_a_cached <= ROM_PAGE_A & BAR(18 downto 15) & T80_A(14 downto 3);
 						FC <= FC_T80_RD;
 					end if;
 				elsif DMA_FLASH_SEL = '1' and DMA_FLASH_DTACK_N = '1' then
 					-- FF_FL_ADDR <= VBUS_ADDR(21 downto 0);
-					if useCache and (VBUS_ADDR(21 downto 3) = romrd_a_cached(21 downto 3)) then
+
+					if useCache and (ROM_PAGE_A & VBUS_ADDR(18 downto 3) = romrd_a_cached(23 downto 3)) then
 						case VBUS_ADDR(2 downto 1) is
 						when "00" =>
 							DMA_FLASH_D <= romrd_q_cached(15 downto 0);
@@ -1882,13 +1916,13 @@ begin
 						DMA_FLASH_DTACK_N <= '0';
 					else
 						romrd_req <= not romrd_req;
-						romrd_a <= VBUS_ADDR(21 downto 3);
-						romrd_a_cached <= VBUS_ADDR(21 downto 3);
+						romrd_a <= ROM_PAGE_A & VBUS_ADDR(18 downto 3);
+						romrd_a_cached <= ROM_PAGE_A & VBUS_ADDR(18 downto 3);
 						FC <= FC_DMA_RD;
-					end if;					
-				end if;				
+					end if;
+				end if;
 			end if;
-		
+
 		when FC_TG68_RD =>
 			if romrd_req = romrd_ack then
 				romrd_q_cached <= romrd_q;
@@ -1966,10 +2000,6 @@ begin
 	end if;
 
 end process;
-
-
-
-
 
 -- SDRAM (68K RAM) CONTROL
 process( MRST_N, MCLK, TG68_AS_N, TG68_RNW,
@@ -2176,32 +2206,28 @@ end process;
 
 -- Boot process
 
-FL_DQ <= boot_data when ext_controller = '0' else ext_data;
+FL_DQ <= ext_data;
 
 process( SDR_CLK )
 begin
 	if rising_edge( SDR_CLK ) then
 		if PRE_RESET_N = '0' then
 				
-			boot_req <='0';
 			ext_data_req <= '0';
 			
 			romwr_req <= '0';
-			romwr_a <= to_unsigned(0, 21);
+			romwr_a <= to_unsigned(0, 23);
 			bootState<=BOOT_READ_1;
 			
 		else
 			case bootState is 
 				when BOOT_READ_1 =>
-					boot_req<='1';
 					ext_data_req <= '1';
-					if boot_ack='1' or ext_data_ack ='1' then
-						boot_req<='0';
+					if ext_data_ack ='1' then
 						ext_data_req <= '0';
 						bootState <= BOOT_WRITE_1;
 					end if;
-					if host_bootdone='1' or ext_bootdone = '1' then
-						boot_req<='0';
+					if ext_bootdone = '1' then
 						ext_data_req <= '0';
 						bootState <= BOOT_DONE;
 					end if;
@@ -2220,79 +2246,6 @@ begin
 	end if;
 end process;
 
-
--- Control module:
-
-mycontrolmodule : entity work.CtrlModule
-	generic map (
-		sysclk_frequency => 540 -- Sysclk frequency * 10
-	)
-	port map (
-		clk => MCLK and not ext_controller,
-		osdclk => SDR_CLK and not ext_controller,
-		reset_n => reset,
-
-		-- SPI signals
-		spi_miso	=> spi_miso,
-		spi_mosi => spi_mosi,
-		spi_clk => spi_clk,
-		spi_cs => spi_cs,
-		
-		-- UART
-		rxd => RS232_RXD,
-		txd => RS232_TXD,
-		
-		-- DIP switches
-		dipswitches => int_sw,
-
-		-- PS2 keyboard
-		ps2k_clk_in => ps2k_clk_in,
-		ps2k_dat_in => ps2k_dat_in,
-		ps2k_clk_out => ps2k_clk_out,
-		ps2k_dat_out => ps2k_dat_out,
-		
-		-- Host control
-		host_reset_n => host_reset_n,
-		host_bootdone => host_bootdone,
-		
-		-- Host boot data
-		host_bootdata => boot_data,
-		host_bootdata_req => boot_req,
-		host_bootdata_ack => boot_ack,
-		rommap => rommap,
-		
-		-- Video signals for OSD
-		vga_hsync => vga_hsync_i,
-		vga_vsync => vga_vsync_i,
-		osd_window => osd_window,
-		osd_pixel => osd_pixel,
-		
-		vol_master => MASTER_VOLUME,
-		
-		-- Gamepad emulation
-		gp1emu => int_gp1emu,
-		gp2emu => int_gp2emu
-);
-
-
-overlay : entity work.OSD_Overlay
-	port map
-	(
-		clk => SDR_CLK,
-		red_in => vga_red_i,
-		green_in => vga_green_i,
-		blue_in => vga_blue_i,
-		window_in => '1',
-		osd_window_in => osd_window,
-		osd_pixel_in => osd_pixel,
-		hsync_in => vga_hsync_i,
-		red_out => VGA_R,
-		green_out => VGA_G,
-		blue_out => VGA_B,
-		window_out => open,
-		scanline_ena => SW(1)
-	);
-
 -- Route VDP signals to outputs
 RED <= VDP_RED & VDP_RED;
 GREEN <= VDP_GREEN & VDP_GREEN;
@@ -2307,20 +2260,13 @@ VGA_HS_N <= VDP_VGA_HS_N;
 VGA_VS_N <= VDP_VGA_VS_N;
 
 -- Select between VGA and TV output	
-vga_red_i <= RED when SW(0)='1' else VGA_RED;
-vga_green_i <= GREEN when SW(0)='1' else VGA_GREEN;
-vga_blue_i <= BLUE when SW(0)='1' else VGA_BLUE;
-vga_hsync_i <= HS_N when SW(0)='1' else VGA_HS_N;
-vga_vsync_i <= VS_N when SW(0)='1' else VGA_VS_N;
-VGA_HS <= vga_hsync_i;
-VGA_VS <= vga_vsync_i;
+VGA_R <= RED when SW(0)='1' else VGA_RED;
+VGA_G <= GREEN when SW(0)='1' else VGA_GREEN;
+VGA_B <= BLUE when SW(0)='1' else VGA_BLUE;
+VGA_HS <= HS_N when SW(0)='1' else VGA_HS_N;
+VGA_VS <= VS_N when SW(0)='1' else VGA_VS_N;
 VID_15KHZ <= SW(0);
 
--- Audio control
-PSG_ENABLE <= not SW(3);
-FM_ENABLE <= not SW(4);
-FM_AMP_LEFT <= FM_LEFT when FM_ENABLE='1' else (others => '0');
-FM_AMP_RIGHT <= FM_RIGHT when FM_ENABLE='1' else (others => '0');
 
 -- #############################################################################
 -- #############################################################################

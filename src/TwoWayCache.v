@@ -199,7 +199,7 @@ begin
 		INIT2:
 		begin
 			init<=1'b1;
-			initctr<=initctr+1;
+			initctr<=initctr+1'b1;
 			data_wren1<=1'b1;
 			data_wren2<=1'b1;
 			if(initctr==10'b11_1111_1111)
@@ -352,7 +352,7 @@ begin
 			cpu_ack<=cpu_req; // Maintain ack signal if necessary
 			// write second word to Cache...
 			readword_burst<=1'b1;
-			readword<=readword+1;
+			readword<=readword+1'b1;
 			data_ports_w<={2'b11,data_from_sdram};
 			data_wren1<=tag_mru1;
 			data_wren2<=!tag_mru1;
@@ -364,7 +364,7 @@ begin
 			cpu_ack<=cpu_req; // Maintain ack signal if necessary
 			// write third word to Cache...
 			readword_burst<=1'b1;
-			readword<=readword+1;
+			readword<=readword+1'b1;
 			data_ports_w<={2'b11,data_from_sdram};
 			data_wren1<=tag_mru1;
 			data_wren2<=!tag_mru1;
@@ -375,7 +375,7 @@ begin
 		begin
 			cpu_ack<=cpu_req; // Maintain ack signal if necessary - that's four cycles, should be plenty
 			readword_burst<=1'b1;
-			readword<=readword+1;
+			readword<=readword+1'b1;
 			data_ports_w<={2'b11,data_from_sdram};
 			data_wren1<=tag_mru1;
 			data_wren2<=!tag_mru1;
@@ -385,7 +385,7 @@ begin
 		FILL5:
 		begin
 			readword_burst<=1'b1;
-			readword<=readword+1;
+			readword<=readword+1'b1;
 			data_ports_w<={2'b11,data_from_sdram};
 			data_wren1<=tag_mru1;
 			data_wren2<=!tag_mru1;
@@ -395,7 +395,7 @@ begin
 		FILL6:
 		begin
 			readword_burst<=1'b1;
-			readword<=readword+1;
+			readword<=readword+1'b1;
 			data_ports_w<={2'b11,data_from_sdram};
 			data_wren1<=tag_mru1;
 			data_wren2<=!tag_mru1;
@@ -405,7 +405,7 @@ begin
 		FILL7:
 		begin
 			readword_burst<=1'b1;
-			readword<=readword+1;
+			readword<=readword+1'b1;
 			data_ports_w<={2'b11,data_from_sdram};
 			data_wren1<=tag_mru1;
 			data_wren2<=!tag_mru1;
@@ -415,7 +415,7 @@ begin
 		FILL8:
 		begin
 			readword_burst<=1'b1;
-			readword<=readword+1;
+			readword<=readword+1'b1;
 			data_ports_w<={2'b11,data_from_sdram};
 			data_wren1<=tag_mru1;
 			data_wren2<=!tag_mru1;

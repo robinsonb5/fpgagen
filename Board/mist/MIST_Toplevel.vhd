@@ -105,6 +105,7 @@ constant CONF_STR : string :=
     "GENESIS;BINGENMD ;"&
     "O7,Display,NTSC,PAL;"&
     "O6,Joystick swap,Off,On;"&
+    "O9,Swap Y axis,Off,On;"&
     "O4,FM Sound,Enable,Disable;"&
     "O5,PSG Sound,Enable,Disable;"&
     "O8,Model,Export,Domestic;"&
@@ -261,6 +262,7 @@ ext_sw(3) <= status(5); --psg en
 ext_sw(4) <= status(4); --fm en
 ext_sw(5) <= status(7); --PAL
 ext_sw(6) <= not status(8); --model
+ext_sw(7) <= status(9); --swap Y
 
 --SDRAM_A(12)<='0';
 virtualtoplevel : entity work.Virtual_Toplevel

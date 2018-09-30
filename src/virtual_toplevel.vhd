@@ -93,6 +93,7 @@ entity Virtual_Toplevel is
 														  -- 4 - FM EN
 														  -- 5 - PAL
 														  -- 6 - Export model
+														  -- 7 - Swap y
 	);
 end entity;
 
@@ -477,9 +478,14 @@ signal VGA_VS_N			: std_logic;
 signal VGA_HS_N			: std_logic;
 
 -- Joystick signals
-signal JOY_SWAP	: std_logic;
-signal JOY_1 		: std_logic_vector(7 downto 0);
-signal JOY_2 		: std_logic_vector(7 downto 0);
+signal JOY_SWAP	    : std_logic;
+signal JOY_Y_SWAP   : std_logic;
+signal JOY_1_UP     : std_logic;
+signal JOY_1_DOWN   : std_logic;
+signal JOY_2_UP     : std_logic;
+signal JOY_2_DOWN   : std_logic;
+signal JOY_1        : std_logic_vector(7 downto 0);
+signal JOY_2        : std_logic_vector(7 downto 0);
 
 signal SDR_INIT_DONE	: std_logic;
 signal PRE_RESET_N	: std_logic;
@@ -522,8 +528,21 @@ end process;
 
 -- Joystick swapping
 JOY_SWAP <= SW(2);
-JOY_1 <= joyb when JOY_SWAP = '1' else joya;
-JOY_2 <= joya when JOY_SWAP = '1' else joyb;
+JOY_Y_SWAP <= SW(7);
+JOY_1_DOWN <= joya(3) when JOY_Y_SWAP = '1' else joya(2);
+JOY_1_UP <= joya(2) when JOY_Y_SWAP = '1' else joya(3);
+JOY_2_DOWN <= joyb(3) when JOY_Y_SWAP = '1' else joyb(2);
+JOY_2_UP <= joyb(2) when JOY_Y_SWAP = '1' else joyb(3);
+
+JOY_1(1 downto 0) <= joyb(1 downto 0) when JOY_SWAP = '1' else joya(1 downto 0);
+JOY_1(2) <= JOY_2_DOWN when JOY_SWAP = '1' else JOY_1_DOWN;
+JOY_1(3) <= JOY_2_UP when JOY_SWAP = '1' else JOY_1_UP;
+JOY_1(7 downto 4) <= joyb(7 downto 4) when JOY_SWAP = '1' else joya(7 downto 4);
+
+JOY_2(1 downto 0) <= joyb(1 downto 0) when JOY_SWAP = '0' else joya(1 downto 0);
+JOY_2(2) <= JOY_2_DOWN when JOY_SWAP = '0' else JOY_1_DOWN;
+JOY_2(3) <= JOY_2_UP when JOY_SWAP = '0' else JOY_1_UP;
+JOY_2(7 downto 4) <= joyb(7 downto 4) when JOY_SWAP = '0' else joya(7 downto 4);
 
 PAL <= SW(5);
 model <= SW(6);
@@ -711,8 +730,8 @@ port map(
 	CLK			=> MCLK,
 
 	P1_UP		=> not JOY_1(3),
-	P1_DOWN	=> not JOY_1(2),
-	P1_LEFT	=> not JOY_1(1),
+	P1_DOWN		=> not JOY_1(2),
+	P1_LEFT		=> not JOY_1(1),
 	P1_RIGHT	=> not JOY_1(0),
 	P1_A		=> not JOY_1(4),
 	P1_B		=> not JOY_1(5),
@@ -720,8 +739,8 @@ port map(
 	P1_START	=> not JOY_1(7),
 		
 	P2_UP		=> not JOY_2(3),
-	P2_DOWN	=> not JOY_2(2),
-	P2_LEFT	=> not JOY_2(1),
+	P2_DOWN		=> not JOY_2(2),
+	P2_LEFT		=> not JOY_2(1),
 	P2_RIGHT	=> not JOY_2(0),
 	P2_A		=> not JOY_2(4),
 	P2_B		=> not JOY_2(5),

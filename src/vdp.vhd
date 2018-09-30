@@ -1585,7 +1585,9 @@ begin
 						 (H40 = '0' and SP1_X(7 downto 1) = 64) or
 						 -- the following checks are inspired by the gens-ii emulator
 					    (H40 = '1' and SP1_VRAM_DO(6 downto 0) >= 80) or 
-						 (H40 = '0' and SP1_VRAM_DO(6 downto 0) >= 64)) then
+						 (H40 = '0' and SP1_VRAM_DO(6 downto 0) >= 64) or
+						 -- don't loop through short sprite attribute table
+						 (SP1_VRAM_DO(6 downto 0) = "0000000") ) then
  					   OBJ_SZ_LINK_D(6 downto 0) <= (others => '0');
 						SP1C <= SP1C_DONE;
 					else

@@ -399,7 +399,7 @@ begin
 			end if;
 end process;
 		
-process(clk)
+process(clk, ramPort_rec)
 begin	
 		-- Priority encode
 		ramPort_pri<=0;
@@ -415,7 +415,7 @@ end process;
 	
 -- -----------------------------------------------------------------------
 -- State machine
-	process(clk)
+	process(clk, ramPort_req, ramPort_rec, ramPort_pri)
 	begin
 			nextRamState <= RAM_IDLE;
 			nextRamPort <= PORT_NONE;
@@ -442,7 +442,9 @@ end process;
 
 	end process;
 
-	process(clk)
+	process(clk, sd_data_ena, sd_data_reg, sd_addr_reg,
+			sd_ras_n_reg, sd_cas_n_reg, sd_we_n_reg,
+			sd_ba_0_reg, sd_ba_1_reg, sd_ldqm_reg, sd_udqm_reg)
 	begin
 -- These are already registered by virtue of being assigned with a clock edge.
 -- Registering them again gives the synthesis software the opportunity to pipeline

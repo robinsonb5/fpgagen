@@ -78,8 +78,6 @@ signal buttons: std_logic_vector(1 downto 0);
 signal status:  std_logic_vector(31 downto 0);
 signal joy_0: std_logic_vector(7 downto 0);
 signal joy_1: std_logic_vector(7 downto 0);
-signal joy_ana_0: std_logic_vector(15 downto 0);
-signal joy_ana_1: std_logic_vector(15 downto 0);
 signal txd:     std_logic;
 signal par_out_data: std_logic_vector(7 downto 0);
 signal par_out_strobe: std_logic;
@@ -90,29 +88,9 @@ signal scandoubler_disable: std_logic;
 signal downloading      : std_logic;
 signal data_io_wr       : std_logic;
 signal data_io_clkref   : std_logic;
-signal data_io_a        : std_logic_vector(24 downto 0);
 signal data_io_d        : std_logic_vector(7 downto 0);
-signal data_io_index    : std_logic_vector(7 downto 0);
 signal downloadingD     : std_logic;
 signal d_state          : std_logic_vector(1 downto 0);
-
--- sd card emulation
-signal sd_cs:	std_logic;
-signal sd_sck:	std_logic;
-signal sd_sdi:	std_logic;
-signal sd_sdo:	std_logic;
-
--- PS/2 Keyboard
-signal ps2_keyboard_clk_in : std_logic;
-signal ps2_keyboard_dat_in : std_logic;
-signal ps2_keyboard_clk_out : std_logic;
-signal ps2_keyboard_dat_out : std_logic;
-
--- PS/2 Mouse
-signal ps2_mouse_clk_in : std_logic;
-signal ps2_mouse_dat_in : std_logic;
-signal ps2_mouse_clk_out : std_logic;
-signal ps2_mouse_dat_out : std_logic;
 
 -- external controller signals
 signal ext_reset_n      : std_logic_vector(2 downto 0) := "111";
@@ -352,14 +330,14 @@ user_io_inst : user_io
 
         joystick_0 => joy_0,
         joystick_1 => joy_1,
-        joystick_analog_0 => joy_ana_0,
-        joystick_analog_1 => joy_ana_1,
+        joystick_analog_0 => open,
+        joystick_analog_1 => open,
 --      switches => switches,
         buttons => buttons,
-        ps2_kbd_clk => ps2_keyboard_clk_in,
-        ps2_kbd_data => ps2_keyboard_dat_in,
-        ps2_mouse_clk => ps2_mouse_clk_in,
-        ps2_mouse_data => ps2_mouse_dat_in,
+        ps2_kbd_clk => open,
+        ps2_kbd_data => open,
+        ps2_mouse_clk => open,
+        ps2_mouse_data => open,
         serial_data => par_out_data,
         serial_strobe => par_out_strobe
  );
@@ -369,10 +347,10 @@ data_io_inst: data_io
         clk     => memclk,
         clkref  => data_io_clkref,
         wr      => data_io_wr,
-        a       => data_io_a,
+        a       => open,
         d       => data_io_d,
         downloading => downloading,
-        index   => data_io_index,
+        index   => open,
 
         sck     => SPI_SCK,
         ss      => SPI_SS2,

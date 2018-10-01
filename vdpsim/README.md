@@ -9,7 +9,7 @@ imagemagick to process the video similation.
 A virtual vram and a virtual video device are provided allowing to render
 the display directly from a vram image to a png image as depicted below:
 
-![SpriteMaskingTestRomSrc result][video.png]
+![video.png](video.png)
 
 Run '''make view''' to re-generate above screenshot. This takes some time as the
 simulation needs to run for full two frames as the vdp needs one full frame

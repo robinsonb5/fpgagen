@@ -11,6 +11,9 @@ the display directly from a vram image to a png image as depicted below:
 
 ![video.png](video.png)
 
+This test runs the VRAM image from the 
+[Sprite_Masking_and_Overflow_Test_ROM](https://segaretro.org/Sprite_Masking_and_Overflow_Test_ROM).
+
 Run '''make view''' to re-generate above screenshot. This takes some time as the
 simulation needs to run for full two frames as the vdp needs one full frame
 before it actually starts rendering.

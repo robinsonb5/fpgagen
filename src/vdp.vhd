@@ -1735,28 +1735,24 @@ begin
 					else
 						OBJ_X_OFS <= "00111";
 					end if;					
-					OBJ_PIX <= OBJ_PIX + 8;
 				when "01" =>	-- 16 pixels
 					if OBJ_HF = '0' then
 						OBJ_X_OFS <= "00000";
 					else
 						OBJ_X_OFS <= "01111";
 					end if;					
-					OBJ_PIX <= OBJ_PIX + 16;
 				when "11" =>	-- 32 pixels
 					if OBJ_HF = '0' then
 						OBJ_X_OFS <= "00000";
 					else
 						OBJ_X_OFS <= "11111";
 					end if;					
-					OBJ_PIX <= OBJ_PIX + 32;
 				when others =>	-- 24 pixels
 					if OBJ_HF = '0' then
 						OBJ_X_OFS <= "00000";
 					else
 						OBJ_X_OFS <= "10111";
 					end if;					
-					OBJ_PIX <= OBJ_PIX + 24;
 				end case;
 
 				case OBJ_VS is
@@ -1793,7 +1789,8 @@ begin
 				OBJ_POS <= OBJ_X - "010000000";
 				OBJ_TILEBASE <= (OBJ_PAT & "0000") + (OBJ_Y_OFS & "0");
 				SP2C <= SP2C_LOOP;
-				
+
+			-- loop over all sprite pixels on the current line
 			when SP2C_LOOP =>
 				OBJ_COLINFO_WE_A <= '0';
 				OBJ_COLINFO_ADDR_A <= OBJ_POS;
@@ -1838,7 +1835,13 @@ begin
 					-- end if;					
 					SP2C <= SP2C_PLOT;
 				end if;
-			
+
+				-- limit total sprite pixels per line
+				if (H40 = '1' and OBJ_PIX = 320) or (H40 = '0' and OBJ_PIX = 256) then
+					SP2C <= SP2C_DONE;
+					SOVR_SET <= '1';
+				end if;
+
 			when SP2C_PLOT =>
 				SP2_SEL <= '0';
 				if OBJ_POS < 320 then
@@ -1855,6 +1858,7 @@ begin
 					end if;
 				end if;
 				OBJ_POS <= OBJ_POS + 1;
+				OBJ_PIX <= OBJ_PIX + 1;
 				if OBJ_HF = '1' then
 					if OBJ_X_OFS = "00000" then
 						SP2C <= SP2C_NEXT;
@@ -1900,14 +1904,8 @@ begin
 				OBJ_TOT <= OBJ_TOT + 1;
 				OBJ_NEXT <= OBJ_LINK;
 
-				-- 1) limit number of sprites per frame to 80 / 64
-				-- FIXME: This is supposed to pass test 9 of the sprite
-				--        masking and overflow test rom. But it doesn't in H32
-		      -- 2) limit number of sprites per line to 20 / 16
- 		      -- 3) limit sprite pixels per line to 320 / 256
-				if (H40 = '1' and OBJ_TOT >=  79) or (H40 = '0' and OBJ_TOT >=  63) or
-				   (H40 = '1' and OBJ_NB  >=  20) or (H40 = '0' and OBJ_NB  >=  16) or
-				   (H40 = '1' and OBJ_PIX >= 320) or (H40 = '0' and OBJ_PIX >= 256) then
+		                -- limit number of sprites per line to 20 / 16
+				if (H40 = '1' and OBJ_NB = 20) or (H40 = '0' and OBJ_NB = 16) then
 					SP2C <= SP2C_DONE;
 					SOVR_SET <= '1';
 				elsif OBJ_LINK = "0000000" then

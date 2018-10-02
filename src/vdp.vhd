@@ -570,6 +570,9 @@ signal OBJ_LINK			: std_logic_vector(6 downto 0);
 signal OBJ_HS			: std_logic_vector(1 downto 0);
 signal OBJ_VS			: std_logic_vector(1 downto 0);
 signal OBJ_X			: std_logic_vector(8 downto 0);
+signal OBJ_MASKED		: std_logic;
+signal OBJ_VALID_X	: std_logic;
+signal OBJ_DOT_OVERFLOW	: std_logic;
 signal OBJ_X_OFS		: std_logic_vector(4 downto 0);
 signal OBJ_PRI			: std_logic;
 signal OBJ_PAL			: std_logic_vector(1 downto 0);
@@ -1627,6 +1630,7 @@ begin
 		
 		OBJ_Y_ADDR_RD <= (others => '0');
 		OBJ_SZ_LINK_ADDR_RD <= (others => '0');
+		OBJ_DOT_OVERFLOW <= '0';
 		
 		SCOL_SET <= '0';
 		SOVR_SET <= '0';
@@ -1645,7 +1649,10 @@ begin
 				OBJ_NEXT <= (others => '0');
 				OBJ_NB <= (others => '0');
 				OBJ_PIX <= (others => '0');
-				
+				OBJ_MASKED <= '0';
+				OBJ_VALID_X <= OBJ_DOT_OVERFLOW;
+				OBJ_DOT_OVERFLOW <= '0';
+
 				SP2C <= SP2C_Y_RD;
 			
 			when SP2C_Y_RD =>
@@ -1707,13 +1714,18 @@ begin
 				end if;
 			
 			when SP2C_X_TST =>
-				if OBJ_X = "000000000" then
-					SP2C <= SP2C_DONE;
-				else
-					SP2_VRAM_ADDR <= (SATB & "00000000") + (OBJ_NEXT & "10");
-					SP2_SEL <= '1';
-					SP2C <= SP2C_TDEF_RD;					
+				-- sprite masking algorithm as implemented by gens-ii
+				if OBJ_X = "000000000" and OBJ_VALID_X = '1' then
+					OBJ_MASKED <= '1';
 				end if;
+
+				if OBJ_X /= "000000000" then
+					OBJ_VALID_X <= '1';
+				end if;
+
+				SP2_VRAM_ADDR <= (SATB & "00000000") + (OBJ_NEXT & "10");
+				SP2_SEL <= '1';
+				SP2C <= SP2C_TDEF_RD;
 			
 			when SP2C_TDEF_RD =>
 				if early_ack_sp2='0' then
@@ -1838,6 +1850,7 @@ begin
 
 				-- limit total sprite pixels per line
 				if (H40 = '1' and OBJ_PIX = 320) or (H40 = '0' and OBJ_PIX = 256) then
+					OBJ_DOT_OVERFLOW <= '1';
 					SP2C <= SP2C_DONE;
 					SOVR_SET <= '1';
 				end if;
@@ -1848,9 +1861,12 @@ begin
 					-- if T_PREV_OBJ_COLINFO(3 downto 0) = "0000" then
 						-- OBJ_COLINFO( CONV_INTEGER(OBJ_POS) ) <= OBJ_PRI & OBJ_PAL & OBJ_COLNO;
 					-- end if;
+
 					if OBJ_COLINFO_Q_A(3 downto 0) = "0000" then
-						OBJ_COLINFO_WE_A <= '1';
-						OBJ_COLINFO_D_A <= OBJ_PRI & OBJ_PAL & OBJ_COLNO;
+						if OBJ_MASKED = '0' then
+							OBJ_COLINFO_WE_A <= '1';
+							OBJ_COLINFO_D_A <= OBJ_PRI & OBJ_PAL & OBJ_COLNO;
+						end if;
 					else
 						if OBJ_COLNO /= "0000" then
 							SCOL_SET <= '1';
@@ -1904,7 +1920,7 @@ begin
 				OBJ_TOT <= OBJ_TOT + 1;
 				OBJ_NEXT <= OBJ_LINK;
 
-		                -- limit number of sprites per line to 20 / 16
+				-- limit number of sprites per line to 20 / 16
 				if (H40 = '1' and OBJ_NB = 20) or (H40 = '0' and OBJ_NB = 16) then
 					SP2C <= SP2C_DONE;
 					SOVR_SET <= '1';

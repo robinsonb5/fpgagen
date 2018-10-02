@@ -3,22 +3,23 @@
 #
 
 SRC=../src
-SRCS = $(SRC)/vdp.vhd vdp_objinfo.vhd vdp_colinfo.vhd $(SRC)/vdp_common.vhd vdp_tb.vhd vram.vhd
-OBJS = $(notdir $(SRCS:.vhd=.o)) vram_c.o video_c.o
+SRCS = $(SRC)/vdp.vhd vdp_objinfo.vhd vdp_colinfo.vhd $(SRC)/vdp_common.vhd vdp_tb.vhd vram.vhd cpu.vhd
+OBJS = $(notdir $(SRCS:.vhd=.o)) vram_c.o video_c.o cpu_c.o
 
 FLAGS=--ieee=synopsys -fexplicit 
 
 all: vdp_tb
 
-vdp_tb.o: vdp.o vram.o video.o
+vdp_tb.o: vdp.o vram.o video.o cpu.o
 vdp.o: vdp_colinfo.o vdp_objinfo.o vdp_common.o
 vram.o: vram_c.o
 video.o: video_c.o
+cpu.o: cpu_c.o
 
-%.o: %.vhd # work-obj93.cf
+%.o: %.vhd
 	ghdl -a $(FLAGS) $<
 
-%.o: $(SRC)/%.vhd # work-obj93.cf
+%.o: $(SRC)/%.vhd
 	ghdl -a $(FLAGS) $<
 
 work-obj93.cf: $(SRCS)
@@ -37,10 +38,10 @@ video.png: vdp_tb Makefile
 	convert video.png -resize 427x262! video.png
 
 vdp_tb: $(OBJS)
-	ghdl -e $(FLAGS) -Wl,vram_c.o -Wl,video_c.o $@
+	ghdl -e $(FLAGS) -Wl,vram_c.o -Wl,video_c.o -Wl,cpu_c.o $@
 
 vdp.ghw:  vdp_tb Makefile
-	ghdl -r $< --ieee-asserts=disable --stop-time=300us --wave=$@
+	ghdl -r $< --ieee-asserts=disable --stop-time=100us --wave=$@
 
 wave: vdp.ghw
 	gtkwave vdp.sav

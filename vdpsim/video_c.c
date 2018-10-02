@@ -26,12 +26,12 @@ void video_c(char clk, char r[4], char g[4], char b[4], char hs, char vs) {
   if(clk == last_clk) return;
   last_clk = clk;
 
-  if(!clk) return;
+  if((clk == SULV_0) || (clk == SULV_L)) return;
   // subcnt
   static int subcnt = 1;
   if(--subcnt) return;
 
-  subcnt = 8;
+  subcnt = 4;
   
   // ignore first few events
   if(ignore) {

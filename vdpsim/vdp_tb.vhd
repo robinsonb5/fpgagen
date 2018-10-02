@@ -1,6 +1,7 @@
 library work;
 use work.vram.all;
 use work.video.all;
+use work.cpu.all;
 
 library ieee;
 use ieee.std_logic_1164.all;
@@ -85,6 +86,7 @@ signal CPU_RNW: std_logic;
 signal CPU_UDS_N: std_logic;
 signal CPU_LDS_N: std_logic;
 signal CPU_DI: std_logic_vector(15 downto 0);
+signal CPU_DTACK_N: std_logic;
 
 signal VIDEO_R: std_logic_vector(3 downto 0);
 signal VIDEO_G: std_logic_vector(3 downto 0);
@@ -107,6 +109,7 @@ begin
       UDS_N => CPU_UDS_N,
       LDS_N => CPU_LDS_N,
       DI => CPU_DI,
+      DTACK_N => CPU_DTACK_N,
       
       vram_a => vram_a,
 --      vram_d => ,
@@ -139,65 +142,15 @@ begin
   end process clock;
 
   stimulus : process
-    procedure WRITE_REG
-      ( a: in std_logic_vector(3 downto 0);
-        d: in std_logic_vector(15 downto 0) ) is
-    begin
-      CPU_UDS_N <= '0';
-      CPU_LDS_N <= '0';
-      CPU_RNW <= '0';
-      CPU_A <= "0" & a;
-      CPU_DI <= d;  
-      CPU_SEL <= '1';
-      wait for 60 ns;
-      CPU_SEL <= '0';
-      wait for 40 ns;   
-
-    end WRITE_REG;
-    
-    procedure WRITE_VDP_REG
-      ( d: in std_logic_vector(15 downto 0) ) is
-    begin
-      WRITE_REG(x"4", d);
-    end WRITE_VDP_REG;
-
   begin
     report "start";
 
-    -- reset cpu signals
-    CPU_SEL <= '0';
-    CPU_A <= "00000"; 
-    CPU_RNW <= '1';
-    CPU_UDS_N <= '1';
-    CPU_LDS_N <= '1';
-    CPU_DI <= "0000000000000000";
-      
     reset_n <= '0';
     wait for 5 ns; reset_n <= '1';
     
     assert false report "vdp out of reset"
       severity note;
 
-    -- from Sprite main.asm
-    WRITE_VDP_REG(x"8004"); -- Enable the palette
-    WRITE_VDP_REG(x"8144"); -- Enable the display/mode 5
-    WRITE_VDP_REG(x"8230"); -- Set the scroll A name table base to 0xC000
-    WRITE_VDP_REG(x"8405"); -- Set the scroll B name table base to 0xA000
-    WRITE_VDP_REG(x"8570"); -- Set the sprite table base to 0xE000
-    WRITE_VDP_REG(x"8D3F"); -- Set the hscroll base to 0xFC00
-    WRITE_VDP_REG(x"9001"); -- Set the scroll size to V32 H64
-    WRITE_VDP_REG(x"8F02"); -- Set the auto-increment data to 2
-
-    -- CRAM
-    WRITE_REG(x"4", x"C000"); WRITE_REG(x"4", x"0000");
-    WRITE_REG(x"0", x"0000"); WRITE_REG(x"0", x"0EEE");
-    WRITE_REG(x"0", x"000E"); WRITE_REG(x"0", x"00E0");
-    WRITE_REG(x"0", x"0E00"); WRITE_REG(x"0", x"0888");
-    WRITE_REG(x"0", x"0008"); WRITE_REG(x"0", x"0080");
-    WRITE_REG(x"0", x"0800"); WRITE_REG(x"0", x"0000");
-    WRITE_REG(x"0", x"0000"); WRITE_REG(x"0", x"0000");
-    WRITE_REG(x"0", x"0000"); WRITE_REG(x"0", x"0800");
-   
     wait;
   end process stimulus;
   
@@ -230,6 +183,30 @@ begin
     r := VIDEO_R; g := VIDEO_G; b := VIDEO_B;
     video_c(c,r,g,b,hs,vs);
  end process video;
+
+ cpu : process (clk, reset_n)
+    variable c : std_logic;
+    variable r_n : std_logic;
+    variable sel : std_logic;
+    variable dtack_n : std_logic;
+    variable rnw : std_logic;
+    variable ds_n : std_logic_vector(1 downto 0);
+    variable a : std_logic_vector(4 downto 0);
+    variable d : std_logic_vector(15 downto 0);
+  begin
+    c := clk;
+    r_n := reset_n;
+    dtack_n := CPU_DTACK_N;
+    
+    cpu_c(c,r_n,sel,dtack_n,rnw,ds_n,a,d);
+
+    CPU_SEL <= sel;
+    CPU_RNW <= rnw;
+    CPU_UDS_N <= ds_n(0);
+    CPU_LDS_N <= ds_n(1);
+    CPU_A <= a;
+    CPU_DI <= d;
+ end process cpu;
 
 end vdp_tb;
 

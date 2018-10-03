@@ -542,6 +542,7 @@ type sp2c_t is (
 	SP2C_CALC_XY,
 	SP2C_CALC_BASE,
 	SP2C_LOOP,
+	SP2C_PLOT_RD,
 	SP2C_PLOT,
 	SP2C_TILE_RD,
 	SP2C_NEXT,
@@ -639,7 +640,8 @@ port map(
 );
 BGA_COLINFO_WE_B <= '0';
 
-obj_ci : entity work.vdp_colinfo
+-- obj_ci : entity work.vdp_colinfo
+obj_ci : entity work.DualPortRAM
 port map(
 	address_a	=> OBJ_COLINFO_ADDR_A,
 	address_b	=> OBJ_COLINFO_ADDR_B,
@@ -1845,7 +1847,7 @@ begin
 					-- if OBJ_POS < 320 then
 						-- T_PREV_OBJ_COLINFO <= OBJ_COLINFO( CONV_INTEGER(OBJ_POS) );
 					-- end if;					
-					SP2C <= SP2C_PLOT;
+					SP2C <= SP2C_PLOT_RD;
 				end if;
 
 				-- limit total sprite pixels per line
@@ -1855,6 +1857,9 @@ begin
 					SOVR_SET <= '1';
 				end if;
 
+			when SP2C_PLOT_RD =>
+				SP2C <= SP2C_PLOT;
+				
 			when SP2C_PLOT =>
 				SP2_SEL <= '0';
 				if OBJ_POS < 320 then

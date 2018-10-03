@@ -9,8 +9,8 @@ use ieee.numeric_std.all;
 ENTITY DualPortRAM IS
 	GENERIC
 	(
-		addrbits : integer := 11;
-		databits : integer := 18
+		addrbits : integer := 9;
+		databits : integer := 7
 	);
 	PORT
 	(

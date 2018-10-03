@@ -38,29 +38,57 @@ library IEEE;
 
 package vdp_common is
 
-constant H_DISP_CLOCKS          : integer := 2560;
+--constant H_DISP_CLOCKS          : integer := 2560;
 
 constant CLOCKS_PER_LINE_MAX    : integer := 3420;
 constant CLOCKS_PER_LINE_H32    : integer := 342*10;
 constant CLOCKS_PER_LINE_H40    : integer := 427*8; -- 3416
 
-constant HS_CLOCKS              : integer := 240; -- multiple of 8 and 10, too
+constant H_DISP_CLOCKS          : integer := 2560;
 constant VGA_HS_CLOCKS          : integer := 204;       -- 3.77 us
 
 constant VGA_VS_LINES           : integer := 1;         -- 0.06 ms
 constant VS_LINES               : integer := 3;
 
-constant H_DISP_START_H32       : integer := HS_CLOCKS + 46*10;
-constant H_DISP_START_H40       : integer := HS_CLOCKS + 46*8;
+-- Timing values from the Exodus emulator in HV_HCNT and HV_VCNT values
 
-constant H_DISP_WIDTH_H32       : integer := 256; -- in cells
+constant H_DISP_START_H32       : integer := 466; -- -46
+constant H_DISP_START_H40       : integer := 457; -- -55
+
+constant HBLANK_END_H32         : integer := 9;
+constant HBLANK_END_H40         : integer := 10;
+
+constant HBLANK_START_H32       : integer := 293;
+constant HBLANK_START_H40       : integer := 357;
+
+-- HSYNC moved a bit before the active area from the reference
+-- to provide enough back porch
+constant HSYNC_START_H32        : integer := 472-5; -- -40
+constant HSYNC_START_H40        : integer := 460-2; -- -52
+
+constant HSYNC_END_H32          : integer := 498-5; -- -14
+constant HSYNC_END_H40          : integer := 492-2; -- -20
+
+constant H_INT_H32              : integer := 265;
+constant H_INT_H40              : integer := 329;
+
+constant H_SPENGINE_ON_H32      : integer := 55;
+constant H_SPENGINE_ON_H40      : integer := 85;
+
+constant H_DISP_WIDTH_H32       : integer := 256;
 constant H_DISP_WIDTH_H40       : integer := 320;
 
-constant V_DISP_START_V28       : integer := 27;
-constant V_DISP_START_V30       : integer := 46;
+constant H_TOTAL_WIDTH_H32      : integer := 342;
+constant H_TOTAL_WIDTH_H40      : integer := 427;
+
+constant V_DISP_START_V28       : integer := 485; -- -27;
+constant V_DISP_START_V30       : integer := 466; -- -46
 
 constant V_DISP_HEIGHT_V28      : integer := 224;
 constant V_DISP_HEIGHT_V30      : integer := 240;
+
+constant V_INT_NTSC             : integer := 231;
+constant V_INT_PAL              : integer := 255;
 
 constant NTSC_LINES             : integer := 262;
 constant PAL_LINES              : integer := 312;

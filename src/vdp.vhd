@@ -917,7 +917,10 @@ SP2_VRAM_DO <= vram_q when early_ack_sp2='0' and SP2_DTACK_N = '1' else SP2_VRAM
 DT_VRAM_DO <= vram_q when early_ack_dt='0' and SP2_DTACK_N = '1' else DT_VRAM_DO_REG;
 
 
-process( RST_N, CLK )
+process( RST_N, CLK,
+	BGA_SEL, BGA_DTACK_N, BGB_SEL, BGB_DTACK_N,
+	SP1_SEL, SP1_DTACK_N, SP2_SEL, SP2_DTACK_N,	DT_VRAM_SEL, DT_VRAM_DTACK_N,
+	early_ack_bga, early_ack_bgb, early_ack_sp1, early_ack_sp2, early_ack_dt)
 -- synthesis translate_off
 file F		: text open write_mode is "vram_dbg.out";
 variable L	: line;

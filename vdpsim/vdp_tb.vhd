@@ -43,12 +43,10 @@ component vdp
                 INTERLACE       : in std_logic;
 
                 HINT            : out std_logic;
-                HINT_ACK        : in std_logic;
+                INTACK          : in std_logic;
 
                 VINT_TG68       : out std_logic;
                 VINT_T80        : out std_logic;
-                VINT_TG68_ACK   : in std_logic;
-                VINT_T80_ACK    : in std_logic;
 
                 VBUS_ADDR               : out std_logic_vector(23 downto 0);
                 VBUS_UDS_N              : out std_logic;
@@ -119,9 +117,7 @@ begin
 
       INTERLACE => '0',
 
-      HINT_ACK => '0',
-      VINT_TG68_ACK => '0',
-      VINT_T80_ACK => '0',
+      INTACK => '0',
 
       VBUS_DATA => "0000000000000000",
 

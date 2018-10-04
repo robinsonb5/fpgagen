@@ -121,7 +121,7 @@ type cram_t is array(0 to 63) of std_logic_vector(15 downto 0);
 signal CRAM			: cram_t;
 type vsram_t is array(0 to 63) of std_logic_vector(15 downto 0);
 signal VSRAM		: vsram_t;
-
+signal VSRAM_LATCH  : vsram_t;
 ----------------------------------------------------------------
 -- CPU INTERFACE
 ----------------------------------------------------------------
@@ -387,13 +387,6 @@ signal early_ack : std_logic;
 ----------------------------------------------------------------
 -- BACKGROUND RENDERING
 ----------------------------------------------------------------
--- Not sure if background rendering should be free-running,
--- now it finishes the scanline about at the end of the blanking period
--- This makes effects which are timed to the middle of a scanline
--- suffer. However access slots to internal RAMs are also not limited,
--- so probably these two mis-functions are compensating each other more or less.
--- See Outrun and Lotus II for examples of HSCROLL values pushed in the middle
--- of the scanline
 
 signal BGEN_ACTIVATE	: std_logic;
 
@@ -487,7 +480,7 @@ signal WIN_H		: std_logic;
 -- SPRITE ENGINE
 ----------------------------------------------------------------
 -- PART 1
-signal SP1E_ACTIVE	: std_logic;
+signal SP1E_ACTIVATE	: std_logic;
 
 type sp1c_t is (
 	SP1C_INIT,
@@ -544,7 +537,7 @@ signal SP1_DTACK_N	: std_logic;
 signal OBJ_CUR			: std_logic_vector(6 downto 0);
 
 -- PART 2
-signal SP2E_ACTIVE	: std_logic;
+signal SP2E_ACTIVATE	: std_logic;
 
 type sp2c_t is (
 	SP2C_INIT,
@@ -1116,12 +1109,12 @@ begin
 			when BGBC_CALC_Y =>
 				BGB_COLINFO_WE_A <= '0';
 				if BGB_POS(9) = '1' then
-					BGB_Y <= (VSRAM(1)(9 downto 0) + Y) and (VSIZE & "11111111");
+					BGB_Y <= (VSRAM_LATCH(1)(9 downto 0) + Y) and (VSIZE & "11111111");
 				else
 					if VSCR = '1' then
-						BGB_Y <= (VSRAM( CONV_INTEGER(BGB_POS(8 downto 4) & "1") )(9 downto 0) + Y) and (VSIZE & "11111111");
+						BGB_Y <= (VSRAM_LATCH( CONV_INTEGER(BGB_POS(8 downto 4) & "1") )(9 downto 0) + Y) and (VSIZE & "11111111");
 					else
-						BGB_Y <= (VSRAM(1)(9 downto 0) + Y) and (VSIZE & "11111111");
+						BGB_Y <= (VSRAM_LATCH(1)(9 downto 0) + Y) and (VSIZE & "11111111");
 					end if;
 				end if;
 				BGBC <= BGBC_CALC_BASE;
@@ -1330,12 +1323,12 @@ begin
 					BGA_Y <= "00" & Y;					
 				else
 					if BGA_POS(9) = '1' then
-						BGA_Y <= (VSRAM(0)(9 downto 0) + Y) and (VSIZE & "11111111");
+						BGA_Y <= (VSRAM_LATCH(0)(9 downto 0) + Y) and (VSIZE & "11111111");
 					else
 						if VSCR = '1' then
-							BGA_Y <= (VSRAM( CONV_INTEGER(BGA_POS(8 downto 4) & "0") )(9 downto 0) + Y) and (VSIZE & "11111111");
+							BGA_Y <= (VSRAM_LATCH( CONV_INTEGER(BGA_POS(8 downto 4) & "0") )(9 downto 0) + Y) and (VSIZE & "11111111");
 						else
-							BGA_Y <= (VSRAM(0)(9 downto 0) + Y) and (VSIZE & "11111111");
+							BGA_Y <= (VSRAM_LATCH(0)(9 downto 0) + Y) and (VSIZE & "11111111");
 						end if;
 					end if;
 				end if;
@@ -1553,7 +1546,7 @@ process( RST_N, MEMCLK )
 begin
 	if RST_N = '0' then
 		SP1_SEL <= '0';
-		SP1C <= SP1C_INIT;
+		SP1C <= SP1C_DONE;
 		
 		OBJ_Y_WE <= '0';
 		OBJ_SZ_LINK_WE <= '0';
@@ -1561,9 +1554,7 @@ begin
 		OBJ_SZ_LINK_ADDR_WR <= (others => '0');
 		
 	elsif rising_edge(MEMCLK) then
-		-- if SP1E_ACTIVE = '1' and SP2E_ACTIVE = '0' then
-		if SP1E_ACTIVE = '1' then
-			case SP1C is
+		case SP1C is
 			when SP1C_INIT =>
 				SP1_X <= (others => '0');
 				OBJ_CUR <= (others => '0');
@@ -1622,17 +1613,16 @@ begin
 			
 			when others => -- SP1C_DONE
 				SP1_SEL <= '0';
-			end case;
-		else	-- SP1E_ACTIVE = '0'
-			SP1_SEL <= '0';
-			SP1C <= SP1C_INIT;
 
-			OBJ_Y_WE <= '0';
-			OBJ_SZ_LINK_WE <= '0';
-			OBJ_Y_ADDR_WR <= (others => '0');
-			OBJ_SZ_LINK_ADDR_WR <= (others => '0');
-			
-		end if;
+				OBJ_Y_WE <= '0';
+				OBJ_SZ_LINK_WE <= '0';
+				OBJ_Y_ADDR_WR <= (others => '0');
+				OBJ_SZ_LINK_ADDR_WR <= (others => '0');
+				if SP1E_ACTIVATE = '1' then
+					SP1C <= SP1C_INIT;
+				end if;
+
+		end case;
 	end if;
 end process;
 
@@ -1644,9 +1634,9 @@ process( RST_N, MEMCLK )
 begin
 	if RST_N = '0' then
 		SP2_SEL <= '0';
-		SP2C <= SP2C_INIT;
+		SP2C <= SP2C_DONE;
 		OBJ_COLINFO_ADDR_A <= (others => '0');
-		OBJ_COLINFO_WE_A <= '0';		
+		OBJ_COLINFO_WE_A <= '0';
 		
 		OBJ_Y_ADDR_RD <= (others => '0');
 		OBJ_SZ_LINK_ADDR_RD <= (others => '0');
@@ -1660,9 +1650,7 @@ begin
 		SCOL_SET <= '0';
 		SOVR_SET <= '0';
 	
-		-- if SP2E_ACTIVE = '1' and SP1E_ACTIVE = '0' then
-		if SP2E_ACTIVE = '1' and (SP1E_ACTIVE = '0' or SP1C = SP1C_DONE) then
-			case SP2C is
+		case SP2C is
 			when SP2C_INIT =>
 				SP2_Y <= PRE_Y;	-- Latch the current PRE_Y value as it will change during the rendering process
 				OBJ_TOT <= (others => '0');
@@ -1955,18 +1943,16 @@ begin
 			
 			when others => -- SP2C_DONE
 				SP2_SEL <= '0';
-				OBJ_COLINFO_WE_A <= '0';
-			end case;
-		else	-- SP2E_ACTIVE = '0'
-			SP2_SEL <= '0';
-			SP2C <= SP2C_INIT;
 
-			OBJ_COLINFO_WE_A <= '0';		
-			OBJ_COLINFO_ADDR_A <= (others => '0');
-		
-			OBJ_Y_ADDR_RD <= (others => '0');
-			OBJ_SZ_LINK_ADDR_RD <= (others => '0');
-		end if;
+				OBJ_COLINFO_WE_A <= '0';
+				OBJ_COLINFO_ADDR_A <= (others => '0');
+
+				OBJ_Y_ADDR_RD <= (others => '0');
+				OBJ_SZ_LINK_ADDR_RD <= (others => '0');
+				if SP2E_ACTIVATE = '1' then
+					SP2C <= SP2C_INIT;
+				end if;
+		end case;
 	end if;
 end process;
 
@@ -1980,8 +1966,6 @@ H_DISP_WIDTH    <= conv_std_logic_vector(H_DISP_WIDTH_H40, 9) when H40='1'
               else conv_std_logic_vector(H_DISP_WIDTH_H32, 9);
 H_TOTAL_WIDTH   <= conv_std_logic_vector(H_TOTAL_WIDTH_H40, 9) when H40='1'
               else conv_std_logic_vector(H_TOTAL_WIDTH_H32, 9);
-H_SPENGINE_ON   <= conv_std_logic_vector(H_SPENGINE_ON_H40, 9) when H40='1'
-              else conv_std_logic_vector(H_SPENGINE_ON_H32, 9);
 H_INT_POS       <= conv_std_logic_vector(H_INT_H40, 9) when H40='1'
               else conv_std_logic_vector(H_INT_H32, 9);
 HSYNC_START     <= conv_std_logic_vector(HSYNC_START_H40, 9) when H40='1'
@@ -2054,6 +2038,10 @@ begin
 				else
 					HV_VCNT <= HV_VCNT + 1;
 				end if;
+				-- Latch VSRAM at the beginning of the line
+				-- Since the scanline rendering is not timing-accurate, it's the best
+				-- to lock these values. 
+				VSRAM_LATCH <= VSRAM;
 			end if;
 
 			if HV_HCNT = H_INT_POS then
@@ -2103,41 +2091,16 @@ end process;
 PRE_V_ACTIVE <= '1' when HV_VCNT = "1"&x"FF" or HV_VCNT < V_DISP_HEIGHT - 1 else '0';
 V_ACTIVE <= '1' when HV_VCNT < V_DISP_HEIGHT else '0';
 DISP_ACTIVE <= '1' when V_ACTIVE = '1' and HV_HCNT > HBLANK_END and HV_HCNT < H_INT_POS and DE = '1' else '0';
-BGEN_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = H_INT_POS+1 else '0';
---SP1E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = H_SPENGINE_ON;
---SP2E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = H_INT_POS - 1;
+-- Background generation runs during active display.
+-- Original timing is 2 pixels (or cells?) before the actual pixel.
+-- But the background generators are not timed, but free running now.
+BGEN_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = HBLANK_END - 3 else '0';
+
+-- Stage 1 runs during active display
+SP1E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = HBLANK_END + 30 else '0';
+-- Stage 2 runs during HBLANK
+SP2E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = H_INT_POS-2 else '0';
 DT_ACTIVE <= '1';
-
-process( RST_N, CLK )
-begin
-	if RST_N = '0' then
-		SP1E_ACTIVE <= '0';
-		SP2E_ACTIVE <= '0';
---		DT_ACTIVE <= '0';
-	elsif rising_edge(CLK) then
-		
-		-- SPRITE ENGINE PART ONE ACTIVE
-		if HV_HCNT = H_SPENGINE_ON and PRE_V_ACTIVE = '1' then
-			SP1E_ACTIVE <= '1';
-		elsif HV_HCNT = H_SPENGINE_ON + 60 then
-		-- elsif H_CNT = H_DISP_START+(3*H_DISP_CLOCKS/4) then
-			SP1E_ACTIVE <= '0';
-		end if;
-
-		-- SPRITE DATA SHOULD PROCESSED AT THE BLANKING PERIOD
-		-- SPRITE ENGINE PART TWO ACTIVE
-		-- if H_CNT = H_DISP_START+H_DISP_CLOCKS and PRE_V_ACTIVE = '1' then
-		-- if H_CNT = H_DISP_START+(3*H_DISP_CLOCKS/4) and PRE_V_ACTIVE = '1' then
-		if HV_HCNT = H_SPENGINE_ON + 61 and PRE_V_ACTIVE = '1' then
-			SP2E_ACTIVE <= '1';
-		elsif HV_HCNT = H_INT_POS then
-			SP2E_ACTIVE <= '0';
-		end if;
-		
-		-- DATA TRANSFER ACTIVE
-		--DT_ACTIVE <= '1';
-	end if;
-end process;
 
 -- PIXEL COUNTER AND OUTPUT
 -- ALSO CLEARS THE SPRITE COLINFO BUFFER RIGHT AFTER RENDERING

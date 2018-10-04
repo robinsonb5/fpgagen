@@ -72,9 +72,6 @@ constant HSYNC_END_H40          : integer := 492-2; -- -20
 constant H_INT_H32              : integer := 265;
 constant H_INT_H40              : integer := 329;
 
-constant H_SPENGINE_ON_H32      : integer := 55;
-constant H_SPENGINE_ON_H40      : integer := 85;
-
 constant H_DISP_WIDTH_H32       : integer := 256;
 constant H_DISP_WIDTH_H40       : integer := 320;
 

@@ -74,13 +74,10 @@ entity vdp is
 		INTERLACE	: in std_logic;
 
 		HINT		: out std_logic;
-		HINT_ACK	: in std_logic;
-		
 		VINT_TG68	: out std_logic;
 		VINT_T80	: out std_logic;
-		VINT_TG68_ACK	: in std_logic;
-		VINT_T80_ACK	: in std_logic;
-		
+		INTACK		: in std_logic;
+
 		VBUS_ADDR		: out std_logic_vector(23 downto 0);
 		VBUS_UDS_N		: out std_logic;
 		VBUS_LDS_N		: out std_logic;
@@ -121,7 +118,7 @@ type cram_t is array(0 to 63) of std_logic_vector(15 downto 0);
 signal CRAM			: cram_t;
 type vsram_t is array(0 to 63) of std_logic_vector(15 downto 0);
 signal VSRAM		: vsram_t;
-
+signal VSRAM_LATCH  : vsram_t;
 ----------------------------------------------------------------
 -- CPU INTERFACE
 ----------------------------------------------------------------
@@ -176,6 +173,7 @@ signal VINT_T80_SET				: std_logic;
 signal VINT_T80_CLR				: std_logic;
 signal VINT_T80_FF				: std_logic;
 
+signal INTACK_D					: std_logic;
 ----------------------------------------------------------------
 -- REGISTERS
 ----------------------------------------------------------------
@@ -201,6 +199,7 @@ signal IE1			: std_logic;
 signal IE0			: std_logic;
 
 signal M3			: std_logic;
+signal DE			: std_logic;
 
 signal DMA			: std_logic;
 
@@ -336,11 +335,19 @@ signal HV_VCNT		: std_logic_vector(8 downto 0);
 
 -- TIMING VALUES
 signal CLOCKS_PER_LINE : std_logic_vector(11 downto 0);
-signal H_DISP_START    : std_logic_vector(11 downto 0);
+signal H_DISP_START    : std_logic_vector(8 downto 0);
 signal H_DISP_WIDTH    : std_logic_vector(8 downto 0);
+signal H_TOTAL_WIDTH   : std_logic_vector(8 downto 0);
+signal H_SPENGINE_ON   : std_logic_vector(8 downto 0);
+signal H_INT_POS       : std_logic_vector(8 downto 0);
+signal HSYNC_START     : std_logic_vector(8 downto 0);
+signal HSYNC_END       : std_logic_vector(8 downto 0);
+signal HBLANK_START    : std_logic_vector(8 downto 0);
+signal HBLANK_END      : std_logic_vector(8 downto 0);
 signal V_DISP_START    : std_logic_vector(8 downto 0);
 signal V_DISP_HEIGHT   : std_logic_vector(8 downto 0);
 signal V_TOTAL_HEIGHT  : std_logic_vector(8 downto 0);
+signal V_INT_POS       : std_logic_vector(8 downto 0);
 
 ----------------------------------------------------------------
 -- VRAM CONTROLLER
@@ -378,7 +385,8 @@ signal early_ack : std_logic;
 ----------------------------------------------------------------
 -- BACKGROUND RENDERING
 ----------------------------------------------------------------
-signal BGEN_ACTIVE	: std_logic;
+
+signal BGEN_ACTIVATE	: std_logic;
 
 -- type colinfo_t is array(0 to 319) of std_logic_vector(6 downto 0);	-- PRI & PAL & COLNO
 
@@ -391,6 +399,7 @@ type bgbc_t is (
 	BGBC_BASE_RD,
 	BGBC_LOOP,
 	BGBC_LOOP_WR,
+	BGBC_SYNC_HCOUNT,
 	BGBC_TILE_RD,
 	BGBC_DONE
 );
@@ -469,7 +478,7 @@ signal WIN_H		: std_logic;
 -- SPRITE ENGINE
 ----------------------------------------------------------------
 -- PART 1
-signal SP1E_ACTIVE	: std_logic;
+signal SP1E_ACTIVATE	: std_logic;
 
 type sp1c_t is (
 	SP1C_INIT,
@@ -526,7 +535,7 @@ signal SP1_DTACK_N	: std_logic;
 signal OBJ_CUR			: std_logic_vector(6 downto 0);
 
 -- PART 2
-signal SP2E_ACTIVE	: std_logic;
+signal SP2E_ACTIVATE	: std_logic;
 
 type sp2c_t is (
 	SP2C_INIT,
@@ -612,7 +621,11 @@ signal PIXOUT		: std_logic;
 
 begin
 
-bgb_ci : entity work.vdp_colinfo
+bgb_ci : entity work.DualPortRAM
+generic map (
+	addrbits => 9,
+	databits => 7
+)
 port map(
 	address_a	=> BGB_COLINFO_ADDR_A,
 	address_b	=> BGB_COLINFO_ADDR_B,
@@ -626,7 +639,11 @@ port map(
 );
 BGB_COLINFO_WE_B <= '0';
 
-bga_ci : entity work.vdp_colinfo
+bga_ci : entity work.DualPortRAM
+generic map (
+	addrbits => 9,
+	databits => 7
+)
 port map(
 	address_a	=> BGA_COLINFO_ADDR_A,
 	address_b	=> BGA_COLINFO_ADDR_B,
@@ -640,8 +657,11 @@ port map(
 );
 BGA_COLINFO_WE_B <= '0';
 
--- obj_ci : entity work.vdp_colinfo
 obj_ci : entity work.DualPortRAM
+generic map (
+	addrbits        => 9,
+	databits        => 7
+)
 port map(
 	address_a	=> OBJ_COLINFO_ADDR_A,
 	address_b	=> OBJ_COLINFO_ADDR_B,
@@ -654,26 +674,39 @@ port map(
 	q_b			=> OBJ_COLINFO_Q_B
 );
 
-obj_oi_y : entity work.vdp_objinfo
+obj_oi_y : entity work.DualPortRAM
+generic map (
+	addrbits        => 7,
+	databits        => 16
+)
 port map(
 	clock		=> MEMCLK,
-	data		=> OBJ_Y_D,
-	rdaddress	=> OBJ_Y_ADDR_RD,
-	wraddress	=> OBJ_Y_ADDR_WR,
-	wren		=> OBJ_Y_WE,
-	q			=> OBJ_Y_Q
-);
-
-obj_oi_sl : entity work.vdp_objinfo
+	data_a		=> (others => '0'),
+	data_b		=> OBJ_Y_D,
+	address_a	=> OBJ_Y_ADDR_RD,
+	address_b	=> OBJ_Y_ADDR_WR,
+	wren_a		=> '0',
+	wren_b		=> OBJ_Y_WE,
+	q_a			=> OBJ_Y_Q,
+	q_b			=> open
+ );
+ 
+obj_oi_sl : entity work.DualPortRAM
+generic map (
+	addrbits	=> 7,
+	databits	=> 16
+)
 port map(
 	clock		=> MEMCLK,
-	data		=> OBJ_SZ_LINK_D,
-	rdaddress	=> OBJ_SZ_LINK_ADDR_RD,
-	wraddress	=> OBJ_SZ_LINK_ADDR_WR,
-	wren		=> OBJ_SZ_LINK_WE,
-	q			=> OBJ_SZ_LINK_Q
-);
-
+	data_a		=> (others => '0'),
+	data_b		=> OBJ_SZ_LINK_D,
+	address_a	=> OBJ_SZ_LINK_ADDR_RD,
+	address_b	=> OBJ_SZ_LINK_ADDR_WR,
+	wren_a		=> '0',
+	wren_b		=> OBJ_SZ_LINK_WE,
+	q_a			=> OBJ_SZ_LINK_Q,
+	q_b			=> open
+ );
 
 ----------------------------------------------------------------
 -- REGISTERS
@@ -705,6 +738,8 @@ DMA <= REG(1)(4);
 
 IM <= REG(12)(1);
 IM2 <= REG(12)(2);
+
+DE <= REG(1)(6);
 
 -- Base addresses
 HSCB <= REG(13)(5 downto 0);
@@ -906,7 +941,10 @@ SP2_VRAM_DO <= vram_q when early_ack_sp2='0' and SP2_DTACK_N = '1' else SP2_VRAM
 DT_VRAM_DO <= vram_q when early_ack_dt='0' and SP2_DTACK_N = '1' else DT_VRAM_DO_REG;
 
 
-process( RST_N, CLK )
+process( RST_N, CLK,
+	BGA_SEL, BGA_DTACK_N, BGB_SEL, BGB_DTACK_N,
+	SP1_SEL, SP1_DTACK_N, SP2_SEL, SP2_DTACK_N,	DT_VRAM_SEL, DT_VRAM_DTACK_N,
+	early_ack_bga, early_ack_bgb, early_ack_sp1, early_ack_sp2, early_ack_dt)
 -- synthesis translate_off
 file F		: text open write_mode is "vram_dbg.out";
 variable L	: line;
@@ -1057,12 +1095,16 @@ variable L	: line;
 begin
 	if RST_N = '0' then
 		BGB_SEL <= '0';
-		BGBC <= BGBC_INIT;
-		BGB_COLINFO_WE_A <= '0';
-		BGB_COLINFO_ADDR_A <= (others => '0');
+		BGBC <= BGBC_DONE;
 	elsif rising_edge(CLK) then
-		if BGEN_ACTIVE = '1' then
 			case BGBC is
+			when BGBC_DONE =>
+				BGB_SEL <= '0';
+				BGB_COLINFO_WE_A <= '0';
+				BGB_COLINFO_ADDR_A <= (others => '0');
+				if BGEN_ACTIVATE = '1' then
+					BGBC <= BGBC_INIT;
+				end if;
 			when BGBC_INIT =>
 				case HSCR is -- Horizontal scroll mode
 				when "00" =>
@@ -1091,12 +1133,12 @@ begin
 			when BGBC_CALC_Y =>
 				BGB_COLINFO_WE_A <= '0';
 				if BGB_POS(9) = '1' then
-					BGB_Y <= (VSRAM(1)(9 downto 0) + Y) and (VSIZE & "11111111");
+					BGB_Y <= (VSRAM_LATCH(1)(9 downto 0) + Y) and (VSIZE & "11111111");
 				else
 					if VSCR = '1' then
-						BGB_Y <= (VSRAM( CONV_INTEGER(BGB_POS(8 downto 4) & "1") )(9 downto 0) + Y) and (VSIZE & "11111111");
+						BGB_Y <= (VSRAM_LATCH( CONV_INTEGER(BGB_POS(8 downto 4) & "1") )(9 downto 0) + Y) and (VSIZE & "11111111");
 					else
-						BGB_Y <= (VSRAM(1)(9 downto 0) + Y) and (VSIZE & "11111111");
+						BGB_Y <= (VSRAM_LATCH(1)(9 downto 0) + Y) and (VSIZE & "11111111");
 					end if;
 				end if;
 				BGBC <= BGBC_CALC_BASE;
@@ -1202,10 +1244,9 @@ begin
 						else
 							BGBC <= BGBC_LOOP;							
 						end if;
-					end if;															
+					end if;
 					BGB_SEL <= '0';					
 				end if;
-
 			when BGBC_TILE_RD =>
 				if early_ack_bgb = '0' then
 --				if BGB_DTACK_N = '0' then
@@ -1230,11 +1271,6 @@ begin
 				BGB_SEL <= '0';
 				BGB_COLINFO_WE_A <= '0';
 			end case;
-		else	-- BGEN_ACTIVE = '0'
-			BGB_SEL <= '0';
-			BGBC <= BGBC_INIT;			
-			BGB_COLINFO_WE_A <= '0';
-		end if;
 	end if;
 end process;
 
@@ -1253,12 +1289,16 @@ variable L	: line;
 begin
 	if RST_N = '0' then
 		BGA_SEL <= '0';
-		BGAC <= BGAC_INIT;
-		BGA_COLINFO_WE_A <= '0';
-		BGA_COLINFO_ADDR_A <= (others => '0');
+		BGAC <= BGAC_DONE;
 	elsif rising_edge(CLK) then
-		if BGEN_ACTIVE = '1' then
 			case BGAC is
+			when BGAC_DONE =>
+				BGA_SEL <= '0';
+				BGA_COLINFO_ADDR_A <= (others => '0');
+				BGA_COLINFO_WE_A <= '0';
+				if BGEN_ACTIVATE = '1' then
+					BGAC <= BGAC_INIT;
+				end if;
 			when BGAC_INIT =>
 			
 				if Y = "00000000" then
@@ -1306,12 +1346,12 @@ begin
 					BGA_Y <= "00" & Y;					
 				else
 					if BGA_POS(9) = '1' then
-						BGA_Y <= (VSRAM(0)(9 downto 0) + Y) and (VSIZE & "11111111");
+						BGA_Y <= (VSRAM_LATCH(0)(9 downto 0) + Y) and (VSIZE & "11111111");
 					else
 						if VSCR = '1' then
-							BGA_Y <= (VSRAM( CONV_INTEGER(BGA_POS(8 downto 4) & "0") )(9 downto 0) + Y) and (VSIZE & "11111111");
+							BGA_Y <= (VSRAM_LATCH( CONV_INTEGER(BGA_POS(8 downto 4) & "0") )(9 downto 0) + Y) and (VSIZE & "11111111");
 						else
-							BGA_Y <= (VSRAM(0)(9 downto 0) + Y) and (VSIZE & "11111111");
+							BGA_Y <= (VSRAM_LATCH(0)(9 downto 0) + Y) and (VSIZE & "11111111");
 						end if;
 					end if;
 				end if;
@@ -1490,7 +1530,6 @@ begin
 					end if;					
 					BGA_SEL <= '0';
 				end if;
-
 			when BGAC_TILE_RD =>
 				if early_ack_bga='0' then
 --				if BGA_DTACK_N = '0' then
@@ -1515,11 +1554,6 @@ begin
 				BGA_SEL <= '0';
 				BGA_COLINFO_WE_A <= '0';
 			end case;
-		else	-- BGEN_ACTIVE = '0'
-			BGA_SEL <= '0';
-			BGAC <= BGAC_INIT;			
-			BGA_COLINFO_WE_A <= '0';
-		end if;
 	end if;
 end process;
 
@@ -1535,7 +1569,7 @@ process( RST_N, MEMCLK )
 begin
 	if RST_N = '0' then
 		SP1_SEL <= '0';
-		SP1C <= SP1C_INIT;
+		SP1C <= SP1C_DONE;
 		
 		OBJ_Y_WE <= '0';
 		OBJ_SZ_LINK_WE <= '0';
@@ -1543,9 +1577,7 @@ begin
 		OBJ_SZ_LINK_ADDR_WR <= (others => '0');
 		
 	elsif rising_edge(MEMCLK) then
-		-- if SP1E_ACTIVE = '1' and SP2E_ACTIVE = '0' then
-		if SP1E_ACTIVE = '1' then
-			case SP1C is
+		case SP1C is
 			when SP1C_INIT =>
 				SP1_X <= (others => '0');
 				OBJ_CUR <= (others => '0');
@@ -1604,17 +1636,16 @@ begin
 			
 			when others => -- SP1C_DONE
 				SP1_SEL <= '0';
-			end case;
-		else	-- SP1E_ACTIVE = '0'
-			SP1_SEL <= '0';
-			SP1C <= SP1C_INIT;
 
-			OBJ_Y_WE <= '0';
-			OBJ_SZ_LINK_WE <= '0';
-			OBJ_Y_ADDR_WR <= (others => '0');
-			OBJ_SZ_LINK_ADDR_WR <= (others => '0');
-			
-		end if;
+				OBJ_Y_WE <= '0';
+				OBJ_SZ_LINK_WE <= '0';
+				OBJ_Y_ADDR_WR <= (others => '0');
+				OBJ_SZ_LINK_ADDR_WR <= (others => '0');
+				if SP1E_ACTIVATE = '1' then
+					SP1C <= SP1C_INIT;
+				end if;
+
+		end case;
 	end if;
 end process;
 
@@ -1626,9 +1657,9 @@ process( RST_N, MEMCLK )
 begin
 	if RST_N = '0' then
 		SP2_SEL <= '0';
-		SP2C <= SP2C_INIT;
+		SP2C <= SP2C_DONE;
 		OBJ_COLINFO_ADDR_A <= (others => '0');
-		OBJ_COLINFO_WE_A <= '0';		
+		OBJ_COLINFO_WE_A <= '0';
 		
 		OBJ_Y_ADDR_RD <= (others => '0');
 		OBJ_SZ_LINK_ADDR_RD <= (others => '0');
@@ -1642,9 +1673,7 @@ begin
 		SCOL_SET <= '0';
 		SOVR_SET <= '0';
 	
-		-- if SP2E_ACTIVE = '1' and SP1E_ACTIVE = '0' then
-		if SP2E_ACTIVE = '1' and (SP1E_ACTIVE = '0' or SP1C = SP1C_DONE) then
-			case SP2C is
+		case SP2C is
 			when SP2C_INIT =>
 				SP2_Y <= PRE_Y;	-- Latch the current PRE_Y value as it will change during the rendering process
 				OBJ_TOT <= (others => '0');
@@ -1937,45 +1966,57 @@ begin
 			
 			when others => -- SP2C_DONE
 				SP2_SEL <= '0';
-				OBJ_COLINFO_WE_A <= '0';
-			end case;
-		else	-- SP2E_ACTIVE = '0'
-			SP2_SEL <= '0';
-			SP2C <= SP2C_INIT;
 
-			OBJ_COLINFO_WE_A <= '0';		
-			OBJ_COLINFO_ADDR_A <= (others => '0');
-		
-			OBJ_Y_ADDR_RD <= (others => '0');
-			OBJ_SZ_LINK_ADDR_RD <= (others => '0');
-		end if;
+				OBJ_COLINFO_WE_A <= '0';
+				OBJ_COLINFO_ADDR_A <= (others => '0');
+
+				OBJ_Y_ADDR_RD <= (others => '0');
+				OBJ_SZ_LINK_ADDR_RD <= (others => '0');
+				if SP2E_ACTIVATE = '1' then
+					SP2C <= SP2C_INIT;
+				end if;
+		end case;
 	end if;
 end process;
+
 
 ----------------------------------------------------------------
 -- VIDEO COUNTING
 ----------------------------------------------------------------
-CLOCKS_PER_LINE <= conv_std_logic_vector(CLOCKS_PER_LINE_H40, 12) when H40='1'
-              else conv_std_logic_vector(CLOCKS_PER_LINE_H32, 12);
-H_DISP_START    <= conv_std_logic_vector(H_DISP_START_H40, 12) when H40='1'
-              else conv_std_logic_vector(H_DISP_START_H32, 12);
+H_DISP_START    <= conv_std_logic_vector(H_DISP_START_H40, 9) when H40='1'
+              else conv_std_logic_vector(H_DISP_START_H32, 9);
 H_DISP_WIDTH    <= conv_std_logic_vector(H_DISP_WIDTH_H40, 9) when H40='1'
               else conv_std_logic_vector(H_DISP_WIDTH_H32, 9);
-V_DISP_START    <= conv_std_logic_vector(-V_DISP_START_V30, 9) when V30='1'
-              else conv_std_logic_vector(-V_DISP_START_V28, 9);
+H_TOTAL_WIDTH   <= conv_std_logic_vector(H_TOTAL_WIDTH_H40, 9) when H40='1'
+              else conv_std_logic_vector(H_TOTAL_WIDTH_H32, 9);
+H_INT_POS       <= conv_std_logic_vector(H_INT_H40, 9) when H40='1'
+              else conv_std_logic_vector(H_INT_H32, 9);
+HSYNC_START     <= conv_std_logic_vector(HSYNC_START_H40, 9) when H40='1'
+              else conv_std_logic_vector(HSYNC_START_H32, 9);
+HSYNC_END       <= conv_std_logic_vector(HSYNC_END_H40, 9) when H40='1'
+              else conv_std_logic_vector(HSYNC_END_H32, 9);
+HBLANK_START    <= conv_std_logic_vector(HBLANK_START_H40, 9) when H40='1'
+              else conv_std_logic_vector(HBLANK_START_H32, 9);
+HBLANK_END      <= conv_std_logic_vector(HBLANK_END_H40, 9) when H40='1'
+              else conv_std_logic_vector(HBLANK_END_H32, 9);
+V_DISP_START    <= conv_std_logic_vector(V_DISP_START_V30, 9) when V30='1'
+              else conv_std_logic_vector(V_DISP_START_V28, 9);
 V_DISP_HEIGHT   <= conv_std_logic_vector(V_DISP_HEIGHT_V30, 9) when V30='1'
               else conv_std_logic_vector(V_DISP_HEIGHT_V28, 9);
 V_TOTAL_HEIGHT  <= conv_std_logic_vector(PAL_LINES, 9) when PAL='1'
               else conv_std_logic_vector(NTSC_LINES, 9);
+V_INT_POS       <= conv_std_logic_vector(V_INT_PAL, 9) when PAL='1'
+              else conv_std_logic_vector(V_INT_NTSC, 9);
 HV8 <= HV_VCNT(8) when INTERLACE = '1' else HV_VCNT(0);
 
 -- COUNTERS AND INTERRUPTS
+
+Y <= HV_VCNT(7 downto 0);
+PRE_Y <= HV_VCNT(7 downto 0) + 1;
+
 process( RST_N, CLK )
-variable
-    hstart: std_logic_vector(8 downto 0);
 begin
 	if RST_N = '0' then
-		H_CNT <= (others => '0');
 		FIELD <= '0';
 
 		HV_PIXDIV <= (others => '0');
@@ -1996,145 +2037,93 @@ begin
 			HV <= HV_VCNT(7 downto 1) & HV8 & HV_HCNT(8 downto 1);
 		end if;
 
-		if (H40 = '1') then
-			hstart := conv_std_logic_vector(-(H_DISP_START_H40-HS_CLOCKS)/8, 9);
-		else
-			hstart := conv_std_logic_vector(-(H_DISP_START_H32-HS_CLOCKS)/10, 9);
-		end if;
-
-		if H_CNT = CLOCKS_PER_LINE-1 then
-			H_CNT <= (others => '0');
-		else
-			H_CNT <= H_CNT + 1;
-		end if;
-
 		HINT_PENDING_SET <= '0';
 		VINT_TG68_PENDING_SET <= '0';
 		VINT_T80_SET <= '0';
 		VINT_T80_CLR <= '0';
 
-		if H_CNT = HS_CLOCKS then
-			-- we're just after HSYNC
-			HV_HCNT <= hstart;
+		HV_PIXDIV <= HV_PIXDIV + 1;
+		if (H40 = '1' and HV_PIXDIV = 8-1) or
+		   (H40 = '0' and HV_PIXDIV = 10-1) then
 			HV_PIXDIV <= (others => '0');
-			if HV_VCNT = V_DISP_START + V_TOTAL_HEIGHT - 1 then --VDISP_START is negative
-				--just after VSYNC
-				HV_VCNT <= V_DISP_START;
-				FIELD <= not FIELD;
+			if HV_HCNT = H_DISP_START + H_TOTAL_WIDTH - 1 then
+				-- we're just after HSYNC
+				HV_HCNT <= H_DISP_START;
 			else
-				HV_VCNT <= HV_VCNT + 1;
-			end if;
-		else
-			HV_PIXDIV <= HV_PIXDIV + 1;
-			if (H40 = '1' and HV_PIXDIV = 8-1) or
-			   (H40 = '0' and HV_PIXDIV = 10-1) then
-				HV_PIXDIV <= (others => '0');
 				HV_HCNT <= HV_HCNT + 1;
+			end if;
 
-				if HV_HCNT = 0 then --active display
-					-- not sure HINT should happen here
-					-- maybe a delay is missing somewhere to allow it to happen at HBLANK
-					if HV_VCNT = 0 then  
-						if HIT = 0 then
-							HINT_PENDING_SET <= '1';
-							HINT_COUNT <= (others => '0');
-						else
-							HINT_COUNT <= HIT - 1;
-						end if;
-					elsif (HV_VCNT > 0) and ( HV_VCNT < V_DISP_HEIGHT )
-					then
-						if HINT_COUNT = 0 then
-							HINT_PENDING_SET <= '1';
-							HINT_COUNT <= HIT;
-						else
-							HINT_COUNT <= HINT_COUNT - 1;
-						end if;
+			if HV_HCNT = H_INT_POS then
+				if HV_VCNT = V_DISP_START + V_TOTAL_HEIGHT - 1 then --VDISP_START is negative
+					--just after VSYNC
+					HV_VCNT <= V_DISP_START;
+					FIELD <= not FIELD;
+				else
+					HV_VCNT <= HV_VCNT + 1;
+				end if;
+				-- Latch VSRAM at the beginning of the line
+				-- Since the scanline rendering is not timing-accurate, it's the best
+				-- to lock these values. 
+				VSRAM_LATCH <= VSRAM;
+			end if;
+
+			if HV_HCNT = H_INT_POS then
+				if HV_VCNT = "1"&x"FF" then
+					IN_VBL <= '0';
+					if HIT = 0 then
+						HINT_PENDING_SET <= '1';
+						HINT_COUNT <= (others => '0');
+					else
+						HINT_COUNT <= HIT - 1;
 					end if;
-
-					IN_HBL <= '0';
-					if HV_VCNT = 0 then
-						IN_VBL <= '0';
+				elsif HV_VCNT < V_DISP_HEIGHT
+				then
+					if HINT_COUNT = 0 then
+						HINT_PENDING_SET <= '1';
+						HINT_COUNT <= HIT;
+					else
+						HINT_COUNT <= HINT_COUNT - 1;
 					end if;
 				end if;
+			end if;
 
-				if HV_HCNT = H_DISP_WIDTH then -- blanking
-					IN_HBL <= '1';
-					if HV_VCNT = V_DISP_HEIGHT - 1
-					then
-						IN_VBL <= '1';
-						VINT_TG68_PENDING_SET <= '1';
-						VINT_T80_SET <= '1';
-					elsif HV_VCNT = V_DISP_HEIGHT + 1
-					then
-						VINT_T80_CLR <= '1';
-					end if;
+			if HV_HCNT = HBLANK_END then --active display
+				IN_HBL <= '0';
+			end if;
+
+			if HV_HCNT = HBLANK_START then -- blanking
+				IN_HBL <= '1';
+			end if;
+
+			if HV_HCNT = 0 then
+				if HV_VCNT = V_INT_POS
+				then
+					IN_VBL <= '1';
+					VINT_TG68_PENDING_SET <= '1';
+					VINT_T80_SET <= '1';
+				elsif HV_VCNT = V_INT_POS + 1
+				then
+					VINT_T80_CLR <= '1';
 				end if;
-			end if;		
+			end if;
 		end if;
 	end if;
 end process;
 
 -- TIMING MANAGEMENT
-process( RST_N, CLK )
-begin
-	if RST_N = '0' then
-		V_ACTIVE <= '0';		
-		PRE_V_ACTIVE <= '0';
-		BGEN_ACTIVE <= '0';
-		DISP_ACTIVE <= '0';	
-		SP1E_ACTIVE <= '0';
-		SP2E_ACTIVE <= '0';
-		DT_ACTIVE <= '0';
-	elsif rising_edge(CLK) then
-		
-		-- DISPLAY ACTIVE
-		if H_CNT = H_DISP_START and V_ACTIVE = '1' then
-			DISP_ACTIVE <= '1';
-		elsif H_CNT = H_DISP_START+H_DISP_CLOCKS then
-			DISP_ACTIVE <= '0';
-		end if;
+PRE_V_ACTIVE <= '1' when HV_VCNT = "1"&x"FF" or HV_VCNT < V_DISP_HEIGHT - 1 else '0';
+V_ACTIVE <= '1' when HV_VCNT < V_DISP_HEIGHT else '0';
+DISP_ACTIVE <= '1' when V_ACTIVE = '1' and HV_HCNT > HBLANK_END and HV_HCNT < H_INT_POS and DE = '1' else '0';
+-- Background generation runs during active display.
+-- Original timing is 2 pixels (or cells?) before the actual pixel.
+-- But the background generators are not timed, but free running now.
+BGEN_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = HBLANK_END - 3 else '0';
 
-		-- BACKGROUND ACTIVE
-		if H_CNT = H_DISP_START-60 and V_ACTIVE = '1' then
-			BGEN_ACTIVE <= '1';
-		elsif H_CNT = H_DISP_START+H_DISP_CLOCKS then
-			BGEN_ACTIVE <= '0';
-		end if;
-
-		-- SPRITE ENGINE PART ONE ACTIVE
-		if H_CNT = H_DISP_START+(3*H_DISP_CLOCKS/4) and PRE_V_ACTIVE = '1' then
-			SP1E_ACTIVE <= '1';
-		elsif H_CNT = H_DISP_START+H_DISP_CLOCKS then
-		-- elsif H_CNT = H_DISP_START+(3*H_DISP_CLOCKS/4) then
-			SP1E_ACTIVE <= '0';
-		end if;
-
-		-- SPRITE ENGINE PART TWO ACTIVE
-		-- if H_CNT = H_DISP_START+H_DISP_CLOCKS and PRE_V_ACTIVE = '1' then
-		-- if H_CNT = H_DISP_START+(3*H_DISP_CLOCKS/4) and PRE_V_ACTIVE = '1' then
-		if H_CNT = H_DISP_START+(3*H_DISP_CLOCKS/4)+2 and PRE_V_ACTIVE = '1' then
-			SP2E_ACTIVE <= '1';
-		elsif H_CNT = H_DISP_START then
-			SP2E_ACTIVE <= '0';
-		end if;
-		
-		-- DATA TRANSFER ACTIVE
-		DT_ACTIVE <= '1';
-		
-		-- VERTICAL DISPLAY ACTIVE
-		if HV_VCNT = 0 then
-			V_ACTIVE <= '1';
-		elsif HV_VCNT = V_DISP_HEIGHT then
-			V_ACTIVE <= '0';
-		end if;
-
-		if HV_VCNT = "1"&x"FF" then
-			PRE_V_ACTIVE <= '1';
-		elsif HV_VCNT = V_DISP_HEIGHT - 1 then
-			PRE_V_ACTIVE <= '0';
-		end if;
-	end if;
-end process;
+-- Stage 1 runs during active display
+SP1E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = HBLANK_END + 30 else '0';
+-- Stage 2 runs during HBLANK
+SP2E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = H_INT_POS-2 else '0';
+DT_ACTIVE <= '1';
 
 -- PIXEL COUNTER AND OUTPUT
 -- ALSO CLEARS THE SPRITE COLINFO BUFFER RIGHT AFTER RENDERING
@@ -2143,11 +2132,8 @@ begin
 	OBJ_COLINFO_D_B <= (others => '0');
 	if RST_N = '0' then
 		X <= (others => '0');
-		Y <= (others => '0');
 		PIXDIV <= (others => '0');
 		PIXOUT <= '0';
-		BGB_COLINFO_ADDR_B <= (others => '0');
-		BGA_COLINFO_ADDR_B <= (others => '0');
 		OBJ_COLINFO_ADDR_B <= (others => '0');
 
 		OBJ_COLINFO_WE_B <= '0';
@@ -2162,6 +2148,8 @@ begin
 			FF_G <= (others => '0');
 			FF_B <= (others => '0');
 
+			BGB_COLINFO_ADDR_B <= (others => '0');
+			BGA_COLINFO_ADDR_B <= (others => '0');
 			OBJ_COLINFO_WE_B <= '0';			
 		else
 			PIXDIV <= PIXDIV + 1;
@@ -2215,21 +2203,6 @@ begin
 				PIXOUT <= '0';
 			end if;
 		end if;
-		
-		if V_ACTIVE = '0' then
-			Y <= (others => '0');
-		else
-			if H_CNT = 0 then
-				Y <= Y + 1;
-			end if;
-		end if;		
-		if PRE_V_ACTIVE = '0' then
-			PRE_Y <= (others => '0');
-		else
-			if H_CNT = 0 then
-				PRE_Y <= PRE_Y + 1;
-			end if;
-		end if;		
 
 	end if;
 end process;
@@ -2237,21 +2210,40 @@ end process;
 ----------------------------------------------------------------
 -- VIDEO OUTPUT
 ----------------------------------------------------------------
+-- VERTICAL SYNC
+FF_VS <= '0' when HV_VCNT >= conv_std_logic_vector(-VS_LINES,9) else '1';
+FF_HS <= '0' when HV_HCNT >= HSYNC_START and HV_HCNT <= HSYNC_END else '1';
+
 -- SCANDOUBLER
+CLOCKS_PER_LINE <= conv_std_logic_vector(CLOCKS_PER_LINE_H40, 12) when H40='1'
+              else conv_std_logic_vector(CLOCKS_PER_LINE_H32, 12);
+
 process( RST_N, CLK )
 begin
 	if RST_N = '0' then
 		H_VGA_CNT <= (others => '0');
 		V_CNT <= (others => '0');
+		H_CNT <= (others => '0');
 	elsif rising_edge(CLK) then
-		H_VGA_CNT <= H_VGA_CNT + 1;
+		if (H_CNT = CLOCKS_PER_LINE - 1) then
+			H_CNT <= (others => '0');
+		else
+			H_CNT <= H_CNT + 1;
+		end if;
+
 		if H_VGA_CNT = CLOCKS_PER_LINE(11 downto 1)-1 then
 			H_VGA_CNT <= (others => '0');
 			V_CNT <= V_CNT + 1;
+		else
+			H_VGA_CNT <= H_VGA_CNT + 1;
 		end if;
-		if HV_VCNT = V_DISP_START + V_TOTAL_HEIGHT - VS_LINES then
+
+		if (HV_VCNT = V_DISP_START + V_TOTAL_HEIGHT - VS_LINES - 1) and
+			HV_HCNT = HSYNC_START
+		then
 			V_CNT <= (others => '0');
 			H_VGA_CNT <= (others => '0');
+			H_CNT <= (others => '0');
 		end if;
 	end if;
 end process;
@@ -2297,15 +2289,8 @@ end process;
 process( RST_N, CLK )
 begin
 	if RST_N = '0' then
-		FF_VS <= '1';
 		FF_VGA_VS <= '1';
 	elsif rising_edge(CLK) then
-		if V_CNT = 0 then
-			FF_VS <= '0';
-		end if;
-		if V_CNT = (VS_LINES*2) then
-			FF_VS <= '1';
-		end if;
 		if V_CNT = 0 then
 			FF_VGA_VS <= '0';
 		elsif V_CNT = (VGA_VS_LINES*2) then
@@ -2318,15 +2303,8 @@ end process;
 process( RST_N, CLK )
 begin
 	if RST_N = '0' then
-		FF_HS <= '1';
 		FF_VGA_HS <= '1';
 	elsif rising_edge(CLK) then
-		if H_CNT = 0 then
-			FF_HS <= '0';
-		end if;
-		if H_CNT = HS_CLOCKS then
-			FF_HS <= '1';
-		end if;
 		if H_VGA_CNT = 0 then
 			FF_VGA_HS <= '0';
 		elsif H_VGA_CNT = VGA_HS_CLOCKS then
@@ -2939,11 +2917,22 @@ process( RST_N, CLK )
 begin
 	if RST_N = '0' then
 		HINT_PENDING <= '0';
+		VINT_TG68_PENDING <= '0';
 	elsif rising_edge( CLK) then
+		INTACK_D <= INTACK;
+		--acknowledge interrupts serially
+		if INTACK_D = '0' and INTACK = '1' then
+			if VINT_TG68_FF = '1' then
+				VINT_TG68_PENDING <= '0';
+			elsif HINT_FF = '1' then
+				HINT_PENDING <= '0';
+			end if;
+		end if;
 		if HINT_PENDING_SET = '1' then
 			HINT_PENDING <= '1';
-		elsif HINT_ACK = '1' then
-			HINT_PENDING <= '0';
+		end if;
+		if VINT_TG68_PENDING_SET = '1' then
+			VINT_TG68_PENDING <= '1';
 		end if;
 	end if;	
 end process;
@@ -2959,20 +2948,6 @@ begin
 			HINT_FF <= '1';
 		else
 			HINT_FF <= '0';
-		end if;
-	end if;	
-end process;
-
--- VINT - TG68 - PENDING
-process( RST_N, CLK )
-begin
-	if RST_N = '0' then
-		VINT_TG68_PENDING <= '0';
-	elsif rising_edge( CLK) then
-		if VINT_TG68_PENDING_SET = '1' then
-			VINT_TG68_PENDING <= '1';
-		elsif VINT_TG68_ACK = '1' then
-			VINT_TG68_PENDING <= '0';
 		end if;
 	end if;	
 end process;
@@ -3001,7 +2976,7 @@ begin
 	elsif rising_edge( CLK) then
 		if VINT_T80_SET = '1' then
 			VINT_T80_FF <= '1';
-		elsif VINT_T80_CLR = '1' or VINT_T80_ACK = '1' then
+		elsif VINT_T80_CLR = '1' then
 			VINT_T80_FF <= '0';
 		end if;
 	end if;	

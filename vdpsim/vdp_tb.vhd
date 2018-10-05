@@ -72,6 +72,7 @@ component vdp
 end component ;
 
 signal   clk      : std_logic := '0';
+signal   memclk   : std_logic := '0';
 signal   reset_n  : std_logic := '1';
 
 signal vram_req_loop: std_logic;
@@ -98,7 +99,7 @@ begin
     port map (
       RST_N => reset_n,
       CLK => clk,
-      MEMCLK => clk,
+      MEMCLK => memclk,
 
       -- CPU bus interface
       SEL => CPU_SEL,
@@ -132,9 +133,16 @@ begin
   );
 
 -- generate a 50mhz clock
-  clock : process
+  memory_clock : process
   begin
-    wait for 10 ns; clk  <= not clk;
+    wait for 5 ns; memclk  <= not memclk;
+  end process memory_clock;
+
+  clock : process(memclk)
+  begin
+    if (memclk = '1' and memclk'event) then
+      clk <= not clk;    
+    end if;   
   end process clock;
 
   stimulus : process
@@ -150,17 +158,17 @@ begin
     wait;
   end process stimulus;
   
-  memory : process (clk)
+  memory : process (memclk)
     variable c : std_logic;
     variable a : std_logic_vector(14 downto 0);
     variable d : std_logic_vector(15 downto 0);
   begin
     -- wire memory
-    c := clk;
+    c := memclk;
     a := vram_a;
     vram_c(c,a,d);
     
-    if (clk = '0' and clk'event) then
+    if (memclk = '0' and memclk'event) then
       vram_d <= d;    
     end if;   
  end process memory;

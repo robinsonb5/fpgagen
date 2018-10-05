@@ -3,7 +3,7 @@
 #
 
 SRC=../src
-SRCS = $(SRC)/vdp.vhd DualPortRAM.vhd $(SRC)/vdp_common.vhd vdp_tb.vhd vram.vhd cpu.vhd
+SRCS = $(SRC)/vdp.vhd $(SRC)/DualPortRAM.vhd $(SRC)/vdp_common.vhd vdp_tb.vhd vram.vhd cpu.vhd
 OBJS = $(notdir $(SRCS:.vhd=.o)) vram_c.o video_c.o cpu_c.o
 
 FLAGS=--ieee=synopsys -fexplicit 

@@ -436,11 +436,8 @@ signal T80_BAR_DTACK_N		: std_logic;
 
 -- INTERRUPTS
 signal HINT		: std_logic;
-signal HINT_ACK	: std_logic;
 signal VINT_TG68	: std_logic;
 signal VINT_T80		: std_logic;
-signal VINT_TG68_ACK	: std_logic;
-signal VINT_T80_ACK	: std_logic;
 
 -- VDP VBUS DMA
 signal VBUS_ADDR	: std_logic_vector(23 downto 0);
@@ -788,12 +785,9 @@ port map(
 	INTERLACE	=> INTERLACE,
 
 	HINT			=> HINT,
-	HINT_ACK		=> HINT_ACK,
-
 	VINT_TG68		=> VINT_TG68,
 	VINT_T80			=> VINT_T80,
-	VINT_TG68_ACK	=> VINT_TG68_ACK,
-	VINT_T80_ACK	=> VINT_T80_ACK,
+	INTACK			=> TG68_INTACK,
 		
 	VBUS_ADDR		=> VBUS_ADDR,
 	VBUS_UDS_N		=> VBUS_UDS_N,
@@ -869,67 +863,8 @@ DAC_RDATA <= std_logic_vector(signed(FM_MUX_RIGHT(11)&FM_MUX_RIGHT&"000") + sign
 -- INTERRUPTS CONTROL
 ----------------------------------------------------------------
 
--- HINT_ACK <= HINT;
--- VINT_TG68_ACK <= VINT_TG68;
--- VINT_T80_ACK <= VINT_T80;
-
--- TG68_IPL_N <= "111";
-process(MRST_N, MCLK)
-begin
-	if MRST_N = '0' then
-		TG68_IPL_N <= "111";
-		T80_INT_N <= '1';
-		
-		HINT_ACK <= '0';
-		VINT_TG68_ACK <= '0';
-		VINT_T80_ACK <= '0';
-	elsif rising_edge( MCLK ) then
-		if HINT = '0' then
-			HINT_ACK <= '0';
-		end if;
-		if VINT_TG68 = '0' then
-			VINT_TG68_ACK <= '0';
-		end if;
-		if VINT_T80 = '0' then
-			VINT_T80_ACK <= '0';
-		end if;
-		if TG68_INTACK = '1' then
-			VINT_TG68_ACK <= '1';
-		end if;				
-		if TG68_INTACK = '1' then
-			HINT_ACK <= '1';
-		end if;
-
-		if VCLKCNT = "110" then
-			if VINT_TG68 = '1' and VINT_TG68_ACK = '0' then
-				TG68_IPL_N <= "001";	-- IPL Level 6
-				-- if TG68_INTACK = '1' then
-					-- VINT_TG68_ACK <= '1';
-				-- end if;				
-			elsif HINT = '1' and HINT_ACK = '0' then
-				TG68_IPL_N <= "011";	-- IPL Level 4
-				-- if TG68_INTACK = '1' then
-					-- HINT_ACK <= '1';
-				-- end if;
-			else
-				TG68_IPL_N <= "111";
-			end if;
-			
-			if ZCLK = '0' then
-				if VINT_T80 = '1' and VINT_T80_ACK = '0' then
-					T80_INT_N <= '0';
-					if T80_M1_N = '0' and T80_IORQ_N = '0' then
-						VINT_T80_ACK <= '1';
-					end if;
-				else
-					T80_INT_N <= '1';
-				end if;
-			end if;
-			
-		end if;
-			
-	end if;
-end process;
+T80_INT_N <= not VINT_T80;
+TG68_IPL_N <= "001" when VINT_TG68 = '1' else "011" when HINT = '1' else "111";
 
 ----------------------------------------------------------------
 -- SWITCHES CONTROL

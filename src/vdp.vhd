@@ -74,13 +74,10 @@ entity vdp is
 		INTERLACE	: in std_logic;
 
 		HINT		: out std_logic;
-		HINT_ACK	: in std_logic;
-		
 		VINT_TG68	: out std_logic;
 		VINT_T80	: out std_logic;
-		VINT_TG68_ACK	: in std_logic;
-		VINT_T80_ACK	: in std_logic;
-		
+		INTACK		: in std_logic;
+
 		VBUS_ADDR		: out std_logic_vector(23 downto 0);
 		VBUS_UDS_N		: out std_logic;
 		VBUS_LDS_N		: out std_logic;
@@ -176,6 +173,7 @@ signal VINT_T80_SET				: std_logic;
 signal VINT_T80_CLR				: std_logic;
 signal VINT_T80_FF				: std_logic;
 
+signal INTACK_D					: std_logic;
 ----------------------------------------------------------------
 -- REGISTERS
 ----------------------------------------------------------------
@@ -2078,7 +2076,7 @@ begin
 					IN_VBL <= '1';
 					VINT_TG68_PENDING_SET <= '1';
 					VINT_T80_SET <= '1';
-				elsif HV_VCNT = V_DISP_HEIGHT + 1
+				elsif HV_VCNT = V_INT_POS + 1
 				then
 					VINT_T80_CLR <= '1';
 				end if;
@@ -2894,11 +2892,22 @@ process( RST_N, CLK )
 begin
 	if RST_N = '0' then
 		HINT_PENDING <= '0';
+		VINT_TG68_PENDING <= '0';
 	elsif rising_edge( CLK) then
+		INTACK_D <= INTACK;
+		--acknowledge interrupts serially
+		if INTACK_D = '0' and INTACK = '1' then
+			if VINT_TG68_FF = '1' then
+				VINT_TG68_PENDING <= '0';
+			elsif HINT_FF = '1' then
+				HINT_PENDING <= '0';
+			end if;
+		end if;
 		if HINT_PENDING_SET = '1' then
 			HINT_PENDING <= '1';
-		elsif HINT_ACK = '1' then
-			HINT_PENDING <= '0';
+		end if;
+		if VINT_TG68_PENDING_SET = '1' then
+			VINT_TG68_PENDING <= '1';
 		end if;
 	end if;	
 end process;
@@ -2914,20 +2923,6 @@ begin
 			HINT_FF <= '1';
 		else
 			HINT_FF <= '0';
-		end if;
-	end if;	
-end process;
-
--- VINT - TG68 - PENDING
-process( RST_N, CLK )
-begin
-	if RST_N = '0' then
-		VINT_TG68_PENDING <= '0';
-	elsif rising_edge( CLK) then
-		if VINT_TG68_PENDING_SET = '1' then
-			VINT_TG68_PENDING <= '1';
-		elsif VINT_TG68_ACK = '1' then
-			VINT_TG68_PENDING <= '0';
 		end if;
 	end if;	
 end process;
@@ -2956,7 +2951,7 @@ begin
 	elsif rising_edge( CLK) then
 		if VINT_T80_SET = '1' then
 			VINT_T80_FF <= '1';
-		elsif VINT_T80_CLR = '1' or VINT_T80_ACK = '1' then
+		elsif VINT_T80_CLR = '1' then
 			VINT_T80_FF <= '0';
 		end if;
 	end if;	

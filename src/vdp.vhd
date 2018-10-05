@@ -621,7 +621,11 @@ signal PIXOUT		: std_logic;
 
 begin
 
-bgb_ci : entity work.vdp_colinfo
+bgb_ci : entity work.DualPortRAM
+generic map (
+	addrbits => 9,
+	databits => 7
+)
 port map(
 	address_a	=> BGB_COLINFO_ADDR_A,
 	address_b	=> BGB_COLINFO_ADDR_B,
@@ -635,7 +639,11 @@ port map(
 );
 BGB_COLINFO_WE_B <= '0';
 
-bga_ci : entity work.vdp_colinfo
+bga_ci : entity work.DualPortRAM
+generic map (
+	addrbits => 9,
+	databits => 7
+)
 port map(
 	address_a	=> BGA_COLINFO_ADDR_A,
 	address_b	=> BGA_COLINFO_ADDR_B,
@@ -649,8 +657,11 @@ port map(
 );
 BGA_COLINFO_WE_B <= '0';
 
--- obj_ci : entity work.vdp_colinfo
 obj_ci : entity work.DualPortRAM
+generic map (
+	addrbits        => 9,
+	databits        => 7
+)
 port map(
 	address_a	=> OBJ_COLINFO_ADDR_A,
 	address_b	=> OBJ_COLINFO_ADDR_B,
@@ -663,26 +674,39 @@ port map(
 	q_b			=> OBJ_COLINFO_Q_B
 );
 
-obj_oi_y : entity work.vdp_objinfo
+obj_oi_y : entity work.DualPortRAM
+generic map (
+	addrbits        => 7,
+	databits        => 16
+)
 port map(
 	clock		=> MEMCLK,
-	data		=> OBJ_Y_D,
-	rdaddress	=> OBJ_Y_ADDR_RD,
-	wraddress	=> OBJ_Y_ADDR_WR,
-	wren		=> OBJ_Y_WE,
-	q			=> OBJ_Y_Q
-);
-
-obj_oi_sl : entity work.vdp_objinfo
+	data_a		=> (others => '0'),
+	data_b		=> OBJ_Y_D,
+	address_a	=> OBJ_Y_ADDR_RD,
+	address_b	=> OBJ_Y_ADDR_WR,
+	wren_a		=> '0',
+	wren_b		=> OBJ_Y_WE,
+	q_a			=> OBJ_Y_Q,
+	q_b			=> open
+ );
+ 
+obj_oi_sl : entity work.DualPortRAM
+generic map (
+	addrbits	=> 7,
+	databits	=> 16
+)
 port map(
 	clock		=> MEMCLK,
-	data		=> OBJ_SZ_LINK_D,
-	rdaddress	=> OBJ_SZ_LINK_ADDR_RD,
-	wraddress	=> OBJ_SZ_LINK_ADDR_WR,
-	wren		=> OBJ_SZ_LINK_WE,
-	q			=> OBJ_SZ_LINK_Q
-);
-
+	data_a		=> (others => '0'),
+	data_b		=> OBJ_SZ_LINK_D,
+	address_a	=> OBJ_SZ_LINK_ADDR_RD,
+	address_b	=> OBJ_SZ_LINK_ADDR_WR,
+	wren_a		=> '0',
+	wren_b		=> OBJ_SZ_LINK_WE,
+	q_a			=> OBJ_SZ_LINK_Q,
+	q_b			=> open
+ );
 
 ----------------------------------------------------------------
 -- REGISTERS
@@ -1072,13 +1096,12 @@ begin
 	if RST_N = '0' then
 		BGB_SEL <= '0';
 		BGBC <= BGBC_DONE;
-		BGB_COLINFO_WE_A <= '0';
-		BGB_COLINFO_ADDR_A <= (others => '0');
 	elsif rising_edge(CLK) then
 			case BGBC is
 			when BGBC_DONE =>
 				BGB_SEL <= '0';
 				BGB_COLINFO_WE_A <= '0';
+				BGB_COLINFO_ADDR_A <= (others => '0');
 				if BGEN_ACTIVATE = '1' then
 					BGBC <= BGBC_INIT;
 				end if;
@@ -1267,12 +1290,11 @@ begin
 	if RST_N = '0' then
 		BGA_SEL <= '0';
 		BGAC <= BGAC_DONE;
-		BGA_COLINFO_WE_A <= '0';
-		BGA_COLINFO_ADDR_A <= (others => '0');
 	elsif rising_edge(CLK) then
 			case BGAC is
 			when BGAC_DONE =>
 				BGA_SEL <= '0';
+				BGA_COLINFO_ADDR_A <= (others => '0');
 				BGA_COLINFO_WE_A <= '0';
 				if BGEN_ACTIVATE = '1' then
 					BGAC <= BGAC_INIT;
@@ -2112,8 +2134,6 @@ begin
 		X <= (others => '0');
 		PIXDIV <= (others => '0');
 		PIXOUT <= '0';
-		BGB_COLINFO_ADDR_B <= (others => '0');
-		BGA_COLINFO_ADDR_B <= (others => '0');
 		OBJ_COLINFO_ADDR_B <= (others => '0');
 
 		OBJ_COLINFO_WE_B <= '0';
@@ -2128,6 +2148,8 @@ begin
 			FF_G <= (others => '0');
 			FF_B <= (others => '0');
 
+			BGB_COLINFO_ADDR_B <= (others => '0');
+			BGA_COLINFO_ADDR_B <= (others => '0');
 			OBJ_COLINFO_WE_B <= '0';			
 		else
 			PIXDIV <= PIXDIV + 1;

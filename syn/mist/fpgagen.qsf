@@ -353,8 +353,6 @@ set_global_assignment -name VHDL_FILE ../../src/os_rom.vhd
 set_global_assignment -name VHDL_FILE ../../src/gen_io.vhd
 set_global_assignment -name VHDL_FILE ../../src/gen_fm.vhd
 set_global_assignment -name VHDL_FILE ../../src/chameleon_gen_sdram.vhd
-set_global_assignment -name VHDL_FILE ../../src/vdp_colinfo.vhd
-set_global_assignment -name VHDL_FILE ../../src/vdp_objinfo.vhd
 set_global_assignment -name VHDL_FILE ../../src/zram.vhd
 set_global_assignment -name QIP_FILE ../../Board/mist/pll.qip
 set_global_assignment -name SIGNALTAP_FILE stp2.stp

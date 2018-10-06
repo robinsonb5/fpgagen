@@ -282,9 +282,6 @@ signal SCLKCNT		: std_logic_vector(5 downto 0);
 
 -- CLOCK GENERATION
 signal VCLK			: std_logic;
-signal VCLK_ENA	: std_logic;
-signal RST_VCLK	: std_logic; -- Reset for blocks using VCLK as clock
-signal RST_VCLK_aux : std_logic;
 signal VCLKCNT		: std_logic_vector(2 downto 0);
 -- signal VCLKCNT		: unsigned(2 downto 0);
 signal ZCLK			: std_logic := '0';
@@ -745,7 +742,7 @@ port map(
 	P2_C		=> not JOY_2(6),
 	P2_START	=> not JOY_2(7),
 		
-	SEL		=> IO_SEL and VCLK_ENA, -- Eliminate VCLK ripple clock
+	SEL		=> IO_SEL,
 	A			=> IO_A,
 	RNW		=> IO_RNW,
 	UDS_N		=> IO_UDS_N,
@@ -830,7 +827,7 @@ port map(
 -- FM
 fm : jt12
 port map(
-	rst		      => RST_VCLK,	-- gen-hw.txt line 328
+	rst		      => not MRST_N,
 	cpu_clk	      => MCLK and FCLK_EN,
 	cpu_limiter_en => '1',
 	cpu_cs_n	      => not FM_SEL,
@@ -880,17 +877,6 @@ INTERLACE <= '0';
 -- #############################################################################
 -- #############################################################################
 
-process( MRST_N, VCLK )
-begin
-	if MRST_N = '0' then
-		RST_VCLK <= '1';
-		RST_VCLK_aux <= '1';
-	elsif rising_edge(VCLK) then
-		RST_VCLK_aux <= '0';
-		RST_VCLK <= RST_VCLK_aux;
-	end if;
-end process;
-
 -- CLOCK GENERATION
 process( MRST_N, MCLK, VCLKCNT )
 begin
@@ -903,7 +889,6 @@ begin
 	elsif rising_edge(MCLK) then
 		ZCLK_ENA <= '0';
 		ZCLK_nENA <= '0';
-		VCLK_ENA <= '0';
 
 		VCLKCNT <= VCLKCNT + 1;
 		if VCLKCNT = "000" then
@@ -913,9 +898,6 @@ begin
 		end if;
 		if VCLKCNT = "110" then
 			VCLKCNT <= "000";
-		end if;
-		if VCLKCNT = "010" then
-			VCLK_ENA <= '1';
 		end if;
 		if VCLKCNT <= "011" then
 			VCLK <= '1';

@@ -177,6 +177,7 @@ signal INTACK_D					: std_logic;
 ----------------------------------------------------------------
 -- REGISTERS
 ----------------------------------------------------------------
+signal RS0			: std_logic;
 signal H40			: std_logic;
 signal V30			: std_logic;
 
@@ -334,7 +335,6 @@ signal HV_HCNT		: std_logic_vector(8 downto 0);
 signal HV_VCNT		: std_logic_vector(8 downto 0);
 
 -- TIMING VALUES
-signal CLOCKS_PER_LINE : std_logic_vector(11 downto 0);
 signal H_DISP_START    : std_logic_vector(8 downto 0);
 signal H_DISP_WIDTH    : std_logic_vector(8 downto 0);
 signal H_TOTAL_WIDTH   : std_logic_vector(8 downto 0);
@@ -604,7 +604,7 @@ signal FF_HS		: std_logic;
 signal FF_VS		: std_logic;
 
 -- Scandoubler
-type scanline_t is array(0 to (CLOCKS_PER_LINE_MAX/2)-1) of std_logic_vector(8 downto 0);
+type scanline_t is array(0 to (CLOCKS_PER_LINE/2)-1) of std_logic_vector(8 downto 0);
 signal LINE0		: scanline_t;
 signal LINE1		: scanline_t; 
 
@@ -713,6 +713,8 @@ port map(
 ----------------------------------------------------------------
 ADDR_STEP <= REG(15);
 H40 <= REG(12)(0);
+RS0 <= REG(12)(7);
+
 -- H40 <= '0';
 V30 <= REG(1)(3);
 -- V30 <= '0';
@@ -2043,8 +2045,10 @@ begin
 		VINT_T80_CLR <= '0';
 
 		HV_PIXDIV <= HV_PIXDIV + 1;
-		if (H40 = '1' and HV_PIXDIV = 8-1) or
-		   (H40 = '0' and HV_PIXDIV = 10-1) then
+		if (RS0 = '1' and H40 = '1' and ((HV_PIXDIV = 8-1 and HV_HCNT < 490) or (HV_PIXDIV = 10-1 and HV_HCNT >= 490))) or --normal H40
+		   (RS0 = '0' and H40 = '1' and HV_PIXDIV = 8-1) or --fast H40
+		   (RS0 = '0' and H40 = '0' and HV_PIXDIV = 10-1) or --normal H32
+		   (RS0 = '1' and H40 = '0' and HV_PIXDIV = 8-1) then --fast H32
 			HV_PIXDIV <= (others => '0');
 			if HV_HCNT = H_DISP_START + H_TOTAL_WIDTH - 1 then
 				-- we're just after HSYNC
@@ -2191,11 +2195,9 @@ begin
 			when others => null;
 			end case;
 
-			if H40 = '1' and PIXDIV = 8-1 then				
-				PIXDIV <= (others => '0');
-				X <= X + 1;
-				PIXOUT <= '1';
-			elsif H40 = '0' and PIXDIV = 10-1 then				
+			if (H40 = '1' and PIXDIV = 8-1) or
+			   (H40 = '0' and RS0 = '0' and PIXDIV = 10-1) or
+			   (H40 = '0' and RS0 = '1' and PIXDIV = 8-1) then
 				PIXDIV <= (others => '0');
 				X <= X + 1;
 				PIXOUT <= '1';
@@ -2215,8 +2217,6 @@ FF_VS <= '0' when HV_VCNT >= conv_std_logic_vector(-VS_LINES,9) else '1';
 FF_HS <= '0' when HV_HCNT >= HSYNC_START and HV_HCNT <= HSYNC_END else '1';
 
 -- SCANDOUBLER
-CLOCKS_PER_LINE <= conv_std_logic_vector(CLOCKS_PER_LINE_H40, 12) when H40='1'
-              else conv_std_logic_vector(CLOCKS_PER_LINE_H32, 12);
 
 process( RST_N, CLK )
 begin
@@ -2231,7 +2231,7 @@ begin
 			H_CNT <= H_CNT + 1;
 		end if;
 
-		if H_VGA_CNT = CLOCKS_PER_LINE(11 downto 1)-1 then
+		if H_VGA_CNT = CLOCKS_PER_LINE/2-1 then
 			H_VGA_CNT <= (others => '0');
 			V_CNT <= V_CNT + 1;
 		else

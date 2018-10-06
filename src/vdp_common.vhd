@@ -38,13 +38,7 @@ library IEEE;
 
 package vdp_common is
 
---constant H_DISP_CLOCKS          : integer := 2560;
-
-constant CLOCKS_PER_LINE_MAX    : integer := 3420;
-constant CLOCKS_PER_LINE_H32    : integer := 342*10;
-constant CLOCKS_PER_LINE_H40    : integer := 427*8; -- 3416
-
-constant H_DISP_CLOCKS          : integer := 2560;
+constant CLOCKS_PER_LINE    : integer := 3420;
 constant VGA_HS_CLOCKS          : integer := 204;       -- 3.77 us
 
 constant VGA_VS_LINES           : integer := 1;         -- 0.06 ms
@@ -76,7 +70,7 @@ constant H_DISP_WIDTH_H32       : integer := 256;
 constant H_DISP_WIDTH_H40       : integer := 320;
 
 constant H_TOTAL_WIDTH_H32      : integer := 342;
-constant H_TOTAL_WIDTH_H40      : integer := 427;
+constant H_TOTAL_WIDTH_H40      : integer := 422;
 
 constant V_DISP_START_V28       : integer := 485; -- -27;
 constant V_DISP_START_V30       : integer := 466; -- -46

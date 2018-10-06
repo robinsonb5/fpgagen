@@ -33,8 +33,8 @@ module user_io #(parameter STRLEN=0, parameter PS2DIV=100) (
 	output reg          SPI_MISO,
 	input               SPI_MOSI,
 	
-	output reg [7:0]    joystick_0,
-	output reg [7:0]    joystick_1,
+	output reg [31:0]   joystick_0,
+	output reg [31:0]   joystick_1,
 	output reg [15:0]   joystick_analog_0,
 	output reg [15:0]   joystick_analog_1,
 	output [1:0]        buttons,
@@ -398,8 +398,8 @@ always @(posedge clk_sys) begin
 			case(acmd)
 				// buttons and switches
 				8'h01: but_sw <= spi_byte_in;
-				8'h02: joystick_0 <= spi_byte_in;
-				8'h03: joystick_1 <= spi_byte_in;
+				8'h60: if (abyte_cnt < 6) joystick_0[(abyte_cnt-2)<<3 +:8] <= spi_byte_in;
+				8'h61: if (abyte_cnt < 6) joystick_1[(abyte_cnt-2)<<3 +:8] <= spi_byte_in;
 				8'h04: begin
 					// store incoming ps2 mouse bytes 
 					ps2_mouse_fifo[ps2_mouse_wptr] <= spi_byte_in;

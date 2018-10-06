@@ -76,8 +76,8 @@ signal vga_pr_o : std_logic_vector(5 downto 0);
 -- user_io
 signal buttons: std_logic_vector(1 downto 0);
 signal status:  std_logic_vector(31 downto 0);
-signal joy_0: std_logic_vector(7 downto 0);
-signal joy_1: std_logic_vector(7 downto 0);
+signal joy_0: std_logic_vector(31 downto 0);
+signal joy_1: std_logic_vector(31 downto 0);
 signal txd:     std_logic;
 signal par_out_data: std_logic_vector(7 downto 0);
 signal par_out_strobe: std_logic;
@@ -106,6 +106,7 @@ constant CONF_STR : string :=
     "O7,Display,NTSC,PAL;"&
     "O6,Joystick swap,Off,On;"&
     "O9,Swap Y axis,Off,On;"&
+    "OA,Only 3 buttons,Off,On;"&
     "O4,FM Sound,Enable,Disable;"&
     "O5,PSG Sound,Enable,Disable;"&
     "O8,Model,Export,Domestic;"&
@@ -175,8 +176,8 @@ component user_io
         SPI_CLK, SPI_SS_IO, SPI_MOSI :in std_logic;
         SPI_MISO : out std_logic;
         conf_str : in std_logic_vector(8*STRLEN-1 downto 0);
-        joystick_0 : out std_logic_vector(7 downto 0);
-        joystick_1 : out std_logic_vector(7 downto 0);
+        joystick_0 : out std_logic_vector(31 downto 0);
+        joystick_1 : out std_logic_vector(31 downto 0);
         joystick_analog_0 : out std_logic_vector(15 downto 0);
         joystick_analog_1 : out std_logic_vector(15 downto 0);
         status: out std_logic_vector(31 downto 0);
@@ -263,6 +264,7 @@ ext_sw(4) <= status(4); --fm en
 ext_sw(5) <= status(7); --PAL
 ext_sw(6) <= not status(8); --model
 ext_sw(7) <= status(9); --swap Y
+ext_sw(8) <= status(10); --3 buttons
 
 --SDRAM_A(12)<='0';
 virtualtoplevel : entity work.Virtual_Toplevel
@@ -290,8 +292,8 @@ virtualtoplevel : entity work.Virtual_Toplevel
     DRAM_DQ => SDRAM_DQ,
 
 --    -- Joystick ports (Port_A, Port_B)
-	joya => joy_1,
-	joyb => joy_0,
+	joya => joy_1(11 downto 0),
+	joyb => joy_0(11 downto 0),
 
 	-- Video, Audio/CMT ports
     unsigned(VGA_R) => vga_tred,

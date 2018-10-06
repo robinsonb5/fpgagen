@@ -84,8 +84,8 @@ constant V_DISP_START_V30       : integer := 466; -- -46
 constant V_DISP_HEIGHT_V28      : integer := 224;
 constant V_DISP_HEIGHT_V30      : integer := 240;
 
-constant V_INT_NTSC             : integer := 231;
-constant V_INT_PAL              : integer := 255;
+constant V_INT_NTSC             : integer := 224;
+constant V_INT_PAL              : integer := 240;
 
 constant NTSC_LINES             : integer := 262;
 constant PAL_LINES              : integer := 312;

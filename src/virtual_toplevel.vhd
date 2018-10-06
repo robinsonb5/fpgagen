@@ -76,8 +76,8 @@ entity Virtual_Toplevel is
 		
 		LED : out std_logic;
 
-		joya : in std_logic_vector(7 downto 0) := (others =>'1');
-		joyb : in std_logic_vector(7 downto 0) := (others =>'1');
+		joya : in std_logic_vector(11 downto 0) := (others =>'1');
+		joyb : in std_logic_vector(11 downto 0) := (others =>'1');
 
         -- ROM Loader / Host boot data
 		ext_reset_n    : in std_logic := '1';
@@ -94,6 +94,7 @@ entity Virtual_Toplevel is
 														  -- 5 - PAL
 														  -- 6 - Export model
 														  -- 7 - Swap y
+														  -- 8 - 3 Buttons only
 	);
 end entity;
 
@@ -479,8 +480,9 @@ signal JOY_1_UP     : std_logic;
 signal JOY_1_DOWN   : std_logic;
 signal JOY_2_UP     : std_logic;
 signal JOY_2_DOWN   : std_logic;
-signal JOY_1        : std_logic_vector(7 downto 0);
-signal JOY_2        : std_logic_vector(7 downto 0);
+signal JOY_1        : std_logic_vector(11 downto 0);
+signal JOY_2        : std_logic_vector(11 downto 0);
+signal JOY_3BUT		: std_logic;
 
 signal SDR_INIT_DONE	: std_logic;
 signal PRE_RESET_N	: std_logic;
@@ -524,6 +526,8 @@ end process;
 -- Joystick swapping
 JOY_SWAP <= SW(2);
 JOY_Y_SWAP <= SW(7);
+JOY_3BUT <= SW(8);
+
 JOY_1_DOWN <= joya(3) when JOY_Y_SWAP = '1' else joya(2);
 JOY_1_UP <= joya(2) when JOY_Y_SWAP = '1' else joya(3);
 JOY_2_DOWN <= joyb(3) when JOY_Y_SWAP = '1' else joyb(2);
@@ -532,12 +536,12 @@ JOY_2_UP <= joyb(2) when JOY_Y_SWAP = '1' else joyb(3);
 JOY_1(1 downto 0) <= joyb(1 downto 0) when JOY_SWAP = '1' else joya(1 downto 0);
 JOY_1(2) <= JOY_2_DOWN when JOY_SWAP = '1' else JOY_1_DOWN;
 JOY_1(3) <= JOY_2_UP when JOY_SWAP = '1' else JOY_1_UP;
-JOY_1(7 downto 4) <= joyb(7 downto 4) when JOY_SWAP = '1' else joya(7 downto 4);
+JOY_1(11 downto 4) <= joyb(11 downto 4) when JOY_SWAP = '1' else joya(11 downto 4);
 
 JOY_2(1 downto 0) <= joyb(1 downto 0) when JOY_SWAP = '0' else joya(1 downto 0);
 JOY_2(2) <= JOY_2_DOWN when JOY_SWAP = '0' else JOY_1_DOWN;
 JOY_2(3) <= JOY_2_UP when JOY_SWAP = '0' else JOY_1_UP;
-JOY_2(7 downto 4) <= joyb(7 downto 4) when JOY_SWAP = '0' else joya(7 downto 4);
+JOY_2(11 downto 4) <= joyb(11 downto 4) when JOY_SWAP = '0' else joya(11 downto 4);
 
 PAL <= SW(5);
 model <= SW(6);
@@ -724,6 +728,7 @@ port map(
 	RST_N		=> MRST_N,
 	CLK			=> MCLK,
 
+	J3BUT		=> JOY_3BUT,
 	P1_UP		=> not JOY_1(3),
 	P1_DOWN		=> not JOY_1(2),
 	P1_LEFT		=> not JOY_1(1),
@@ -732,7 +737,11 @@ port map(
 	P1_B		=> not JOY_1(5),
 	P1_C		=> not JOY_1(6),
 	P1_START	=> not JOY_1(7),
-		
+	P1_X		=> not JOY_1(8),
+	P1_Y		=> not JOY_1(9),
+	P1_Z		=> not JOY_1(10),
+	P1_MODE		=> not JOY_1(11),
+
 	P2_UP		=> not JOY_2(3),
 	P2_DOWN		=> not JOY_2(2),
 	P2_LEFT		=> not JOY_2(1),
@@ -741,7 +750,11 @@ port map(
 	P2_B		=> not JOY_2(5),
 	P2_C		=> not JOY_2(6),
 	P2_START	=> not JOY_2(7),
-		
+	P2_X		=> not JOY_1(8),
+	P2_Y		=> not JOY_1(9),
+	P2_Z		=> not JOY_1(10),
+	P2_MODE		=> not JOY_1(11),
+
 	SEL		=> IO_SEL,
 	A			=> IO_A,
 	RNW		=> IO_RNW,

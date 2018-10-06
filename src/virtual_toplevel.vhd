@@ -372,6 +372,7 @@ signal VDP_LDS_N			: std_logic;
 signal VDP_DI				: std_logic_vector(15 downto 0);
 signal VDP_DO				: std_logic_vector(15 downto 0);
 signal VDP_DTACK_N			: std_logic;
+signal VDP_RST_N			: std_logic;
 
 signal TG68_VDP_SEL		: std_logic;
 signal TG68_VDP_D			: std_logic_vector(15 downto 0);
@@ -758,9 +759,12 @@ port map(
 );
 
 -- VDP
+
+VDP_RST_N <= '1' when bootState = BOOT_DONE else '0';
+
 vdp : entity work.vdp
 port map(
-	RST_N		=> MRST_N,
+	RST_N		=> MRST_N and VDP_RST_N,
 	CLK		=> MCLK,
 	MEMCLK	=> SDR_CLK,
 		
@@ -991,7 +995,8 @@ TG68_RES_N <= MRST_N and ext_bootdone;
 --TG68_CLK <= VCLK;
 --TG68_CLKE <= '1';
 
-TG68_DTACK_N <= TG68_FLASH_DTACK_N when TG68_FLASH_SEL = '1'
+TG68_DTACK_N <= '0' when bootState /= BOOT_DONE
+	else TG68_FLASH_DTACK_N when TG68_FLASH_SEL = '1'
 	else TG68_SDRAM_DTACK_N when TG68_SDRAM_SEL = '1' 
 	else TG68_ZRAM_DTACK_N when TG68_ZRAM_SEL = '1' 
 	else TG68_CTRL_DTACK_N when TG68_CTRL_SEL = '1' 
@@ -1047,7 +1052,8 @@ T80_CLK_N <= ZCLK;
 T80_NMI_N <= '1';
 T80_BUSRQ_N <= not ZBUSREQ;
 
-T80_WAIT_N <= not T80_SDRAM_DTACK_N when T80_SDRAM_SEL = '1'
+T80_WAIT_N <= '0' when bootState /= BOOT_DONE
+	else not T80_SDRAM_DTACK_N when T80_SDRAM_SEL = '1'
 	else not T80_ZRAM_DTACK_N when T80_ZRAM_SEL = '1'
 	else not T80_FLASH_DTACK_N when T80_FLASH_SEL = '1'
 	else not T80_CTRL_DTACK_N when T80_CTRL_SEL = '1' 

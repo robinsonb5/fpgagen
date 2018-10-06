@@ -355,7 +355,7 @@ mytwc : component TwoWayCache
 		ramPort_rec(1).col<=romrd_a(addr_colbits_64bit)&"00";
 		ramPort_rec(1).wr<='0';
 		ramPort_rec(1).burst<='1';
-		ramPort_rec(0).burstlength<=3;
+		ramPort_rec(1).burstlength<=3;
 		ramPort_rec(1).ldqm<='0';
 		ramPort_rec(1).udqm<='0';
 		ramPort_rec(1).ramport<=PORT_ROMRD;
@@ -386,7 +386,7 @@ mytwc : component TwoWayCache
 		ramPort_rec(3).col<=vram_a(addr_colbits);
 		ramPort_rec(3).wr<=vram_we;
 		ramPort_rec(3).burst<='1';
-		ramPort_rec(0).burstlength<=7;
+		ramPort_rec(3).burstlength<=7;
 		ramPort_rec(3).ldqm<=vram_l_n;
 		ramPort_rec(3).udqm<=vram_u_n;
 		ramPort_rec(3).ramport<=PORT_VRAM;

@@ -118,7 +118,6 @@ type cram_t is array(0 to 63) of std_logic_vector(15 downto 0);
 signal CRAM			: cram_t;
 type vsram_t is array(0 to 63) of std_logic_vector(15 downto 0);
 signal VSRAM		: vsram_t;
-signal VSRAM_LATCH  : vsram_t;
 ----------------------------------------------------------------
 -- CPU INTERFACE
 ----------------------------------------------------------------
@@ -431,6 +430,7 @@ signal BGB_VRAM_DO	: std_logic_vector(15 downto 0);
 signal BGB_VRAM_DO_REG	: std_logic_vector(15 downto 0);
 signal BGB_SEL		: std_logic;
 signal BGB_DTACK_N	: std_logic;
+signal BGB_VSRAM1_LATCH : std_logic_vector(9 downto 0);
 
 -- BACKGROUND A
 type bgac_t is (
@@ -470,6 +470,7 @@ signal BGA_VRAM_DO	: std_logic_vector(15 downto 0);
 signal BGA_VRAM_DO_REG	: std_logic_vector(15 downto 0);
 signal BGA_SEL		: std_logic;
 signal BGA_DTACK_N	: std_logic;
+signal BGA_VSRAM0_LATCH : std_logic_vector(9 downto 0);
 
 signal WIN_V		: std_logic;
 signal WIN_H		: std_logic;
@@ -1135,12 +1136,12 @@ begin
 			when BGBC_CALC_Y =>
 				BGB_COLINFO_WE_A <= '0';
 				if BGB_POS(9) = '1' then
-					BGB_Y <= (VSRAM_LATCH(1)(9 downto 0) + Y) and (VSIZE & "11111111");
+					BGB_Y <= (BGB_VSRAM1_LATCH + Y) and (VSIZE & "11111111");
 				else
 					if VSCR = '1' then
-						BGB_Y <= (VSRAM_LATCH( CONV_INTEGER(BGB_POS(8 downto 4) & "1") )(9 downto 0) + Y) and (VSIZE & "11111111");
+						BGB_Y <= (VSRAM( CONV_INTEGER(BGB_POS(8 downto 4) & "1") )(9 downto 0) + Y) and (VSIZE & "11111111");
 					else
-						BGB_Y <= (VSRAM_LATCH(1)(9 downto 0) + Y) and (VSIZE & "11111111");
+						BGB_Y <= (BGB_VSRAM1_LATCH + Y) and (VSIZE & "11111111");
 					end if;
 				end if;
 				BGBC <= BGBC_CALC_BASE;
@@ -1348,12 +1349,12 @@ begin
 					BGA_Y <= "00" & Y;					
 				else
 					if BGA_POS(9) = '1' then
-						BGA_Y <= (VSRAM_LATCH(0)(9 downto 0) + Y) and (VSIZE & "11111111");
+						BGA_Y <= (BGA_VSRAM0_LATCH + Y) and (VSIZE & "11111111");
 					else
 						if VSCR = '1' then
-							BGA_Y <= (VSRAM_LATCH( CONV_INTEGER(BGA_POS(8 downto 4) & "0") )(9 downto 0) + Y) and (VSIZE & "11111111");
+							BGA_Y <= (VSRAM( CONV_INTEGER(BGA_POS(8 downto 4) & "0") )(9 downto 0) + Y) and (VSIZE & "11111111");
 						else
-							BGA_Y <= (VSRAM_LATCH(0)(9 downto 0) + Y) and (VSIZE & "11111111");
+							BGA_Y <= (BGA_VSRAM0_LATCH + Y) and (VSIZE & "11111111");
 						end if;
 					end if;
 				end if;
@@ -2065,10 +2066,8 @@ begin
 				else
 					HV_VCNT <= HV_VCNT + 1;
 				end if;
-				-- Latch VSRAM at the beginning of the line
-				-- Since the scanline rendering is not timing-accurate, it's the best
-				-- to lock these values. 
-				VSRAM_LATCH <= VSRAM;
+				BGB_VSRAM1_LATCH <= VSRAM(1)(9 downto 0);
+				BGA_VSRAM0_LATCH <= VSRAM(0)(9 downto 0);
 			end if;
 
 			if HV_HCNT = H_INT_POS then

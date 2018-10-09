@@ -41,7 +41,7 @@ vdp_tb: $(OBJS)
 	ghdl -e $(FLAGS) -Wl,vram_c.o -Wl,video_c.o -Wl,cpu_c.o $@
 
 vdp.ghw:  vdp_tb Makefile
-	ghdl -r $< --ieee-asserts=disable --stop-time=100us --wave=$@
+	ghdl -r $< --ieee-asserts=disable --stop-time=200us --wave=$@
 
 wave: vdp.ghw
 	gtkwave vdp.sav

@@ -21,6 +21,7 @@ void video_c(char clk, char r[4], char g[4], char b[4], char hs, char vs) {
   static char last_clk = 0;
   static int ignore = 100;
   static int vskip = 1;
+  static int vdetect = 0;
 
   // only work on rising clock edge
   if(clk == last_clk) return;
@@ -58,6 +59,11 @@ void video_c(char clk, char r[4], char g[4], char b[4], char hs, char vs) {
   int pix = ((cr << 12)&0xf000) | ((cg << 7)&0x0780) | ((cb << 1)&0x3e);
 
   if(raw) {
+    // colorize hs and vs
+    if(!chs) pix = 0xf000;
+    if(!cvs) pix = 0x0780;
+
+    
     // write pixel
     fputc(pix & 0xff, raw);
     fputc((pix >> 8)&0xff, raw);
@@ -69,6 +75,13 @@ void video_c(char clk, char r[4], char g[4], char b[4], char hs, char vs) {
     printf("HS@%d %d\n", vcnt, hcnt);
     hcnt = 0;
     vcnt++;
+
+    if(vdetect) {   
+      // begin of a new image: open file
+      if(!raw) raw = fopen("video.rgb", "wb");
+      else { fclose(raw); printf("DONE\n"); exit(0); }
+      vdetect = 0;
+    }
   }
   last_hs = chs;
   
@@ -78,10 +91,8 @@ void video_c(char clk, char r[4], char g[4], char b[4], char hs, char vs) {
 
     if(vskip) {
       vskip--;
-    } else {   
-      // begin of a new image: open file
-      if(!raw) raw = fopen("video.rgb", "wb");
-      else { fclose(raw); printf("DONE\n"); exit(0); }
+    } else {
+      vdetect = 1;
     }
   }
   last_vs = cvs;

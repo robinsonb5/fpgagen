@@ -177,6 +177,7 @@ signal INTACK_D					: std_logic;
 signal RS0			: std_logic;
 signal H40			: std_logic;
 signal V30			: std_logic;
+signal SHI			: std_logic;
 
 signal ADDR_STEP	: std_logic_vector(7 downto 0);
 
@@ -597,14 +598,20 @@ signal T_PREV_OBJ_COLINFO		: std_logic_vector(6 downto 0);
 ----------------------------------------------------------------
 -- VIDEO OUTPUT
 ----------------------------------------------------------------
+type pix_t is (
+	PIX_SHADOW,
+	PIX_NORMAL,
+	PIX_HIGHLIGHT
+);
+signal PIX_MODE		: pix_t;
 signal T_COLOR			: std_logic_vector(15 downto 0);
 
-signal COLOR		: std_logic_vector(8 downto 0);
+signal COLOR		: std_logic_vector(11 downto 0);
 signal FF_HS		: std_logic;
 signal FF_VS		: std_logic;
 
 -- Scandoubler
-type scanline_t is array(0 to (CLOCKS_PER_LINE/2)-1) of std_logic_vector(8 downto 0);
+type scanline_t is array(0 to (CLOCKS_PER_LINE/2)-1) of std_logic_vector(11 downto 0);
 signal LINE0		: scanline_t;
 signal LINE1		: scanline_t; 
 
@@ -614,9 +621,9 @@ signal FF_VGA_B			: std_logic_vector(3 downto 0);
 signal FF_VGA_HS		: std_logic;
 signal FF_VGA_VS		: std_logic;
 
-signal FF_R			: std_logic_vector(2 downto 0);
-signal FF_G			: std_logic_vector(2 downto 0);
-signal FF_B			: std_logic_vector(2 downto 0);
+signal FF_R			: std_logic_vector(3 downto 0);
+signal FF_G			: std_logic_vector(3 downto 0);
+signal FF_B			: std_logic_vector(3 downto 0);
 signal PIXOUT		: std_logic;
 
 begin
@@ -714,6 +721,8 @@ port map(
 ADDR_STEP <= REG(15);
 H40 <= REG(12)(0);
 RS0 <= REG(12)(7);
+
+SHI <= REG(12)(3);
 
 -- H40 <= '0';
 V30 <= REG(1)(3);
@@ -2162,15 +2171,44 @@ begin
 				BGA_COLINFO_ADDR_B <= X;
 				OBJ_COLINFO_ADDR_B <= X;
 				OBJ_COLINFO_WE_B <= '0';
-				
+
+			when "0010" =>
+				if SHI = '1' and BGA_COLINFO_Q_B(6) = '0' and BGB_COLINFO_Q_B(6) = '0' then
+					--if all layers are normal priority, then shadowed
+					PIX_MODE <= PIX_SHADOW;
+				else
+					PIX_MODE <= PIX_NORMAL;
+				end if;
+
 			when "0011" =>
-				if OBJ_COLINFO_Q_B(3 downto 0) /= "0000" and OBJ_COLINFO_Q_B(6) = '1' then
+				if SHI = '1' and (OBJ_COLINFO_Q_B(6) = '1' or (BGA_COLINFO_Q_B(6) = '0' and BGB_COLINFO_Q_B(6) = '0')) then
+					--sprite is visible
+					if OBJ_COLINFO_Q_B(5 downto 0) = "111110" then
+						--if sprite is palette 3/color 14 increase intensity
+						if PIX_MODE = PIX_SHADOW then 
+							PIX_MODE <= PIX_NORMAL;
+						else
+							PIX_MODE <= PIX_HIGHLIGHT;
+						end if;
+					elsif OBJ_COLINFO_Q_B(5 downto 0) = "111111" then
+						-- if sprite is visible and palette 3/color 15, decrease intensity
+						PIX_MODE <= PIX_SHADOW;
+					elsif (OBJ_COLINFO_Q_B(6) = '1' and OBJ_COLINFO_Q_B(3 downto 0) /= "0000") or 
+					       OBJ_COLINFO_Q_B(3 downto 0) = "1110" then
+						--sprite color 14 or high prio always shows up normal
+						PIX_MODE <= PIX_NORMAL;
+					end if;
+				end if;
+
+				if OBJ_COLINFO_Q_B(3 downto 0) /= "0000" and OBJ_COLINFO_Q_B(6) = '1' and
+					(SHI='0' or OBJ_COLINFO_Q_B(5 downto 1) /= "11111") then
 					T_COLOR <= CRAM( CONV_INTEGER(OBJ_COLINFO_Q_B(5 downto 0)) );
 				elsif BGA_COLINFO_Q_B(3 downto 0) /= "0000" and BGA_COLINFO_Q_B(6) = '1' then
 					T_COLOR <= CRAM( CONV_INTEGER(BGA_COLINFO_Q_B(5 downto 0)) );
 				elsif BGB_COLINFO_Q_B(3 downto 0) /= "0000" and BGB_COLINFO_Q_B(6) = '1' then
 					T_COLOR <= CRAM( CONV_INTEGER(BGB_COLINFO_Q_B(5 downto 0)) );
-				elsif OBJ_COLINFO_Q_B(3 downto 0) /= "0000" then
+				elsif OBJ_COLINFO_Q_B(3 downto 0) /= "0000" and
+					(SHI='0' or OBJ_COLINFO_Q_B(5 downto 1) /= "11111") then
 					T_COLOR <= CRAM( CONV_INTEGER(OBJ_COLINFO_Q_B(5 downto 0)) );
 				elsif BGA_COLINFO_Q_B(3 downto 0) /= "0000" then
 					T_COLOR <= CRAM( CONV_INTEGER(BGA_COLINFO_Q_B(5 downto 0)) );
@@ -2179,12 +2217,25 @@ begin
 				else
 					T_COLOR <= CRAM( CONV_INTEGER(BGCOL) );
 				end if;
-				
-			when "0100" =>
-				FF_B <= T_COLOR(11 downto 9);
-				FF_G <= T_COLOR(7 downto 5);
-				FF_R <= T_COLOR(3 downto 1);
 
+			when "0100" =>
+				case PIX_MODE is
+				when PIX_SHADOW =>
+					FF_B <= "0" & T_COLOR(11 downto 9);
+					FF_G <= "0" & T_COLOR(7 downto 5);
+					FF_R <= "0" & T_COLOR(3 downto 1);
+
+				when PIX_NORMAL =>
+					FF_B <= conv_std_logic_vector(conv_integer(T_COLOR(11 downto 9)) + conv_integer(T_COLOR(11 downto 10)), 4);
+					FF_G <= conv_std_logic_vector(conv_integer(T_COLOR(7 downto 5)) + conv_integer(T_COLOR(7 downto 6)), 4);
+					FF_R <= conv_std_logic_vector(conv_integer(T_COLOR(3 downto 1)) + conv_integer(T_COLOR(3 downto 2)), 4);
+
+				when PIX_HIGHLIGHT =>
+					FF_B <= T_COLOR(11 downto 9) & "1";
+					FF_G <= T_COLOR(7 downto 5) & "1";
+					FF_R <= T_COLOR(3 downto 1) & "1";
+
+				end case;
 				OBJ_COLINFO_WE_B <= '1';
 				
 			when "0101" =>
@@ -2263,7 +2314,7 @@ end process;
 
 -- 31KHZ READS
 process( CLK )
-variable RGB	: std_logic_vector(8 downto 0);
+variable RGB	: std_logic_vector(11 downto 0);
 begin
 	if rising_edge(CLK) then
 		if V_CNT(0) = (FIELD and INTERLACE) or INTERLACE = '0' then
@@ -2272,9 +2323,9 @@ begin
 			else
 				RGB := LINE0( CONV_INTEGER(H_VGA_CNT) );
 			end if;
-			FF_VGA_R <= RGB(8 downto 6) & '0';
-			FF_VGA_G <= RGB(5 downto 3) & '0';
-			FF_VGA_B <= RGB(2 downto 0) & '0';
+			FF_VGA_R <= RGB(11 downto 8);
+			FF_VGA_G <= RGB(7 downto 4);
+			FF_VGA_B <= RGB(3 downto 0);
 		else
 			FF_VGA_R <= (others => '0');
 			FF_VGA_G <= (others => '0');
@@ -2316,9 +2367,9 @@ VGA_G <= FF_VGA_G;
 VGA_B <= FF_VGA_B;
 VGA_HS <= FF_VGA_HS;
 VGA_VS <= FF_VGA_VS;
-R <= COLOR(8 downto 6) & '0';
-G <= COLOR(5 downto 3) & '0';
-B <= COLOR(2 downto 0) & '0';
+R <= COLOR(11 downto 8);
+G <= COLOR(7 downto 4);
+B <= COLOR(3 downto 0);
 HS <= FF_HS;
 VS <= FF_VS;
 

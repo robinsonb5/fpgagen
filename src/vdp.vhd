@@ -2097,7 +2097,7 @@ end process;
 -- TIMING MANAGEMENT
 PRE_V_ACTIVE <= '1' when HV_VCNT = "1"&x"FF" or HV_VCNT < V_DISP_HEIGHT - 1 else '0';
 V_ACTIVE <= '1' when HV_VCNT < V_DISP_HEIGHT else '0';
-DISP_ACTIVE <= '1' when V_ACTIVE = '1' and HV_HCNT > HBLANK_END and HV_HCNT < H_INT_POS else '0';
+DISP_ACTIVE <= '1' when V_ACTIVE = '1' and HV_HCNT > HBLANK_END and HV_HCNT <= HBLANK_END + H_DISP_WIDTH else '0';
 -- Background generation runs during active display.
 -- Original timing is 2 pixels (or cells?) before the actual pixel.
 -- But the background generators are not timed, but free running now.

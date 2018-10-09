@@ -345,6 +345,7 @@ signal HBLANK_START    : std_logic_vector(8 downto 0);
 signal HBLANK_END      : std_logic_vector(8 downto 0);
 signal V_DISP_START    : std_logic_vector(8 downto 0);
 signal V_DISP_HEIGHT   : std_logic_vector(8 downto 0);
+signal VSYNC_START     : std_logic_vector(8 downto 0);
 signal V_TOTAL_HEIGHT  : std_logic_vector(8 downto 0);
 signal V_INT_POS       : std_logic_vector(8 downto 0);
 
@@ -1978,6 +1979,10 @@ HBLANK_START    <= conv_std_logic_vector(HBLANK_START_H40, 9) when H40='1'
               else conv_std_logic_vector(HBLANK_START_H32, 9);
 HBLANK_END      <= conv_std_logic_vector(HBLANK_END_H40, 9) when H40='1'
               else conv_std_logic_vector(HBLANK_END_H32, 9);
+VSYNC_START     <= conv_std_logic_vector(VSYNC_START_PAL_V30, 9) when V30='1' and PAL='1'
+              else conv_std_logic_vector(VSYNC_START_PAL_V28, 9) when V30='0' and PAL='1'
+              else conv_std_logic_vector(VSYNC_START_NTSC_V30, 9) when V30='1' and PAL='0'
+              else conv_std_logic_vector(VSYNC_START_NTSC_V28, 9) when V30='0' and PAL='0';
 V_DISP_START    <= conv_std_logic_vector(V_DISP_START_V30, 9) when V30='1'
               else conv_std_logic_vector(V_DISP_START_V28, 9);
 V_DISP_HEIGHT   <= conv_std_logic_vector(V_DISP_HEIGHT_V30, 9) when V30='1'
@@ -2232,7 +2237,7 @@ end process;
 -- VIDEO OUTPUT
 ----------------------------------------------------------------
 -- VERTICAL SYNC
-FF_VS <= '0' when HV_VCNT >= conv_std_logic_vector(-VS_LINES,9) else '1';
+FF_VS <= '0' when HV_VCNT >= VSYNC_START and HV_VCNT <= VSYNC_START + VS_LINES - 1 else '1';
 FF_HS <= '0' when HV_HCNT >= HSYNC_START and HV_HCNT <= HSYNC_END else '1';
 
 -- SCANDOUBLER
@@ -2257,8 +2262,7 @@ begin
 			H_VGA_CNT <= H_VGA_CNT + 1;
 		end if;
 
-		if (HV_VCNT = V_DISP_START + V_TOTAL_HEIGHT - VS_LINES - 1) and
-			HV_HCNT = HSYNC_START
+		if HV_VCNT = VSYNC_START and HV_HCNT = HSYNC_START
 		then
 			V_CNT <= (others => '0');
 			H_VGA_CNT <= (others => '0');

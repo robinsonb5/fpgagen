@@ -490,21 +490,16 @@ type sp1c_t is (
 signal SP1C		: sp1c_t;
 
 -- type obj_y_t is array(0 to 80) of std_logic_vector(8 downto 0);
--- type obj_sz_link_t is array(0 to 80) of std_logic_vector(10 downto 0);	-- HS & VS & LINK
+-- type OBJ_OBJINFO_t is array(0 to 80) of std_logic_vector(10 downto 0);	-- HS & VS & LINK
 -- signal OBJ_Y		: obj_y_t;
--- signal OBJ_SZ_LINK	: obj_sz_link_t;
+-- signal OBJ_OBJINFO	: OBJ_OBJINFO_t;
 
-signal OBJ_Y_D				: std_logic_vector(15 downto 0);
-signal OBJ_Y_ADDR_RD		: std_logic_vector(6 downto 0);
-signal OBJ_Y_ADDR_WR		: std_logic_vector(6 downto 0);
-signal OBJ_Y_WE				: std_logic;
-signal OBJ_Y_Q				: std_logic_vector(15 downto 0);
-
-signal OBJ_SZ_LINK_D		: std_logic_vector(15 downto 0);
-signal OBJ_SZ_LINK_ADDR_RD	: std_logic_vector(6 downto 0);
-signal OBJ_SZ_LINK_ADDR_WR	: std_logic_vector(6 downto 0);
-signal OBJ_SZ_LINK_WE		: std_logic;
-signal OBJ_SZ_LINK_Q		: std_logic_vector(15 downto 0);
+signal OBJ_Y 				: std_logic_vector(8 downto 0);
+signal OBJ_OBJINFO_D		: std_logic_vector(19 downto 0);
+signal OBJ_OBJINFO_ADDR_RD	: std_logic_vector(6 downto 0);
+signal OBJ_OBJINFO_ADDR_WR	: std_logic_vector(6 downto 0);
+signal OBJ_OBJINFO_WE		: std_logic;
+signal OBJ_OBJINFO_Q		: std_logic_vector(19 downto 0);
 
 
 -- signal OBJ_COLINFO		: colinfo_t;
@@ -674,37 +669,20 @@ port map(
 	q_b			=> OBJ_COLINFO_Q_B
 );
 
-obj_oi_y : entity work.DualPortRAM
-generic map (
-	addrbits        => 7,
-	databits        => 16
-)
-port map(
-	clock		=> MEMCLK,
-	data_a		=> (others => '0'),
-	data_b		=> OBJ_Y_D,
-	address_a	=> OBJ_Y_ADDR_RD,
-	address_b	=> OBJ_Y_ADDR_WR,
-	wren_a		=> '0',
-	wren_b		=> OBJ_Y_WE,
-	q_a			=> OBJ_Y_Q,
-	q_b			=> open
- );
- 
-obj_oi_sl : entity work.DualPortRAM
+obj_oi : entity work.DualPortRAM
 generic map (
 	addrbits	=> 7,
-	databits	=> 16
+	databits	=> 20
 )
 port map(
 	clock		=> MEMCLK,
 	data_a		=> (others => '0'),
-	data_b		=> OBJ_SZ_LINK_D,
-	address_a	=> OBJ_SZ_LINK_ADDR_RD,
-	address_b	=> OBJ_SZ_LINK_ADDR_WR,
+	data_b		=> OBJ_OBJINFO_D,
+	address_a	=> OBJ_OBJINFO_ADDR_RD,
+	address_b	=> OBJ_OBJINFO_ADDR_WR,
 	wren_a		=> '0',
-	wren_b		=> OBJ_SZ_LINK_WE,
-	q_a			=> OBJ_SZ_LINK_Q,
+	wren_b		=> OBJ_OBJINFO_WE,
+	q_a			=> OBJ_OBJINFO_Q,
 	q_b			=> open
  );
 
@@ -1571,10 +1549,8 @@ begin
 		SP1_SEL <= '0';
 		SP1C <= SP1C_DONE;
 		
-		OBJ_Y_WE <= '0';
-		OBJ_SZ_LINK_WE <= '0';
-		OBJ_Y_ADDR_WR <= (others => '0');
-		OBJ_SZ_LINK_ADDR_WR <= (others => '0');
+		OBJ_OBJINFO_WE <= '0';
+		OBJ_OBJINFO_ADDR_WR <= (others => '0');
 		
 	elsif rising_edge(MEMCLK) then
 		case SP1C is
@@ -1585,14 +1561,13 @@ begin
 			
 			when SP1C_LOOP =>
 			
-				OBJ_Y_WE <= '0';
-				OBJ_SZ_LINK_WE <= '0';
+				OBJ_OBJINFO_WE <= '0';
 			
-				if SP1_X(0) = '0' and SP1_SEL = '0' then
+				if SP1_X(0) = '0' then
 					SP1_VRAM_ADDR <= (SATB & "00000000") + (OBJ_CUR & "00");
 					SP1_SEL <= '1';
 					SP1C <= SP1C_Y_RD;
-				elsif SP1_X(0) = '1' and SP1_SEL = '0' then
+				elsif SP1_X(0) = '1' then
 					SP1_VRAM_ADDR <= (SATB & "00000000") + (OBJ_CUR & "01");
 					SP1_SEL <= '1';
 					SP1C <= SP1C_SZL_RD;
@@ -1600,9 +1575,7 @@ begin
 			
 			when SP1C_Y_RD =>
 				if early_ack_sp1='0' then
-					OBJ_Y_ADDR_WR <= SP1_X(7 downto 1);
-					OBJ_Y_D <= "0000000" & SP1_VRAM_DO(8 downto 0);
-					OBJ_Y_WE <= '1';
+					OBJ_Y <= SP1_VRAM_DO(8 downto 0);
 
 					SP1_X <= SP1_X + 1;
 					SP1C <= SP1C_LOOP;
@@ -1611,9 +1584,9 @@ begin
 			
 			when SP1C_SZL_RD =>
 				if early_ack_sp1='0' then
-					OBJ_SZ_LINK_ADDR_WR <= SP1_X(7 downto 1);
-					OBJ_SZ_LINK_D <= "00000" & SP1_VRAM_DO(11 downto 8) & SP1_VRAM_DO(6 downto 0);
-					OBJ_SZ_LINK_WE <= '1';					
+					OBJ_OBJINFO_ADDR_WR <= SP1_X(7 downto 1);
+					OBJ_OBJINFO_D <= OBJ_Y & SP1_VRAM_DO(11 downto 8) & SP1_VRAM_DO(6 downto 0);
+					OBJ_OBJINFO_WE <= '1';					
 					
 					OBJ_CUR <= SP1_VRAM_DO(6 downto 0);
 
@@ -1625,7 +1598,7 @@ begin
 						 (H40 = '0' and SP1_VRAM_DO(6 downto 0) >= 64) or
 						 -- don't loop through short sprite attribute table
 						 (SP1_VRAM_DO(6 downto 0) = "0000000") ) then
- 					   OBJ_SZ_LINK_D(6 downto 0) <= (others => '0');
+ 					   OBJ_OBJINFO_D(6 downto 0) <= (others => '0');
 						SP1C <= SP1C_DONE;
 					else
 						SP1_X <= SP1_X + 1;
@@ -1637,10 +1610,8 @@ begin
 			when others => -- SP1C_DONE
 				SP1_SEL <= '0';
 
-				OBJ_Y_WE <= '0';
-				OBJ_SZ_LINK_WE <= '0';
-				OBJ_Y_ADDR_WR <= (others => '0');
-				OBJ_SZ_LINK_ADDR_WR <= (others => '0');
+				OBJ_OBJINFO_WE <= '0';
+				OBJ_OBJINFO_ADDR_WR <= (others => '0');
 				if SP1E_ACTIVATE = '1' then
 					SP1C <= SP1C_INIT;
 				end if;
@@ -1661,8 +1632,7 @@ begin
 		OBJ_COLINFO_ADDR_A <= (others => '0');
 		OBJ_COLINFO_WE_A <= '0';
 		
-		OBJ_Y_ADDR_RD <= (others => '0');
-		OBJ_SZ_LINK_ADDR_RD <= (others => '0');
+		OBJ_OBJINFO_ADDR_RD <= (others => '0');
 		OBJ_DOT_OVERFLOW <= '0';
 		
 		SCOL_SET <= '0';
@@ -1689,13 +1659,12 @@ begin
 			when SP2C_Y_RD =>
 				OBJ_COLINFO_WE_A <= '0';
 				-- OBJ_Y_OFS <= "010000000" + ("0" & SP2_Y) - OBJ_Y( CONV_INTEGER( OBJ_TOT ) );
-				-- V_SZ_LINK := OBJ_SZ_LINK( CONV_INTEGER(OBJ_TOT) );
+				-- V_SZ_LINK := OBJ_OBJINFO( CONV_INTEGER(OBJ_TOT) );
 				-- OBJ_HS <= V_SZ_LINK(10 downto 9);
 				-- OBJ_VS <= V_SZ_LINK(8 downto 7);
 				-- OBJ_LINK <= V_SZ_LINK(6 downto 0);				
 				-- SP2C <= SP2C_Y_TST;
-				OBJ_Y_ADDR_RD <= OBJ_TOT;
-				OBJ_SZ_LINK_ADDR_RD <= OBJ_TOT;
+				OBJ_OBJINFO_ADDR_RD <= OBJ_TOT;
 				SP2C <= SP2C_Y_RD2;
 			
 			when SP2C_Y_RD2 =>
@@ -1704,10 +1673,10 @@ begin
 				SP2C <= SP2C_Y_RD4;
 			
 			when SP2C_Y_RD4 =>
-				OBJ_Y_OFS <= "010000000" + ("0" & SP2_Y) - OBJ_Y_Q(8 downto 0);
-				OBJ_HS <= OBJ_SZ_LINK_Q(10 downto 9);
-				OBJ_VS <= OBJ_SZ_LINK_Q(8 downto 7);
-				OBJ_LINK <= OBJ_SZ_LINK_Q(6 downto 0);				
+				OBJ_Y_OFS <= "010000000" + ("0" & SP2_Y) - OBJ_OBJINFO_Q(19 downto 11);
+				OBJ_HS <= OBJ_OBJINFO_Q(10 downto 9);
+				OBJ_VS <= OBJ_OBJINFO_Q(8 downto 7);
+				OBJ_LINK <= OBJ_OBJINFO_Q(6 downto 0);				
 				SP2C <= SP2C_Y_TST;
 
 			when SP2C_Y_TST =>
@@ -1970,8 +1939,7 @@ begin
 				OBJ_COLINFO_WE_A <= '0';
 				OBJ_COLINFO_ADDR_A <= (others => '0');
 
-				OBJ_Y_ADDR_RD <= (others => '0');
-				OBJ_SZ_LINK_ADDR_RD <= (others => '0');
+				OBJ_OBJINFO_ADDR_RD <= (others => '0');
 				if SP2E_ACTIVATE = '1' then
 					SP2C <= SP2C_INIT;
 				end if;

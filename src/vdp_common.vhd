@@ -81,6 +81,11 @@ constant V_DISP_HEIGHT_V30      : integer := 240;
 constant V_INT_NTSC             : integer := 224;
 constant V_INT_PAL              : integer := 240;
 
+constant VSYNC_START_PAL_V28	: integer := 255;
+constant VSYNC_START_PAL_V30	: integer := 263;
+constant VSYNC_START_NTSC_V28	: integer := 231;
+constant VSYNC_START_NTSC_V30	: integer := 263; --never happen
+
 constant NTSC_LINES             : integer := 262;
 constant PAL_LINES              : integer := 312;
 

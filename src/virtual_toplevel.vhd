@@ -67,9 +67,9 @@ entity Virtual_Toplevel is
 		DAC_LDATA : out std_logic_vector(15 downto 0);
 		DAC_RDATA : out std_logic_vector(15 downto 0);
 		
-		VGA_R		: out std_logic_vector(7 downto 0);
-		VGA_G		: out std_logic_vector(7 downto 0);
-		VGA_B		: out std_logic_vector(7 downto 0);
+		VGA_R		: out std_logic_vector(5 downto 0);
+		VGA_G		: out std_logic_vector(5 downto 0);
+		VGA_B		: out std_logic_vector(5 downto 0);
 		VGA_VS		: out std_logic;
 		VGA_HS		: out std_logic;
 		VID_15KHZ	: out std_logic;
@@ -460,16 +460,16 @@ signal VDP_VGA_VS_N	: std_logic;
 signal VDP_VGA_HS_N	: std_logic;
 
 -- NTSC/RGB Video Output
-signal RED			: std_logic_vector(7 downto 0);
-signal GREEN			: std_logic_vector(7 downto 0);
-signal BLUE			: std_logic_vector(7 downto 0);		
+signal RED			: std_logic_vector(5 downto 0);
+signal GREEN			: std_logic_vector(5 downto 0);
+signal BLUE			: std_logic_vector(5 downto 0);		
 signal VS_N			: std_logic;
 signal HS_N			: std_logic;
 
 -- VGA Video Output
-signal VGA_RED			: std_logic_vector(7 downto 0);
-signal VGA_GREEN			: std_logic_vector(7 downto 0);
-signal VGA_BLUE			: std_logic_vector(7 downto 0);		
+signal VGA_RED			: std_logic_vector(5 downto 0);
+signal VGA_GREEN			: std_logic_vector(5 downto 0);
+signal VGA_BLUE			: std_logic_vector(5 downto 0);		
 signal VGA_VS_N			: std_logic;
 signal VGA_HS_N			: std_logic;
 
@@ -2183,15 +2183,15 @@ begin
 end process;
 
 -- Route VDP signals to outputs
-RED <= VDP_RED & VDP_RED;
-GREEN <= VDP_GREEN & VDP_GREEN;
-BLUE <= VDP_BLUE & VDP_BLUE;
+RED <= VDP_RED & "00";
+GREEN <= VDP_GREEN & "00";
+BLUE <= VDP_BLUE & "00";
 HS_N <= VDP_HS_N;
 VS_N <= VDP_VS_N;
 
-VGA_RED <= VDP_VGA_RED & VDP_VGA_RED;
-VGA_GREEN <= VDP_VGA_GREEN & VDP_VGA_GREEN;
-VGA_BLUE <= VDP_VGA_BLUE & VDP_VGA_BLUE;
+VGA_RED <= VDP_VGA_RED & "00";
+VGA_GREEN <= VDP_VGA_GREEN & "00";
+VGA_BLUE <= VDP_VGA_BLUE & "00";
 VGA_HS_N <= VDP_VGA_HS_N;
 VGA_VS_N <= VDP_VGA_VS_N;
 

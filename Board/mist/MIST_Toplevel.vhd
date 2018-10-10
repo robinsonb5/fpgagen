@@ -54,18 +54,15 @@ signal memclk      : std_logic;
 signal audiol : std_logic_vector(15 downto 0);
 signal audior : std_logic_vector(15 downto 0);
 
-signal vga_tred : unsigned(7 downto 0);
-signal vga_tgreen : unsigned(7 downto 0);
-signal vga_tblue : unsigned(7 downto 0);
+signal vga_tred : std_logic_vector(5 downto 0);
+signal vga_tgreen : std_logic_vector(5 downto 0);
+signal vga_tblue : std_logic_vector(5 downto 0);
 signal vga_ths		: std_logic;
 signal vga_tvs		: std_logic;
 signal vga_window : std_logic;
 signal vid_15khz	: std_logic;
 
 -- 
-signal vga_red_o : std_logic_vector(5 downto 0);
-signal vga_green_o : std_logic_vector(5 downto 0);
-signal vga_blue_o : std_logic_vector(5 downto 0);
 signal osd_red_o : std_logic_vector(5 downto 0);
 signal osd_green_o : std_logic_vector(5 downto 0);
 signal osd_blue_o : std_logic_vector(5 downto 0);
@@ -138,23 +135,6 @@ COMPONENT hybrid_pwm_sd
 	);
 END COMPONENT;
 
-COMPONENT video_vga_dither
-	GENERIC ( outbits : INTEGER := 4 );
-	PORT
-	(
-		clk		:	 IN STD_LOGIC;
-		hsync		:	 IN STD_LOGIC;
-		vsync		:	 IN STD_LOGIC;
-		vid_ena		:	 IN STD_LOGIC;
-		iRed		:	 IN UNSIGNED(7 DOWNTO 0);
-		iGreen		:	 IN UNSIGNED(7 DOWNTO 0);
-		iBlue		:	 IN UNSIGNED(7 DOWNTO 0);
-		oRed		:	 OUT UNSIGNED(outbits-1 DOWNTO 0);
-		oGreen		:	 OUT UNSIGNED(outbits-1 DOWNTO 0);
-		oBlue		:	 OUT UNSIGNED(outbits-1 DOWNTO 0)
-	);
-END COMPONENT;
-  
 -- 
 COMPONENT rgb2ypbpr
 	PORT
@@ -296,9 +276,9 @@ virtualtoplevel : entity work.Virtual_Toplevel
 	joyb => joy_0(11 downto 0),
 
 	-- Video, Audio/CMT ports
-    unsigned(VGA_R) => vga_tred,
-    unsigned(VGA_G) => vga_tgreen,
-    unsigned(VGA_B) => vga_tblue,
+    VGA_R => vga_tred,
+    VGA_G => vga_tgreen,
+    VGA_B => vga_tblue,
 
     VGA_HS => vga_ths,
     VGA_VS => vga_tvs,
@@ -405,24 +385,6 @@ begin
     end if;
 end process;
 
-vga_window<='1';
-mydither : component video_vga_dither
-	generic map (
-		outbits => 6
-	)
-	port map (
-		clk => MCLK,
-		hsync => vga_ths,
-		vsync => vga_tvs,
-		vid_ena => vga_window,
-		iRed => vga_tred,
-		iGreen => vga_tgreen,
-		iBlue => vga_tblue,
-		std_logic_vector(oRed) => vga_red_o,
-		std_logic_vector(oGreen) => vga_green_o,
-		std_logic_vector(oBlue) => vga_blue_o
-	);
-
 osd_inst: osd
     port map (
         clk_sys     => MCLK,
@@ -431,9 +393,9 @@ osd_inst: osd
         SPI_SS3     => SPI_SS3,
         SPI_DI      => SPI_DI,
 
-        R_in        => vga_red_o,
-        G_in        => vga_green_o,
-        B_in        => vga_blue_o,
+        R_in        => vga_tred,
+        G_in        => vga_tgreen,
+        B_in        => vga_tblue,
         HSync       => vga_ths,
         VSync       => vga_tvs,
 

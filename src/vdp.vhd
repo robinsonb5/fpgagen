@@ -2196,19 +2196,40 @@ begin
 			when "0100" =>
 				case PIX_MODE is
 				when PIX_SHADOW =>
-					FF_B <= "0" & T_COLOR(11 downto 9);
-					FF_G <= "0" & T_COLOR(7 downto 5);
-					FF_R <= "0" & T_COLOR(3 downto 1);
+				   -- half brightness
+					FF_B <= '0' & T_COLOR(11 downto 9);
+					FF_G <= '0' & T_COLOR(7 downto 5);
+					FF_R <= '0' & T_COLOR(3 downto 1);
 
 				when PIX_NORMAL =>
-					FF_B <= conv_std_logic_vector(conv_integer(T_COLOR(11 downto 9)) + conv_integer(T_COLOR(11 downto 10)), 4);
-					FF_G <= conv_std_logic_vector(conv_integer(T_COLOR(7 downto 5)) + conv_integer(T_COLOR(7 downto 6)), 4);
-					FF_R <= conv_std_logic_vector(conv_integer(T_COLOR(3 downto 1)) + conv_integer(T_COLOR(3 downto 2)), 4);
-
+				   -- normal brightness
+					FF_B <= T_COLOR(11 downto 9) & '0';
+					FF_G <= T_COLOR(7 downto 5) & '0';
+					FF_R <= T_COLOR(3 downto 1) & '0';
+					
 				when PIX_HIGHLIGHT =>
-					FF_B <= T_COLOR(11 downto 9) & "1";
-					FF_G <= T_COLOR(7 downto 5) & "1";
-					FF_R <= T_COLOR(3 downto 1) & "1";
+					FF_B <= '0' & T_COLOR(11 downto 9) + 7;
+					FF_G <= '0' & T_COLOR(7 downto 5) + 7;
+					FF_R <= '0' & T_COLOR(3 downto 1) + 7;
+					
+				   -- double brightness
+--					if T_COLOR(11) = '1' then 
+--						FF_B <= "1110";
+--					else
+--						FF_B <= T_COLOR(10 downto 9) & "00";
+--					end if;
+						
+--					if T_COLOR(7) = '1' then 
+--						FF_G <= "1110";
+--					else
+--						FF_G <= T_COLOR(6 downto 5) & "00";
+--					end if;
+					
+--					if T_COLOR(3) = '1' then 
+--						FF_R <= "1110";
+--					else
+--						FF_R <= T_COLOR(2 downto 1) & "00";
+--					end if;
 
 				end case;
 				OBJ_COLINFO_WE_B <= '1';
@@ -2330,7 +2351,7 @@ begin
 	elsif rising_edge(CLK) then
 		if H_VGA_CNT = 0 then
 			FF_VGA_HS <= '0';
-		elsif H_VGA_CNT = VGA_HS_CLOCKS then
+		elsif H_VGA_CNT = VGA_HS_CLOCKS/2 then
 			FF_VGA_HS <= '1';
 		end if;
 	end if;

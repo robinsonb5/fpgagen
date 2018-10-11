@@ -114,8 +114,14 @@ signal vram_l_n_reg : std_logic;
 ----------------------------------------------------------------
 -- ON-CHIP RAMS
 ----------------------------------------------------------------
-type cram_t is array(0 to 63) of std_logic_vector(15 downto 0);
-signal CRAM			: cram_t;
+signal CRAM_ADDR_A	: std_logic_vector(5 downto 0);
+signal CRAM_ADDR_B	: std_logic_vector(5 downto 0);
+signal CRAM_D_A		: std_logic_vector(15 downto 0);
+signal CRAM_WE_A		: std_logic;
+signal CRAM_WE_B		: std_logic;
+signal CRAM_Q_A		: std_logic_vector(15 downto 0);
+signal CRAM_Q_B		: std_logic_vector(15 downto 0);
+
 type vsram_t is array(0 to 63) of std_logic_vector(15 downto 0);
 signal VSRAM		: vsram_t;
 ----------------------------------------------------------------
@@ -234,6 +240,8 @@ type dtc_t is (
 	DTC_VRAM_RD1,
 	DTC_VRAM_RD2,
 	DTC_CRAM_RD,
+	DTC_CRAM_RD1,
+	DTC_CRAM_RD2,
 	DTC_VSRAM_RD
 );
 signal DTC	: dtc_t;
@@ -409,10 +417,8 @@ signal BGBC		: bgbc_t;
 signal BGB_COLINFO_ADDR_A	: std_logic_vector(8 downto 0);
 signal BGB_COLINFO_ADDR_B	: std_logic_vector(8 downto 0);
 signal BGB_COLINFO_D_A		: std_logic_vector(6 downto 0);
-signal BGB_COLINFO_D_B		: std_logic_vector(6 downto 0);
 signal BGB_COLINFO_WE_A		: std_logic;
 signal BGB_COLINFO_WE_B		: std_logic;
-signal BGB_COLINFO_Q_A		: std_logic_vector(6 downto 0);
 signal BGB_COLINFO_Q_B		: std_logic_vector(6 downto 0);
 
 
@@ -450,10 +456,8 @@ signal BGAC		: bgac_t;
 signal BGA_COLINFO_ADDR_A	: std_logic_vector(8 downto 0);
 signal BGA_COLINFO_ADDR_B	: std_logic_vector(8 downto 0);
 signal BGA_COLINFO_D_A		: std_logic_vector(6 downto 0);
-signal BGA_COLINFO_D_B		: std_logic_vector(6 downto 0);
 signal BGA_COLINFO_WE_A		: std_logic;
 signal BGA_COLINFO_WE_B		: std_logic;
-signal BGA_COLINFO_Q_A		: std_logic_vector(6 downto 0);
 signal BGA_COLINFO_Q_B		: std_logic_vector(6 downto 0);
 
 signal BGA_X		: std_logic_vector(9 downto 0);
@@ -634,10 +638,10 @@ port map(
 	address_b	=> BGB_COLINFO_ADDR_B,
 	clock		=> CLK,
 	data_a		=> BGB_COLINFO_D_A,
-	data_b		=> BGB_COLINFO_D_B,
+	data_b		=> (others => '0'),
 	wren_a		=> BGB_COLINFO_WE_A,
 	wren_b		=> BGB_COLINFO_WE_B,
-	q_a			=> BGB_COLINFO_Q_A,
+	q_a			=> open,
 	q_b			=> BGB_COLINFO_Q_B
 );
 BGB_COLINFO_WE_B <= '0';
@@ -652,10 +656,10 @@ port map(
 	address_b	=> BGA_COLINFO_ADDR_B,
 	clock		=> CLK,
 	data_a		=> BGA_COLINFO_D_A,
-	data_b		=> BGA_COLINFO_D_B,
+	data_b		=> (others => '0'),
 	wren_a		=> BGA_COLINFO_WE_A,
 	wren_b		=> BGA_COLINFO_WE_B,
-	q_a			=> BGA_COLINFO_Q_A,
+	q_a			=> open,
 	q_b			=> BGA_COLINFO_Q_B
 );
 BGA_COLINFO_WE_B <= '0';
@@ -693,6 +697,24 @@ port map(
 	q_a			=> OBJ_OBJINFO_Q,
 	q_b			=> open
  );
+
+cram : entity work.DualPortRAM
+generic map (
+	addrbits => 6,
+	databits => 16
+)
+port map(
+	address_a	=> CRAM_ADDR_A,
+	address_b	=> CRAM_ADDR_B,
+	clock		=> CLK,
+	data_a		=> CRAM_D_A,
+	data_b		=> (others => '0'),
+	wren_a		=> CRAM_WE_A,
+	wren_b		=> CRAM_WE_B,
+	q_a			=> CRAM_Q_A,
+	q_b			=> CRAM_Q_B
+);
+CRAM_WE_B <= '0';
 
 ----------------------------------------------------------------
 -- REGISTERS
@@ -1982,7 +2004,7 @@ HBLANK_END      <= conv_std_logic_vector(HBLANK_END_H40, 9) when H40='1'
 VSYNC_START     <= conv_std_logic_vector(VSYNC_START_PAL_V30, 9) when V30='1' and PAL='1'
               else conv_std_logic_vector(VSYNC_START_PAL_V28, 9) when V30='0' and PAL='1'
               else conv_std_logic_vector(VSYNC_START_NTSC_V30, 9) when V30='1' and PAL='0'
-              else conv_std_logic_vector(VSYNC_START_NTSC_V28, 9) when V30='0' and PAL='0';
+              else conv_std_logic_vector(VSYNC_START_NTSC_V28, 9);
 V_DISP_START    <= conv_std_logic_vector(V_DISP_START_V30, 9) when V30='1'
               else conv_std_logic_vector(V_DISP_START_V28, 9);
 V_DISP_HEIGHT   <= conv_std_logic_vector(V_DISP_HEIGHT_V30, 9) when V30='1'
@@ -2174,43 +2196,43 @@ begin
 				end if;
 
 				if DE='0' then
-					T_COLOR <= CRAM( CONV_INTEGER(BGCOL) );
+					CRAM_ADDR_B <= BGCOL;
 				elsif OBJ_COLINFO_Q_B(3 downto 0) /= "0000" and OBJ_COLINFO_Q_B(6) = '1' and
 					(SHI='0' or OBJ_COLINFO_Q_B(5 downto 1) /= "11111") then
-					T_COLOR <= CRAM( CONV_INTEGER(OBJ_COLINFO_Q_B(5 downto 0)) );
+					CRAM_ADDR_B <= OBJ_COLINFO_Q_B(5 downto 0);
 				elsif BGA_COLINFO_Q_B(3 downto 0) /= "0000" and BGA_COLINFO_Q_B(6) = '1' then
-					T_COLOR <= CRAM( CONV_INTEGER(BGA_COLINFO_Q_B(5 downto 0)) );
+					CRAM_ADDR_B <= BGA_COLINFO_Q_B(5 downto 0);
 				elsif BGB_COLINFO_Q_B(3 downto 0) /= "0000" and BGB_COLINFO_Q_B(6) = '1' then
-					T_COLOR <= CRAM( CONV_INTEGER(BGB_COLINFO_Q_B(5 downto 0)) );
+					CRAM_ADDR_B <= BGB_COLINFO_Q_B(5 downto 0);
 				elsif OBJ_COLINFO_Q_B(3 downto 0) /= "0000" and
 					(SHI='0' or OBJ_COLINFO_Q_B(5 downto 1) /= "11111") then
-					T_COLOR <= CRAM( CONV_INTEGER(OBJ_COLINFO_Q_B(5 downto 0)) );
+					CRAM_ADDR_B <= OBJ_COLINFO_Q_B(5 downto 0);
 				elsif BGA_COLINFO_Q_B(3 downto 0) /= "0000" then
-					T_COLOR <= CRAM( CONV_INTEGER(BGA_COLINFO_Q_B(5 downto 0)) );
+					CRAM_ADDR_B <= BGA_COLINFO_Q_B(5 downto 0);
 				elsif BGB_COLINFO_Q_B(3 downto 0) /= "0000" then
-					T_COLOR <= CRAM( CONV_INTEGER(BGB_COLINFO_Q_B(5 downto 0)) );
+					CRAM_ADDR_B <= BGB_COLINFO_Q_B(5 downto 0);
 				else
-					T_COLOR <= CRAM( CONV_INTEGER(BGCOL) );
+					CRAM_ADDR_B <= BGCOL;
 				end if;
 
-			when "0100" =>
+			when "0101" =>
 				case PIX_MODE is
 				when PIX_SHADOW =>
 				   -- half brightness
-					FF_B <= '0' & T_COLOR(11 downto 9);
-					FF_G <= '0' & T_COLOR(7 downto 5);
-					FF_R <= '0' & T_COLOR(3 downto 1);
+					FF_B <= '0' & CRAM_Q_B(11 downto 9);
+					FF_G <= '0' & CRAM_Q_B(7 downto 5);
+					FF_R <= '0' & CRAM_Q_B(3 downto 1);
 
 				when PIX_NORMAL =>
 				   -- normal brightness
-					FF_B <= T_COLOR(11 downto 9) & '0';
-					FF_G <= T_COLOR(7 downto 5) & '0';
-					FF_R <= T_COLOR(3 downto 1) & '0';
+					FF_B <= CRAM_Q_B(11 downto 9) & '0';
+					FF_G <= CRAM_Q_B(7 downto 5) & '0';
+					FF_R <= CRAM_Q_B(3 downto 1) & '0';
 					
 				when PIX_HIGHLIGHT =>
-					FF_B <= '0' & T_COLOR(11 downto 9) + 7;
-					FF_G <= '0' & T_COLOR(7 downto 5) + 7;
-					FF_R <= '0' & T_COLOR(3 downto 1) + 7;
+					FF_B <= '0' & CRAM_Q_B(11 downto 9) + 7;
+					FF_G <= '0' & CRAM_Q_B(7 downto 5) + 7;
+					FF_R <= '0' & CRAM_Q_B(3 downto 1) + 7;
 					
 				   -- double brightness
 --					if T_COLOR(11) = '1' then 
@@ -2234,7 +2256,7 @@ begin
 				end case;
 				OBJ_COLINFO_WE_B <= '1';
 				
-			when "0101" =>
+			when "0111" =>
 				OBJ_COLINFO_WE_B <= '0';
 			
 			when others => null;
@@ -2403,7 +2425,6 @@ begin
 	if RST_N = '0' then
 
 		REG <= (others => (others => '0'));
-		CRAM <= (others => (others => '0'));
 		VSRAM <= (others => (others => '0'));
 
 		ADDR <= (others => '0');
@@ -2463,7 +2484,9 @@ begin
 		if DMAF_SET_REQ = '0' then
 			DMAF_SET_ACK <= '0';
 		end if;
-		
+
+		CRAM_WE_A <= '0';
+
 		if DT_FF_SEL = '1' and (FIFO_WR_POS + 1 /= FIFO_RD_POS) and DT_FF_DTACK_N = '1' then
 			FIFO_ADDR( CONV_INTEGER( FIFO_WR_POS ) ) <= ADDR;
 			FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_FF_DATA;
@@ -2578,10 +2601,12 @@ begin
 				hwrite(L, DT_WR_DATA);
 				write(L, string'("]"));
 				writeline(F,L);									
--- synthesis translate_on								
-				CRAM( CONV_INTEGER(DT_WR_ADDR(6 downto 1)) ) <= DT_WR_DATA;
+-- synthesis translate_on
+				CRAM_WE_A <= '1';
+				CRAM_ADDR_A <= DT_WR_ADDR(6 downto 1);
+				CRAM_D_A <= DT_WR_DATA;
 				DTC <= DTC_IDLE;
-				
+
 			when DTC_VSRAM_WR =>
 -- synthesis translate_off					
 				write(L, string'("  VSRAM WR ["));
@@ -2613,7 +2638,15 @@ begin
 				end if;
 			
 			when DTC_CRAM_RD =>
-				DT_RD_DATA <= CRAM( CONV_INTEGER(ADDR(6 downto 1)) );
+				CRAM_ADDR_A <= ADDR(6 downto 1);
+				DTC <= DTC_CRAM_RD1;
+
+			when DTC_CRAM_RD1 =>
+				-- cram address is set up
+				DTC <= DTC_CRAM_RD2;
+
+			when DTC_CRAM_RD2 =>
+				DT_RD_DATA <= CRAM_Q_A;
 				DT_RD_DTACK_N <= '0';
 				ADDR <= ADDR + ADDR_STEP;	
 				DTC <= DTC_IDLE;

@@ -39,6 +39,7 @@ use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.STD_LOGIC_UNSIGNED.ALL;
 use IEEE.STD_LOGIC_TEXTIO.all;
 use IEEE.NUMERIC_STD.ALL;
+use work.jt12.all;
 
 entity Virtual_Toplevel is
 	generic (
@@ -99,59 +100,6 @@ entity Virtual_Toplevel is
 end entity;
 
 architecture rtl of Virtual_Toplevel is
-component jt12 port(
-	rst	    : in std_logic;
-	cpu_clk   : in std_logic;
-	cpu_din   : in std_logic_vector(7 downto 0);
-	cpu_dout  : out std_logic_vector(7 downto 0);
-	cpu_addr  : in std_logic_vector(1 downto 0);
-	cpu_cs_n  : in std_logic;
-	cpu_wr_n  : in std_logic;
-	cpu_irq_n : out std_logic;
-	cpu_limiter_en: in std_logic;
-	
-	syn_clk   : in std_logic;
-	syn_snd_right:out std_logic_vector(11 downto 0);
-	syn_snd_left:out std_logic_vector(11 downto 0);
-	syn_snd_sample	: out std_logic;
-	-- Mux'ed output
-	syn_mux_right	:out std_logic_vector(8 downto 0);
-	syn_mux_left	:out std_logic_vector(8 downto 0);
-	syn_mux_sample	:out std_logic
-);
-end component;
-
-component jt12_amp_stereo port(
-	clk : in std_logic;
-	sample : in std_logic;
-	volume : in std_logic_vector(2 downto 0);
-	psg	   : in std_logic_vector(5 downto 0);
-	enable_psg: in std_logic;
-	fmleft : in std_logic_vector(11 downto 0);
-	fmright: in std_logic_vector(11 downto 0);
-	postleft: out std_logic_vector(15 downto 0);
-	postright: out std_logic_vector(15 downto 0) );	
-end component;
-
-component jt12_mixer port(
-	clk 		: in std_logic;
-	rst			: in std_logic;
-	sample 		: in std_logic;
-	left_in 	: in std_logic_vector(8 downto 0);
-	right_in	: in std_logic_vector(8 downto 0);
-	psg			: in std_logic_vector(5 downto 0);
-	enable_psg	: in std_logic;
-	left_out	: out std_logic_vector(15 downto 0);
-	right_out	: out std_logic_vector(15 downto 0) );	
-end component;
-
-component audio_mixer port(
-	left_in 		: in  std_logic_vector(11 downto 0);
-	right_in		: in  std_logic_vector(11 downto 0);
-	psg			: in  std_logic_vector(5 downto 0);
-	left_out		: out std_logic_vector(15 downto 0);
-	right_out	: out std_logic_vector(15 downto 0) );
-end component;
 
 -- "FLASH"
 signal romwr_req : std_logic := '0';
@@ -835,18 +783,18 @@ port map(
 -- FM
 fm : jt12
 port map(
-	rst		      => not MRST_N,
-	cpu_clk	      => MCLK and FCLK_EN,
-	cpu_limiter_en => '1',
-	cpu_cs_n	      => not FM_SEL,
-	cpu_addr	      => FM_A,
-	cpu_wr_n	      => FM_RNW,
-	cpu_din	      => FM_DI,
-	cpu_dout	      => FM_DO,
+	rst			=> not MRST_N,
+	clk			=> MCLK,
+	cen			=> FCLK_EN,
+	limiter_en 	=> '1',
+	addr		=> FM_A,
+	cs_n		=> not FM_SEL,
+	wr_n		=> FM_RNW,
+	din			=> FM_DI,
+	dout		=> FM_DO,
 
-	syn_clk	      => MCLK and SCLK_EN,
-	syn_snd_left   => FM_LEFT,
-	syn_snd_right  => FM_RIGHT
+	snd_left	=> FM_LEFT,
+	snd_right	=> FM_RIGHT
 );
 
 -- Audio control

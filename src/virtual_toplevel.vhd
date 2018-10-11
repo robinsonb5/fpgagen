@@ -232,24 +232,19 @@ signal NO_DATA		: std_logic_vector(15 downto 0) := x"4E71";	-- SYNTHESIS gp/m68k
 signal MRST_N		: std_logic;
 
 -- 68K
---signal TG68_CLK		: std_logic;
 signal TG68_RES_N	: std_logic;
---signal TG68_CLKE	: std_logic;
 signal TG68_DI		: std_logic_vector(15 downto 0);
 signal TG68_IPL_N	: std_logic_vector(2 downto 0);
 signal TG68_DTACK_N	: std_logic;
 signal TG68_A		: std_logic_vector(31 downto 0);
 signal TG68_DO		: std_logic_vector(15 downto 0);
-signal TG68_AS_N		: std_logic;
+signal TG68_SEL		: std_logic;
 signal TG68_UDS_N	: std_logic;
 signal TG68_LDS_N	: std_logic;
 signal TG68_RNW		: std_logic;
 signal TG68_INTACK	: std_logic;
 signal TG68_STATE	: std_logic_vector(1 downto 0);
 signal TG68_FC	        : std_logic_vector(2 downto 0);
-
-signal TG68_ENARDREG	: std_logic;
-signal TG68_ENAWRREG	: std_logic;
 
 signal TG68_ENA: std_logic;
 signal TG68_ENA_DIV: std_logic_vector(1 downto 0);
@@ -632,37 +627,37 @@ zr : entity work.zram port map (
 -- -----------------------------------------------------------------------
 -- -----------------------------------------------------------------------
 
--- a full cpu cycle consists of 4 TG68_ENARDREG "bus" cycles
+-- a full cpu cycle consists of 4 VCLK cycles
+-- VCLK = 50 MHz / 7 = 7.14 MHz
 process(MRST_N, MCLK)
 begin
 	if MRST_N = '0' then
 		TG68_ENA_DIV <= "00";
-		TG68_AS_N <= '1';
+		TG68_SEL <= '0';
 	elsif rising_edge( MCLK ) then
-		if TG68_ENAWRREG = '1' then
+		if VCLK = '1' then
 			TG68_ENA_DIV <= TG68_ENA_DIV + 1;
 
-			-- activate AS
-			if TG68_IO = '1' and TG68_ENA_DIV = "00" then
-				TG68_AS_N <= '0';
+			-- activate memory/io SEL in bus cycle 2 if the cpu wants to do io
+			if TG68_IO = '1' and TG68_ENA_DIV = "10" and (TG68_UDS_N = '0' or TG68_LDS_N = '0') then
+				TG68_SEL <= '1';
 			end if;
-			
-		end if;
-		if TG68_ENARDREG = '1' then
-			-- de-activate as in bus cycle 3 if dtack is ok
+
+			-- de-activate SEL in bus cycle 3 if dtack is ok. This happens at the same
+			-- time the tg68k is enabled due to dtack and proceeds one clock
 			if TG68_ENA_DIV = "11" and TG68_DTACK_N = '0' then
-				TG68_AS_N <= '1';
+				TG68_SEL <= '0';
 			end if;
 		end if;		
 	end if;
 end process;
-	
+
 TG68_WR <= '1' when TG68_STATE = "11" else '0';      -- data wr
 TG68_RD <= '1' when TG68_STATE = "00" or TG68_STATE = "10" else '0';   -- inst or data rd
 TG68_IO <= '1' when TG68_WR = '1' or TG68_RD = '1' else '0';
--- clock enable signal for tg68k. Effectively clock/16 -> 3.375 MHz
-TG68_ENA <= '1' when TG68_ENARDREG = '1' and TG68_ENA_DIV = "11" and TG68_DTACK_N = '0' else '0';
-TG68_INTACK <= '1' when TG68_ENA = '1' and TG68_FC = "111" else '0';
+-- clock enable signal for tg68k. Effectively clock/28 -> 1.78 MHz
+TG68_ENA <= '1' when VCLK = '1' and TG68_ENA_DIV = "11" and (TG68_IO = '0' or TG68_DTACK_N = '0') else '0';
+TG68_INTACK <= '1' when TG68_ENA = '1' and TG68_IO = '1' and TG68_FC = "111" else '0';
 
 -- 68K
 tg68 : entity work.TG68KdotC_Kernel
@@ -897,8 +892,6 @@ begin
 		VCLK <= '1';
 		ZCLK <= '0';
 		VCLKCNT <= "001"; -- important for SDRAM controller (EDIT: not needed anymore)
-		TG68_ENARDREG <= '0';
-		TG68_ENAWRREG <= '0';
 	elsif rising_edge(MCLK) then
 		ZCLK_ENA <= '0';
 		ZCLK_nENA <= '0';
@@ -917,19 +910,6 @@ begin
 		else
 			VCLK <= '0';
 		end if;
-		
-		if VCLKCNT = "110" then
-			TG68_ENAWRREG <= '1';
-		else
-			TG68_ENAWRREG <= '0';
-		end if;
-		
-		if VCLKCNT = "011" then
-			TG68_ENARDREG <= '1';
-		else
-			TG68_ENARDREG <= '0';
-		end if;
-		
 	end if;
 end process;
 
@@ -1070,12 +1050,12 @@ T80_DI <= T80_SDRAM_D when T80_SDRAM_SEL = '1'
 -- OPERATING SYSTEM ROM
 TG68_OS_DTACK_N <= '0';
 OS_OEn <= '0';
-process( MRST_N, MCLK, TG68_AS_N, TG68_RNW,
-	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N, CART_EN )
+process( MRST_N, MCLK, TG68_SEL, TG68_RNW,
+	TG68_A, TG68_DO, CART_EN )
 begin
 
 	if TG68_A(23 downto 22) = "00" 
-		and TG68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') 
+		and TG68_SEL = '1' 
 		and TG68_RNW = '1' 
 		and CART_EN = '0'
 	then
@@ -1088,12 +1068,12 @@ end process;
 
 
 -- CONTROL AREA
-process( MRST_N, MCLK, TG68_AS_N, TG68_RNW,
+process( MRST_N, MCLK, TG68_SEL, TG68_RNW,
 	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
 	BAR, T80_A, T80_MREQ_N, T80_RD_N, T80_WR_N)
 begin
 	if (TG68_A(23 downto 12) = x"A11" or TG68_A(23 downto 12) = x"A14")
-		and TG68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') 
+		and TG68_SEL = '1' 
 	then	
 		TG68_CTRL_SEL <= '1';
 	else
@@ -1188,12 +1168,12 @@ begin
 end process;
 
 -- I/O AREA
-process( MRST_N, MCLK, TG68_AS_N, TG68_RNW,
+process( MRST_N, MCLK, TG68_SEL, TG68_RNW,
 	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
 	BAR, T80_A, T80_MREQ_N, T80_RD_N, T80_WR_N )
 begin
 	if TG68_A(23 downto 5) = x"A100" & "000"
-		and TG68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') 
+		and TG68_SEL = '1' 
 	then	
 		TG68_IO_SEL <= '1';		
 	else
@@ -1297,16 +1277,16 @@ end process;
 -- 7F = 01111111 000
 -- FF = 11111111 000
 -- VDP AREA
-process( MRST_N, MCLK, TG68_AS_N, TG68_RNW,
+process( MRST_N, MCLK, TG68_SEL, TG68_RNW,
 	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
 	BAR, T80_A, T80_MREQ_N, T80_RD_N, T80_WR_N )
 begin
 	if TG68_A(23 downto 21) = "110" and TG68_A(18 downto 16) = "000"
-		and TG68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') 
+		and TG68_SEL = '1' 
 	then	
 		TG68_VDP_SEL <= '1';		
 	elsif TG68_A(23 downto 16) = x"A0" and TG68_A(14 downto 5) = "1111111" & "000" -- Z80 Address space
-		and TG68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') 
+		and TG68_SEL = '1' 
 	then
 		TG68_VDP_SEL <= '1';
 	else
@@ -1442,12 +1422,12 @@ end process;
 -- C0 = 11000000
 -- DF = 11011111
 -- FM AREA
-process( MRST_N, MCLK, TG68_AS_N, TG68_RNW,
+process( MRST_N, MCLK, TG68_SEL, TG68_RNW,
 	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
 	BAR, T80_A, T80_MREQ_N, T80_RD_N, T80_WR_N )
 begin
 	if TG68_A(23 downto 16) = x"A0" and TG68_A(14 downto 13) = "10"
-		and TG68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') 
+		and TG68_SEL = '1' 
 	then	
 		TG68_FM_SEL <= '1';		
 	else
@@ -1563,10 +1543,10 @@ end process;
 -- 68k: C00011
 
 T80_PSG_SEL <= '1' when T80_A(15 downto 3) = x"7F1"&'0' and T80_MREQ_N = '0' and T80_WR_N = '0' else '0';
-TG68_PSG_SEL <= '1' when TG68_A(31 downto 3) = x"C0001"&'0' and TG68_AS_N = '0' and TG68_RNW='0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') else '0';
+TG68_PSG_SEL <= '1' when TG68_A(31 downto 3) = x"C0001"&'0' and TG68_SEL = '1' and TG68_RNW='0' else '0';
 
-process( MRST_N, MCLK, TG68_AS_N, 
-	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
+process( MRST_N, MCLK, TG68_SEL, 
+	TG68_A, TG68_DO,
 	BAR, T80_A, T80_MREQ_N, T80_WR_N )
 begin
 	
@@ -1600,13 +1580,13 @@ end process;
 -- E0 = 11100000
 -- FE = 11111110
 -- BANK ADDRESS REGISTER AND UNUSED AREA IN Z80 ADDRESS SPACE
-process( MRST_N, MCLK, TG68_AS_N, TG68_RNW,
+process( MRST_N, MCLK, TG68_SEL, TG68_RNW,
 	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
 	BAR, T80_A, T80_MREQ_N, T80_RD_N, T80_WR_N )
 begin
 
 	if (TG68_A(23 downto 16) = x"A0" and TG68_A(14 downto 13) = "11" and TG68_A(12 downto 8) /= "11111")
-		and TG68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') 
+		and TG68_SEL = '1' 
 	then	
 		TG68_BAR_SEL <= '1';		
 	else
@@ -1680,7 +1660,7 @@ begin
             SSF2_MAP(35 downto 30) <= "00"&x"5";
             SSF2_MAP(41 downto 36) <= "00"&x"6";
             SSF2_MAP(47 downto 42) <= "00"&x"7";
-        elsif TG68_A(23 downto 4) = x"a130f" and TG68_AS_N = '0' and TG68_RNW = '0' then
+        elsif TG68_A(23 downto 4) = x"a130f" and TG68_SEL = '1' and TG68_RNW = '0' then
             case TG68_A(3 downto 1) is
             when "000" =>
                 null; -- always 0;
@@ -1717,13 +1697,13 @@ ROM_PAGE_A <= SSF2_MAP(4 downto 0) when ROM_PAGE = "000" else
               SSF2_MAP(46 downto 42);
 
 -- FLASH (SDRAM) CONTROL
-process( MRST_N, MCLK, TG68_AS_N, TG68_RNW,
+process( MRST_N, MCLK, TG68_SEL, TG68_RNW,
 	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
 	BAR, T80_A, T80_MREQ_N, T80_RD_N, T80_WR_N,
 	VBUS_SEL, VBUS_ADDR, CART_EN )
 begin
 	if TG68_A(23 downto 22) = "00" 
-		and TG68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') 
+		and TG68_SEL = '1' 
 		and TG68_RNW = '1' 
 		and CART_EN = '1'
 	then
@@ -1938,13 +1918,13 @@ begin
 end process;
 
 -- SDRAM (68K RAM) CONTROL
-process( MRST_N, MCLK, TG68_AS_N, TG68_RNW,
+process( MRST_N, MCLK, TG68_SEL, TG68_RNW,
 	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
 	BAR, T80_A, T80_MREQ_N, T80_RD_N, T80_WR_N,
 	VBUS_SEL, VBUS_ADDR)
 begin
 	if TG68_A(23 downto 21) = "111" -- 68000 RAM
-		and TG68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') 
+		and TG68_SEL = '1' 
 	then	
 		TG68_SDRAM_SEL <= '1';
 	else
@@ -2053,14 +2033,14 @@ end process;
 
 
 -- Z80 RAM CONTROL
-process( MRST_N, MCLK, TG68_AS_N, TG68_RNW,
+process( MRST_N, MCLK, TG68_SEL, TG68_RNW,
 	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
 	BAR, T80_A, T80_MREQ_N, T80_RD_N, T80_WR_N,
 	VBUS_SEL, VBUS_ADDR)
 begin
 	if TG68_A(23 downto 16) = x"A0" -- Z80 Address Space
 		and TG68_A(14) = '0' -- Z80 RAM (gen-hw.txt lines 89 and 272-273)
-		and TG68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') 
+		and TG68_SEL = '1' 
 	then	
 		TG68_ZRAM_SEL <= '1';
 	else

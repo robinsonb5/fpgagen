@@ -117,7 +117,6 @@ signal vram_l_n_reg : std_logic;
 signal CRAM_ADDR_A	: std_logic_vector(5 downto 0);
 signal CRAM_ADDR_B	: std_logic_vector(5 downto 0);
 signal CRAM_D_A		: std_logic_vector(15 downto 0);
-signal CRAM_D_B		: std_logic_vector(15 downto 0);
 signal CRAM_WE_A		: std_logic;
 signal CRAM_WE_B		: std_logic;
 signal CRAM_Q_A		: std_logic_vector(15 downto 0);
@@ -418,10 +417,8 @@ signal BGBC		: bgbc_t;
 signal BGB_COLINFO_ADDR_A	: std_logic_vector(8 downto 0);
 signal BGB_COLINFO_ADDR_B	: std_logic_vector(8 downto 0);
 signal BGB_COLINFO_D_A		: std_logic_vector(6 downto 0);
-signal BGB_COLINFO_D_B		: std_logic_vector(6 downto 0);
 signal BGB_COLINFO_WE_A		: std_logic;
 signal BGB_COLINFO_WE_B		: std_logic;
-signal BGB_COLINFO_Q_A		: std_logic_vector(6 downto 0);
 signal BGB_COLINFO_Q_B		: std_logic_vector(6 downto 0);
 
 
@@ -459,10 +456,8 @@ signal BGAC		: bgac_t;
 signal BGA_COLINFO_ADDR_A	: std_logic_vector(8 downto 0);
 signal BGA_COLINFO_ADDR_B	: std_logic_vector(8 downto 0);
 signal BGA_COLINFO_D_A		: std_logic_vector(6 downto 0);
-signal BGA_COLINFO_D_B		: std_logic_vector(6 downto 0);
 signal BGA_COLINFO_WE_A		: std_logic;
 signal BGA_COLINFO_WE_B		: std_logic;
-signal BGA_COLINFO_Q_A		: std_logic_vector(6 downto 0);
 signal BGA_COLINFO_Q_B		: std_logic_vector(6 downto 0);
 
 signal BGA_X		: std_logic_vector(9 downto 0);
@@ -643,10 +638,10 @@ port map(
 	address_b	=> BGB_COLINFO_ADDR_B,
 	clock		=> CLK,
 	data_a		=> BGB_COLINFO_D_A,
-	data_b		=> BGB_COLINFO_D_B,
+	data_b		=> (others => '0'),
 	wren_a		=> BGB_COLINFO_WE_A,
 	wren_b		=> BGB_COLINFO_WE_B,
-	q_a			=> BGB_COLINFO_Q_A,
+	q_a			=> open,
 	q_b			=> BGB_COLINFO_Q_B
 );
 BGB_COLINFO_WE_B <= '0';
@@ -661,10 +656,10 @@ port map(
 	address_b	=> BGA_COLINFO_ADDR_B,
 	clock		=> CLK,
 	data_a		=> BGA_COLINFO_D_A,
-	data_b		=> BGA_COLINFO_D_B,
+	data_b		=> (others => '0'),
 	wren_a		=> BGA_COLINFO_WE_A,
 	wren_b		=> BGA_COLINFO_WE_B,
-	q_a			=> BGA_COLINFO_Q_A,
+	q_a			=> open,
 	q_b			=> BGA_COLINFO_Q_B
 );
 BGA_COLINFO_WE_B <= '0';
@@ -713,7 +708,7 @@ port map(
 	address_b	=> CRAM_ADDR_B,
 	clock		=> CLK,
 	data_a		=> CRAM_D_A,
-	data_b		=> CRAM_D_B,
+	data_b		=> (others => '0'),
 	wren_a		=> CRAM_WE_A,
 	wren_b		=> CRAM_WE_B,
 	q_a			=> CRAM_Q_A,
@@ -2009,7 +2004,7 @@ HBLANK_END      <= conv_std_logic_vector(HBLANK_END_H40, 9) when H40='1'
 VSYNC_START     <= conv_std_logic_vector(VSYNC_START_PAL_V30, 9) when V30='1' and PAL='1'
               else conv_std_logic_vector(VSYNC_START_PAL_V28, 9) when V30='0' and PAL='1'
               else conv_std_logic_vector(VSYNC_START_NTSC_V30, 9) when V30='1' and PAL='0'
-              else conv_std_logic_vector(VSYNC_START_NTSC_V28, 9) when V30='0' and PAL='0';
+              else conv_std_logic_vector(VSYNC_START_NTSC_V28, 9);
 V_DISP_START    <= conv_std_logic_vector(V_DISP_START_V30, 9) when V30='1'
               else conv_std_logic_vector(V_DISP_START_V28, 9);
 V_DISP_HEIGHT   <= conv_std_logic_vector(V_DISP_HEIGHT_V30, 9) when V30='1'

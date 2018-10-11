@@ -587,7 +587,7 @@ begin
 			TG68_ENA_DIV <= TG68_ENA_DIV + 1;
 
 			-- activate memory/io SEL in bus cycle 2 if the cpu wants to do io
-			if TG68_IO = '1' and TG68_ENA_DIV = "10" and (TG68_UDS_N = '0' or TG68_LDS_N = '0') then
+			if TG68_IO = '1' and TG68_ENA_DIV = "01" then
 				TG68_SEL <= '1';
 			end if;
 
@@ -998,22 +998,23 @@ T80_DI <= T80_SDRAM_D when T80_SDRAM_SEL = '1'
 -- OPERATING SYSTEM ROM
 TG68_OS_DTACK_N <= '0';
 OS_OEn <= '0';
-process( MRST_N, MCLK, TG68_SEL, TG68_RNW,
-	TG68_A, TG68_DO, CART_EN )
-begin
+TG68_OS_SEL <= '1' when TG68_A(23 downto 22) = "00" and TG68_RD = '1' and CART_EN = '0' else '0';
 
-	if TG68_A(23 downto 22) = "00" 
-		and TG68_SEL = '1' 
-		and TG68_RNW = '1' 
-		and CART_EN = '0'
-	then
-		TG68_OS_SEL <= '1';
-	else
-		TG68_OS_SEL <= '0';
-	end if;
-
-end process;
-
+--process( MRST_N, MCLK, TG68_SEL, TG68_RNW,
+--	TG68_A, TG68_DO, CART_EN )
+--begin
+--
+--	if TG68_A(23 downto 22) = "00" 
+--		and TG68_SEL = '1' 
+--		and TG68_RNW = '1' 
+--		and CART_EN = '0'
+--	then
+--		TG68_OS_SEL <= '1';
+--	else
+--		TG68_OS_SEL <= '0';
+--	end if;
+--
+--end process;
 
 -- CONTROL AREA
 process( MRST_N, MCLK, TG68_SEL, TG68_RNW,
@@ -2111,15 +2112,15 @@ begin
 end process;
 
 -- Route VDP signals to outputs
-RED <= VDP_RED & "00";
-GREEN <= VDP_GREEN & "00";
-BLUE <= VDP_BLUE & "00";
+RED <= VDP_RED & VDP_RED(3 downto 2);
+GREEN <= VDP_GREEN & VDP_GREEN(3 downto 2);
+BLUE <= VDP_BLUE & VDP_BLUE(3 downto 2);
 HS_N <= VDP_HS_N;
 VS_N <= VDP_VS_N;
 
-VGA_RED <= VDP_VGA_RED & "00";
-VGA_GREEN <= VDP_VGA_GREEN & "00";
-VGA_BLUE <= VDP_VGA_BLUE & "00";
+VGA_RED <= VDP_VGA_RED & VDP_VGA_RED(3 downto 2);
+VGA_GREEN <= VDP_VGA_GREEN & VDP_VGA_GREEN(3 downto 2);
+VGA_BLUE <= VDP_VGA_BLUE & VDP_VGA_BLUE(3 downto 2);
 VGA_HS_N <= VDP_VGA_HS_N;
 VGA_VS_N <= VDP_VGA_VS_N;
 

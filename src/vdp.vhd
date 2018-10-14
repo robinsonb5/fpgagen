@@ -764,7 +764,7 @@ SATB <= REG(5)(6 downto 0);
 ODD <= FIELD when IM = '1' else '0';
 IN_DMA <= DMA_FILL or DMA_COPY or DMA_VBUS;
 
-STATUS <= "111111" & FIFO_EMPTY & FIFO_FULL & VINT_TG68_PENDING & SOVR & SCOL & ODD & IN_VBL & IN_HBL & IN_DMA & PAL;
+STATUS <= "111111" & FIFO_EMPTY & FIFO_FULL & VINT_TG68_PENDING & SOVR & SCOL & ODD & (IN_VBL or not DE) & IN_HBL & IN_DMA & PAL;
 
 ----------------------------------------------------------------
 -- CPU INTERFACE

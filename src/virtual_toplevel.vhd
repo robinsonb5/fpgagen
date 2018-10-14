@@ -431,7 +431,7 @@ signal SDR_INIT_DONE	: std_logic;
 signal PRE_RESET_N	: std_logic;
 
 type bootStates is (BOOT_READ_1, BOOT_WRITE_1, BOOT_WRITE_2, BOOT_DONE);
-signal bootState : bootStates := BOOT_READ_1;
+signal bootState : bootStates := BOOT_DONE;
 
 signal FL_DQ : std_logic_vector(15 downto 0);
 
@@ -458,11 +458,16 @@ begin
 -- -----------------------------------------------------------------------
 
 -- Reset
-PRE_RESET_N <= reset and SDR_INIT_DONE and ext_reset_n;
 process(MRST_N,MCLK)
 begin
 	if rising_edge(MCLK) then
+		PRE_RESET_N <= reset and SDR_INIT_DONE and ext_reset_n;
 		MRST_N <= PRE_RESET_N;
+		if bootState = BOOT_DONE then
+			VDP_RST_N <= '1';
+		else
+			VDP_RST_N <= '0';
+		end if;
 	end if;
 end process;
 
@@ -712,8 +717,6 @@ port map(
 );
 
 -- VDP
-
-VDP_RST_N <= '1' when bootState = BOOT_DONE else '0';
 
 vdp : entity work.vdp
 port map(

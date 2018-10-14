@@ -2124,12 +2124,12 @@ DISP_ACTIVE <= '1' when V_ACTIVE = '1' and HV_HCNT > HBLANK_END and HV_HCNT <= H
 -- Background generation runs during active display.
 -- Original timing is 2 pixels (or cells?) before the actual pixel.
 -- But the background generators are not timed, but free running now.
-BGEN_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = HBLANK_END - 3 else '0';
+BGEN_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = HBLANK_END - 8 else '0';
 
 -- Stage 1 runs during active display
 SP1E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = HBLANK_END + 30 else '0';
 -- Stage 2 runs during HBLANK
-SP2E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = H_INT_POS-2 else '0';
+SP2E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = H_INT_POS-12 else '0';
 DT_ACTIVE <= '1';
 
 -- PIXEL COUNTER AND OUTPUT

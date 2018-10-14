@@ -883,9 +883,8 @@ begin
 					FF_DTACK_N <= '0';
 				end if;			
 			else -- Read
-				PENDING <= '0';
-
 				if A(3 downto 2) = "00" then
+					PENDING <= '0';
 					-- Data Port
 					if CODE = "001000" -- CRAM Read
 					or CODE = "000100" -- VSRAM Read
@@ -904,6 +903,7 @@ begin
 					end if;
 				elsif A(3 downto 2) = "01" then
 					-- Control Port (Read Status Register)
+					PENDING <= '0';
 					FF_DO <= STATUS;
 					SOVR_CLR <= '1';
 					SCOL_CLR <= '1';

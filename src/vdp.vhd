@@ -853,7 +853,8 @@ begin
 							PENDING <= '0';
 						end if;
 					else						
-						if DI(15 downto 13) = "100" then
+						CODE(1 downto 0) <= DI(15 downto 14);
+						if DI(15 downto 14) = "10" then
 							-- Register Set
 							REG_LATCH <= DI;
 							if REG_SET_ACK = '0' then
@@ -864,8 +865,6 @@ begin
 							end if;							
 						else
 							-- Address Set
-							CODE(1 downto 0) <= DI(15 downto 14);
-							-- ADDR <= ADDR_LATCH & DI(13 downto 0);
 							ADDR_LATCH(13 downto 0) <= DI(13 downto 0);
 							if ADDR_SET_ACK = '0' then
 								ADDR_SET_REQ <= '1';

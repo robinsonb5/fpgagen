@@ -122,7 +122,7 @@ signal CRAM_WE_B		: std_logic;
 signal CRAM_Q_A		: std_logic_vector(15 downto 0);
 signal CRAM_Q_B		: std_logic_vector(15 downto 0);
 
-type vsram_t is array(0 to 63) of std_logic_vector(15 downto 0);
+type vsram_t is array(0 to 63) of std_logic_vector(10 downto 0);
 signal VSRAM		: vsram_t;
 ----------------------------------------------------------------
 -- CPU INTERFACE
@@ -2616,7 +2616,7 @@ begin
 				write(L, string'("]"));
 				writeline(F,L);									
 -- synthesis translate_on											
-				VSRAM( CONV_INTEGER(DT_WR_ADDR(6 downto 1)) ) <= DT_WR_DATA;
+				VSRAM( CONV_INTEGER(DT_WR_ADDR(6 downto 1)) ) <= DT_WR_DATA(10 downto 0);
 				DTC <= DTC_IDLE;
 			
 			when DTC_VRAM_RD1 =>
@@ -2652,7 +2652,7 @@ begin
 				DTC <= DTC_IDLE;
 				
 			when DTC_VSRAM_RD =>
-				DT_RD_DATA <= VSRAM( CONV_INTEGER(ADDR(6 downto 1)) );
+				DT_RD_DATA <= FIFO_DATA( CONV_INTEGER( FIFO_RD_POS ) )(15 downto 11) & VSRAM( CONV_INTEGER(ADDR(6 downto 1)) );
 				DT_RD_DTACK_N <= '0';
 				ADDR <= ADDR + ADDR_STEP;	
 				DTC <= DTC_IDLE;

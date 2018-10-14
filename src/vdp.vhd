@@ -872,7 +872,7 @@ begin
 								ADDR_SET_REQ <= '0';
 								FF_DTACK_N <= '0';
 								PENDING <= '1';
-								CODE(5 downto 2) <= "0000"; -- attempt to fix lotus i
+								CODE(5 downto 4) <= "00"; -- attempt to fix lotus i
 							end if;
 						end if;
 						-- Note : Genesis Plus does address setting

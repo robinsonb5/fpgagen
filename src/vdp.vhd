@@ -116,13 +116,13 @@ signal vram_l_n_reg : std_logic;
 ----------------------------------------------------------------
 signal CRAM_ADDR_A	: std_logic_vector(5 downto 0);
 signal CRAM_ADDR_B	: std_logic_vector(5 downto 0);
-signal CRAM_D_A		: std_logic_vector(15 downto 0);
+signal CRAM_D_A		: std_logic_vector(8 downto 0);
 signal CRAM_WE_A		: std_logic;
 signal CRAM_WE_B		: std_logic;
-signal CRAM_Q_A		: std_logic_vector(15 downto 0);
-signal CRAM_Q_B		: std_logic_vector(15 downto 0);
+signal CRAM_Q_A		: std_logic_vector(8 downto 0);
+signal CRAM_Q_B		: std_logic_vector(8 downto 0);
 
-type vsram_t is array(0 to 63) of std_logic_vector(15 downto 0);
+type vsram_t is array(0 to 63) of std_logic_vector(10 downto 0);
 signal VSRAM		: vsram_t;
 ----------------------------------------------------------------
 -- CPU INTERFACE
@@ -701,7 +701,7 @@ port map(
 cram : entity work.DualPortRAM
 generic map (
 	addrbits => 6,
-	databits => 16
+	databits => 9
 )
 port map(
 	address_a	=> CRAM_ADDR_A,
@@ -764,7 +764,7 @@ SATB <= REG(5)(6 downto 0);
 ODD <= FIELD when IM = '1' else '0';
 IN_DMA <= DMA_FILL or DMA_COPY or DMA_VBUS;
 
-STATUS <= "111111" & FIFO_EMPTY & FIFO_FULL & VINT_TG68_PENDING & SOVR & SCOL & ODD & IN_VBL & (IN_HBL and not IN_VBL) & IN_DMA & PAL;
+STATUS <= "111111" & FIFO_EMPTY & FIFO_FULL & VINT_TG68_PENDING & SOVR & SCOL & ODD & (IN_VBL or not DE) & IN_HBL & IN_DMA & PAL;
 
 ----------------------------------------------------------------
 -- CPU INTERFACE
@@ -853,7 +853,8 @@ begin
 							PENDING <= '0';
 						end if;
 					else						
-						if DI(15 downto 13) = "100" then
+						CODE(1 downto 0) <= DI(15 downto 14);
+						if DI(15 downto 14) = "10" then
 							-- Register Set
 							REG_LATCH <= DI;
 							if REG_SET_ACK = '0' then
@@ -864,8 +865,6 @@ begin
 							end if;							
 						else
 							-- Address Set
-							CODE(1 downto 0) <= DI(15 downto 14);
-							-- ADDR <= ADDR_LATCH & DI(13 downto 0);
 							ADDR_LATCH(13 downto 0) <= DI(13 downto 0);
 							if ADDR_SET_ACK = '0' then
 								ADDR_SET_REQ <= '1';
@@ -885,9 +884,8 @@ begin
 					FF_DTACK_N <= '0';
 				end if;			
 			else -- Read
-				PENDING <= '0';
-
 				if A(3 downto 2) = "00" then
+					PENDING <= '0';
 					-- Data Port
 					if CODE = "001000" -- CRAM Read
 					or CODE = "000100" -- VSRAM Read
@@ -906,6 +904,7 @@ begin
 					end if;
 				elsif A(3 downto 2) = "01" then
 					-- Control Port (Read Status Register)
+					PENDING <= '0';
 					FF_DO <= STATUS;
 					SOVR_CLR <= '1';
 					SCOL_CLR <= '1';
@@ -2091,6 +2090,8 @@ begin
 					else
 						HINT_COUNT <= HINT_COUNT - 1;
 					end if;
+				elsif HV_VCNT = V_DISP_HEIGHT then
+					IN_VBL <= '1';
 				end if;
 			end if;
 
@@ -2105,7 +2106,6 @@ begin
 			if HV_HCNT = 0 then
 				if HV_VCNT = V_INT_POS
 				then
-					IN_VBL <= '1';
 					VINT_TG68_PENDING_SET <= '1';
 					VINT_T80_SET <= '1';
 				elsif HV_VCNT = V_INT_POS + 1
@@ -2220,20 +2220,20 @@ begin
 				case PIX_MODE is
 				when PIX_SHADOW =>
 				   -- half brightness
-					FF_B <= '0' & CRAM_Q_B(11 downto 9);
-					FF_G <= '0' & CRAM_Q_B(7 downto 5);
-					FF_R <= '0' & CRAM_Q_B(3 downto 1);
+					FF_B <= '0' & CRAM_Q_B(8 downto 6);
+					FF_G <= '0' & CRAM_Q_B(5 downto 3);
+					FF_R <= '0' & CRAM_Q_B(2 downto 0);
 
 				when PIX_NORMAL =>
 				   -- normal brightness
-					FF_B <= CRAM_Q_B(11 downto 9) & '0';
-					FF_G <= CRAM_Q_B(7 downto 5) & '0';
-					FF_R <= CRAM_Q_B(3 downto 1) & '0';
+					FF_B <= CRAM_Q_B(8 downto 6) & '0';
+					FF_G <= CRAM_Q_B(5 downto 3) & '0';
+					FF_R <= CRAM_Q_B(2 downto 0) & '0';
 					
 				when PIX_HIGHLIGHT =>
-					FF_B <= '0' & CRAM_Q_B(11 downto 9) + 7;
-					FF_G <= '0' & CRAM_Q_B(7 downto 5) + 7;
-					FF_R <= '0' & CRAM_Q_B(3 downto 1) + 7;
+					FF_B <= '0' & CRAM_Q_B(8 downto 6) + 7;
+					FF_G <= '0' & CRAM_Q_B(5 downto 3) + 7;
+					FF_R <= '0' & CRAM_Q_B(2 downto 0) + 7;
 					
 				   -- double brightness
 --					if T_COLOR(11) = '1' then 
@@ -2605,7 +2605,7 @@ begin
 -- synthesis translate_on
 				CRAM_WE_A <= '1';
 				CRAM_ADDR_A <= DT_WR_ADDR(6 downto 1);
-				CRAM_D_A <= DT_WR_DATA;
+				CRAM_D_A <= DT_WR_DATA(11 downto 9) & DT_WR_DATA(7 downto 5) & DT_WR_DATA(3 downto 1);
 				DTC <= DTC_IDLE;
 
 			when DTC_VSRAM_WR =>
@@ -2617,7 +2617,7 @@ begin
 				write(L, string'("]"));
 				writeline(F,L);									
 -- synthesis translate_on											
-				VSRAM( CONV_INTEGER(DT_WR_ADDR(6 downto 1)) ) <= DT_WR_DATA;
+				VSRAM( CONV_INTEGER(DT_WR_ADDR(6 downto 1)) ) <= DT_WR_DATA(10 downto 0);
 				DTC <= DTC_IDLE;
 			
 			when DTC_VRAM_RD1 =>
@@ -2647,13 +2647,20 @@ begin
 				DTC <= DTC_CRAM_RD2;
 
 			when DTC_CRAM_RD2 =>
-				DT_RD_DATA <= CRAM_Q_A;
+				DT_RD_DATA(11 downto 9) <= CRAM_Q_A(8 downto 6);
+				DT_RD_DATA(7 downto 5) <= CRAM_Q_A(5 downto 3);
+				DT_RD_DATA(3 downto 1) <= CRAM_Q_A(2 downto 0);
+				--unused bits come from the next FIFO entry
+				DT_RD_DATA(15 downto 12) <= FIFO_DATA( CONV_INTEGER( FIFO_RD_POS ) )(15 downto 12);
+				DT_RD_DATA(8) <= FIFO_DATA( CONV_INTEGER( FIFO_RD_POS ) )(8);
+				DT_RD_DATA(4) <= FIFO_DATA( CONV_INTEGER( FIFO_RD_POS ) )(4);
+				DT_RD_DATA(0) <= FIFO_DATA( CONV_INTEGER( FIFO_RD_POS ) )(0);
 				DT_RD_DTACK_N <= '0';
 				ADDR <= ADDR + ADDR_STEP;	
 				DTC <= DTC_IDLE;
 				
 			when DTC_VSRAM_RD =>
-				DT_RD_DATA <= VSRAM( CONV_INTEGER(ADDR(6 downto 1)) );
+				DT_RD_DATA <= FIFO_DATA( CONV_INTEGER( FIFO_RD_POS ) )(15 downto 11) & VSRAM( CONV_INTEGER(ADDR(6 downto 1)) );
 				DT_RD_DTACK_N <= '0';
 				ADDR <= ADDR + ADDR_STEP;	
 				DTC <= DTC_IDLE;

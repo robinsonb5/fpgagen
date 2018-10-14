@@ -764,7 +764,7 @@ SATB <= REG(5)(6 downto 0);
 ODD <= FIELD when IM = '1' else '0';
 IN_DMA <= DMA_FILL or DMA_COPY or DMA_VBUS;
 
-STATUS <= "111111" & FIFO_EMPTY & FIFO_FULL & VINT_TG68_PENDING & SOVR & SCOL & ODD & IN_VBL & (IN_HBL and not IN_VBL) & IN_DMA & PAL;
+STATUS <= "111111" & FIFO_EMPTY & FIFO_FULL & VINT_TG68_PENDING & SOVR & SCOL & ODD & IN_VBL & IN_HBL & IN_DMA & PAL;
 
 ----------------------------------------------------------------
 -- CPU INTERFACE
@@ -2089,6 +2089,8 @@ begin
 					else
 						HINT_COUNT <= HINT_COUNT - 1;
 					end if;
+				elsif HV_VCNT = V_DISP_HEIGHT then
+					IN_VBL <= '1';
 				end if;
 			end if;
 
@@ -2103,7 +2105,6 @@ begin
 			if HV_HCNT = 0 then
 				if HV_VCNT = V_INT_POS
 				then
-					IN_VBL <= '1';
 					VINT_TG68_PENDING_SET <= '1';
 					VINT_T80_SET <= '1';
 				elsif HV_VCNT = V_INT_POS + 1

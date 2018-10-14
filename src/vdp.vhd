@@ -838,7 +838,10 @@ begin
 				elsif A(3 downto 2) = "01" then
 					-- Control Port
 					if PENDING = '1' then
-						CODE(5 downto 2) <= DI(7 downto 4);
+						CODE(4 downto 2) <= DI(6 downto 4);
+						if DMA = '1' then
+							CODE(5) <= DI(7);
+						end if;
 						-- ADDR(15 downto 14) <= DI(1 downto 0);
 						-- ADDR_LATCH <= DI(1 downto 0);
 						ADDR_LATCH <= DI(1 downto 0) & ADDR(13 downto 0);
@@ -2521,7 +2524,7 @@ begin
 				else
 					if ADDR_SET_REQ = '1' and ADDR_SET_ACK = '0' and IN_DMA = '0' then
 						ADDR <= ADDR_LATCH;
-						if CODE(5) = '1' and DMA = '1' and PENDING = '1' then
+						if CODE(5) = '1' and PENDING = '1' then
 							if REG(23)(7) = '0' then
 								DMA_VBUS <= '1';
 							else

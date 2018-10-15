@@ -838,7 +838,10 @@ begin
 				elsif A(3 downto 2) = "01" then
 					-- Control Port
 					if PENDING = '1' then
-						CODE(5 downto 2) <= DI(7 downto 4);
+						CODE(4 downto 2) <= DI(6 downto 4);
+						if DMA = '1' then
+							CODE(5) <= DI(7);
+						end if;
 						-- ADDR(15 downto 14) <= DI(1 downto 0);
 						-- ADDR_LATCH <= DI(1 downto 0);
 						ADDR_LATCH <= DI(1 downto 0) & ADDR(13 downto 0);
@@ -872,7 +875,7 @@ begin
 								ADDR_SET_REQ <= '0';
 								FF_DTACK_N <= '0';
 								PENDING <= '1';
-								CODE(5 downto 2) <= "0000"; -- attempt to fix lotus i
+								CODE(5 downto 4) <= "00"; -- attempt to fix lotus i
 							end if;
 						end if;
 						-- Note : Genesis Plus does address setting
@@ -1371,7 +1374,7 @@ begin
 				
 			when BGAC_CALC_BASE =>
 				if WIN_H = '1' or WIN_V = '1' then
-					V_BGA_XBASE := (NTWB & "00000000000") + (BGA_POS(9 downto 3) & "0");
+					V_BGA_XBASE := (NTWB(4 downto 1) & (not H40 and NTWB(0))  & "00000000000") + (BGA_POS(9 downto 3) & "0");
 					if H40 = '0' then -- WIN is 32 tiles wide in H32 mode
 						V_BGA_BASE := V_BGA_XBASE + (BGA_Y(9 downto 3) & "00000" & "0");
 					else              -- WIN is 64 tiles wide in H40 mode
@@ -2521,7 +2524,7 @@ begin
 				else
 					if ADDR_SET_REQ = '1' and ADDR_SET_ACK = '0' and IN_DMA = '0' then
 						ADDR <= ADDR_LATCH;
-						if CODE(5) = '1' and DMA = '1' and PENDING = '1' then
+						if CODE(5) = '1' and PENDING = '1' then
 							if REG(23)(7) = '0' then
 								DMA_VBUS <= '1';
 							else

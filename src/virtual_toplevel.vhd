@@ -1079,7 +1079,7 @@ begin
 				end if;
 			else
 				-- Read
-				TG68_CTRL_D <= NO_DATA;
+				TG68_CTRL_D <= (others => '0');
 				if TG68_A(15 downto 8) = x"11" then
 					-- ZBUSACK_N
 					TG68_CTRL_D(8) <= ZBUSACK_N;

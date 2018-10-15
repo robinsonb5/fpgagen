@@ -620,7 +620,8 @@ generic map(
    extAddr_Mode => 0,      --0=>no,     1=>yes,             2=>switchable with CPU(1)
    MUL_Mode => 0,          --0=>16Bit,  1=>32Bit,           2=>switchable with CPU(1),  3=>no MUL,  
    DIV_Mode => 0,          --0=>16Bit,  1=>32Bit,           2=>switchable with CPU(1),  3=>no DIV, 
-   BitField => 0           --0=>no,     1=>yes,             2=>switchable with CPU(1)
+   BitField => 0,          --0=>no,     1=>yes,             2=>switchable with CPU(1)
+   TASbug	=> 1
 )
 port map(
         clk		=> MCLK,

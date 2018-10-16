@@ -1992,8 +1992,8 @@ V_DISP_HEIGHT   <= conv_std_logic_vector(V_DISP_HEIGHT_V30, 9) when V30='1'
               else conv_std_logic_vector(V_DISP_HEIGHT_V28, 9);
 V_TOTAL_HEIGHT  <= conv_std_logic_vector(PAL_LINES, 9) when PAL='1'
               else conv_std_logic_vector(NTSC_LINES, 9);
-V_INT_POS       <= conv_std_logic_vector(V_INT_PAL, 9) when PAL='1'
-              else conv_std_logic_vector(V_INT_NTSC, 9);
+V_INT_POS       <= conv_std_logic_vector(V_INT_V30, 9) when V30='1'
+              else conv_std_logic_vector(V_INT_V28, 9);
 HV8 <= HV_VCNT(8) when INTERLACE = '1' else HV_VCNT(0);
 
 -- COUNTERS AND INTERRUPTS
@@ -2030,7 +2030,9 @@ begin
 		VINT_T80_CLR <= '0';
 
 		HV_PIXDIV <= HV_PIXDIV + 1;
-		if (RS0 = '1' and H40 = '1' and ((HV_PIXDIV = 8-1 and HV_HCNT < 490) or (HV_PIXDIV = 10-1 and HV_HCNT >= 490))) or --normal H40
+		if (RS0 = '1' and H40 = '1' and 
+			((HV_PIXDIV = 8-1 and (HV_HCNT >= H_DISP_START + 30 or HV_HCNT < H_DISP_START)) or
+			(HV_PIXDIV = 10-1 and HV_HCNT >= H_DISP_START and HV_HCNT < H_DISP_START + 30))) or --normal H40 - 30*10+390*8=3420 cycles
 		   (RS0 = '0' and H40 = '1' and HV_PIXDIV = 8-1) or --fast H40
 		   (RS0 = '0' and H40 = '0' and HV_PIXDIV = 10-1) or --normal H32
 		   (RS0 = '1' and H40 = '0' and HV_PIXDIV = 8-1) then --fast H32
@@ -2052,11 +2054,10 @@ begin
 				end if;
 				BGB_VSRAM1_LATCH <= VSRAM(1)(9 downto 0);
 				BGA_VSRAM0_LATCH <= VSRAM(0)(9 downto 0);
-			end if;
 
-			if HV_HCNT = H_INT_POS then
-				if HV_VCNT = "1"&x"FF" then
+				if HV_VCNT = "1"&x"FE" then
 					IN_VBL <= '0';
+				elsif HV_VCNT = "1"&x"FF" then
 					if HIT = 0 then
 						HINT_PENDING_SET <= '1';
 						HINT_COUNT <= (others => '0');
@@ -2071,7 +2072,8 @@ begin
 					else
 						HINT_COUNT <= HINT_COUNT - 1;
 					end if;
-				elsif HV_VCNT = V_DISP_HEIGHT then
+				end if;
+				if HV_VCNT = V_DISP_HEIGHT - 1 then
 					IN_VBL <= '1';
 				end if;
 			end if;

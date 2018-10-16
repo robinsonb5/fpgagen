@@ -299,8 +299,6 @@ signal REG_SET_ACK : std_logic;
 signal DT_DMAF_DATA	: std_logic_vector(15 downto 0);
 signal DT_DMAV_DATA	: std_logic_vector(15 downto 0);
 signal DMAF_SET_REQ	: std_logic;
-signal DMAF_SET_ACK : std_logic;
-
 
 signal FF_VBUS_ADDR		: std_logic_vector(23 downto 0);
 signal FF_VBUS_UDS_N	: std_logic;
@@ -781,7 +779,6 @@ begin
 		ADDR_LATCH <= (others => '0');
 		ADDR_SET_REQ <= '0';
 		REG_SET_REQ <= '0';
-		DMAF_SET_REQ <= '0';
 		CODE <= (others => '0');
 		
 		DT_RD_SEL <= '0';
@@ -802,24 +799,14 @@ begin
 					-- Data Port
 					PENDING <= '0';
 
-					if DMA_FILL_PRE = '1' then
-						DT_DMAF_DATA <= DI;
-						if DMAF_SET_ACK = '0' then
-							DMAF_SET_REQ <= '1';
-						else
-							DMAF_SET_REQ <= '0';
-							FF_DTACK_N <= '0';
-						end if;
-					else
-						DT_FF_DATA <= DI;
-						DT_FF_CODE <= CODE(3 downto 0);
+					DT_FF_DATA <= DI;
+					DT_FF_CODE <= CODE(3 downto 0);
 
-						if DT_FF_DTACK_N = '1' then
-							DT_FF_SEL <= '1';
-						else
-							DT_FF_SEL <= '0';
-							FF_DTACK_N <= '0';	
-						end if;
+					if DT_FF_DTACK_N = '1' then
+						DT_FF_SEL <= '1';
+					else
+						DT_FF_SEL <= '0';
+						FF_DTACK_N <= '0';
 					end if;
 
 				elsif A(3 downto 2) = "01" then
@@ -832,7 +819,7 @@ begin
 						-- ADDR(15 downto 14) <= DI(1 downto 0);
 						-- ADDR_LATCH <= DI(1 downto 0);
 						ADDR_LATCH <= DI(1 downto 0) & ADDR(13 downto 0);
-						
+
 						-- In case of DMA VBUS request, hold the TG68 with DTACK_N
 						-- it should avoid the use of a CLKEN signal
 						if ADDR_SET_ACK = '0' or DMA_VBUS = '1' then							
@@ -2440,6 +2427,7 @@ begin
 		
 		DMA_FILL_PRE <= '0';
 		DMA_FILL <= '0';
+		DMAF_SET_REQ <= '0';
 		DMA_COPY <= '0';
 		DMA_VBUS <= '0';
 		DMA_SOURCE <= (others => '0');
@@ -2472,9 +2460,6 @@ begin
 		if REG_SET_REQ = '0' then
 			REG_SET_ACK <= '0';
 		end if;
-		if DMAF_SET_REQ = '0' then
-			DMAF_SET_ACK <= '0';
-		end if;
 
 		CRAM_WE_A <= '0';
 
@@ -2494,6 +2479,12 @@ begin
 			DT_FF_DTACK_N <= '0';
 		end if;
 
+		if REG_SET_REQ = '1' and REG_SET_ACK = '0' and IN_DMA = '0' then
+			REG( CONV_INTEGER( REG_LATCH(12 downto 8)) ) <= REG_LATCH(7 downto 0);
+			REG_SET_ACK <= '1';
+		end if;
+
+
 		if DT_ACTIVE = '1' then
 			case DTC is
 			when DTC_IDLE =>
@@ -2509,36 +2500,12 @@ begin
 						DTC <= DTC_VRAM_RD1;
 					end case;					
 				else
-					if ADDR_SET_REQ = '1' and ADDR_SET_ACK = '0' and IN_DMA = '0' then
-						ADDR <= ADDR_LATCH;
-						if CODE(5) = '1' and PENDING = '1' then
-							if REG(23)(7) = '0' then
-								DMA_VBUS <= '1';
-							else
-								if REG(23)(6) = '0' then
-									DMA_FILL_PRE <= '1';
-								else
-									DMA_COPY <= '1';
-								end if;
-							end if;
-						end if;
-						ADDR_SET_ACK <= '1';
-					end if;
-
-					if REG_SET_REQ = '1' and REG_SET_ACK = '0' and IN_DMA = '0' then
-						REG( CONV_INTEGER( REG_LATCH(12 downto 8)) ) <= REG_LATCH(7 downto 0);
-						REG_SET_ACK <= '1';
-					end if;
-
-					if DMAF_SET_REQ = '1' and DMAF_SET_ACK = '0' and IN_DMA = '0' then
-						if DMA_FILL_PRE = '1' then
-							DMA_FILL <= '1';
-						end if;
-						DMAF_SET_ACK <= '1';
-					end if;				
 				end if;
 			
 			when DTC_FIFO_RD =>
+				if DMA_FILL_PRE = '1' then
+					DMAF_SET_REQ <= '1';
+				end if;
 				DT_WR_ADDR <= FIFO_ADDR( CONV_INTEGER( FIFO_RD_POS ) );
 				DT_WR_DATA <= FIFO_DATA( CONV_INTEGER( FIFO_RD_POS ) );
 				FIFO_RD_POS <= FIFO_RD_POS + 1;
@@ -2663,6 +2630,28 @@ begin
 ----------------------------------------------------------------
 -- DMA ENGINE
 ----------------------------------------------------------------
+			if ADDR_SET_REQ = '1' and ADDR_SET_ACK = '0' and IN_DMA = '0' then
+				ADDR <= ADDR_LATCH;
+				if CODE(5) = '1' and PENDING = '1' then
+					if REG(23)(7) = '0' then
+						DMA_VBUS <= '1';
+					else
+						if REG(23)(6) = '0' then
+							DMA_FILL_PRE <= '1';
+						else
+							DMA_COPY <= '1';
+						end if;
+					end if;
+				end if;
+				ADDR_SET_ACK <= '1';
+			end if;
+
+			if DMA_FILL_PRE = '1' and DMAF_SET_REQ = '1' and FIFO_RD_POS = FIFO_WR_POS then
+				DT_DMAF_DATA <= DT_FF_DATA;
+				DMA_FILL <= '1';
+				DMA_FILL_PRE <= '0';
+				DMAF_SET_REQ <= '0';
+			end if;
 
 			case DMAC is
 			when DMA_IDLE =>

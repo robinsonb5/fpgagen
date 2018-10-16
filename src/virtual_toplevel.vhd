@@ -332,6 +332,7 @@ signal INTERLACE	: std_logic;
 signal FM_SEL			: std_logic;
 signal FM_A 			: std_logic_vector(1 downto 0);
 signal FM_RNW			: std_logic;
+signal FM_RNW_D			: std_logic;
 signal FM_UDS_N			: std_logic;
 signal FM_LDS_N			: std_logic;
 signal FM_DI			: std_logic_vector(7 downto 0);
@@ -343,6 +344,12 @@ signal FM_RIGHT			: std_logic_vector(11 downto 0);
 signal FM_MUX_LEFT		: std_logic_vector(11 downto 0);
 signal FM_MUX_RIGHT		: std_logic_vector(11 downto 0);
 signal FM_ENABLE		: std_logic;
+signal FM_FIFO_RDREQ	: std_logic;
+signal FM_FIFO_WRREQ	: std_logic;
+signal FM_FIFO_EMPTY	: std_logic;
+signal FM_FIFO_FULL		: std_logic;
+signal FM_FIFO_Q		: std_logic_vector(9 downto 0);
+signal FM_RNW_FIFO		: std_logic;
 
 -- PSG
 signal PSG_SEL			: std_logic;
@@ -785,17 +792,54 @@ port map(
 );
 
 -- FM
+process( MRST_N, MCLK )
+variable state: std_logic;
+begin
+	if MRST_N = '0' then
+		null;
+	elsif rising_edge(MCLK) then
+		FM_FIFO_WRREQ <= '0';
+		FM_RNW_FIFO <= '1';
+		FM_RNW_D <= FM_RNW;
+		if FM_RNW_D = '1' and FM_RNW = '0' then
+			FM_FIFO_WRREQ <= '1';
+		end if;
+		if state = '0' then
+			if FM_FIFO_EMPTY = '0' and FM_DO(7) = '0' then
+				FM_FIFO_RDREQ <= '1';
+				state := '1';
+			end if;
+		else
+			FM_FIFO_RDREQ <= '0';
+			FM_RNW_FIFO <= '0';
+			state := '0';
+		end if;
+	end if;
+end process;
+
+fm_fifo: entity work.fm_fifo
+port map(
+	sclr	=> not MRST_N,
+	clock	=> MCLK,
+	data	=> FM_A & FM_DI,
+	rdreq	=> FM_FIFO_RDREQ,
+	wrreq	=> FM_FIFO_WRREQ,
+	empty	=> FM_FIFO_EMPTY,
+	full	=> FM_FIFO_FULL,
+	q		=> FM_FIFO_Q
+);
+
 fm : jt12
 port map(
-	rst			=> not MRST_N,
-	clk			=> MCLK,
-	cen			=> FCLK_EN,
-	limiter_en 	=> '1',
-	addr		=> FM_A,
-	cs_n		=> not FM_SEL,
-	wr_n		=> FM_RNW,
-	din			=> FM_DI,
-	dout		=> FM_DO,
+	rst		=> not MRST_N,
+	clk		=> MCLK,
+	cen		=> FCLK_EN,
+	limiter_en	=> '1',
+	addr	=> FM_FIFO_Q(9 downto 8),
+	cs_n	=> not FM_SEL and FM_RNW_FIFO,
+	wr_n	=> FM_RNW_FIFO,
+	din		=> FM_FIFO_Q(7 downto 0),
+	dout	=> FM_DO,
 
 	snd_left	=> FM_LEFT,
 	snd_right	=> FM_RIGHT

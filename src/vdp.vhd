@@ -250,6 +250,9 @@ signal DTC	: dtc_t;
 type dmac_t is (
 	DMA_IDLE,
 	DMA_FILL_INIT,
+	DMA_FILL_START,
+	DMA_FILL_CRAM,
+	DMA_FILL_VSRAM,
 	DMA_FILL_WR,
 	DMA_FILL_WR2,
 	DMA_FILL_LOOP,
@@ -2515,7 +2518,7 @@ begin
 				when "0001" => -- VRAM Write
 					DTC <= DTC_VRAM_WR1;
 				when others => --invalid target
-					DTC <= DTC_IDLE;
+					DTC <= DTC_WR_END;
 				end case;
 			
 			when DTC_VRAM_WR1 =>
@@ -2682,8 +2685,39 @@ begin
 -- synthesis translate_on
 				DMA_SOURCE <= REG(22) & REG(21);
 				DMA_LENGTH <= REG(20) & REG(19);
-				DMAC <= DMA_FILL_WR;
+				DMAC <= DMA_FILL_START;
+
+			when DMA_FILL_START =>
+				case CODE(3 downto 0) is
+				when "0011" => -- CRAM Write
+					DMAC <= DMA_FILL_CRAM;
+				when "0101" => -- VSRAM Write
+					DMAC <= DMA_FILL_VSRAM;
+				when others => -- VRAM Write
+					DMAC <= DMA_FILL_WR;
+				end case;
+
+			when DMA_FILL_CRAM =>
+				CRAM_WE_A <= '1';
+				CRAM_ADDR_A <= ADDR(6 downto 1);
+				-- CRAM fill gets its data from the next FIFO write position
+				CRAM_D_A(8 downto 6) <= FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) )(11 downto 9);
+				CRAM_D_A(5 downto 3) <= FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) )(7 downto 5);
+				CRAM_D_A(2 downto 0) <= FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) )(3 downto 1);
+				--CRAM_D_A <= DT_DMAF_DATA(11 downto 9) & DT_DMAF_DATA(7 downto 5) & DT_DMAF_DATA(3 downto 1);
+				ADDR <= ADDR + ADDR_STEP;
+				DMA_SOURCE <= DMA_SOURCE + ADDR_STEP;
+				DMA_LENGTH <= DMA_LENGTH - 1;
+				DMAC <= DMA_FILL_LOOP;
 				
+			when DMA_FILL_VSRAM =>
+				--VSRAM( CONV_INTEGER(ADDR(6 downto 1)) ) <= FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) )(10 downto 0);
+				VSRAM( CONV_INTEGER(ADDR(6 downto 1)) ) <= DT_DMAF_DATA(10 downto 0);
+				ADDR <= ADDR + ADDR_STEP;
+				DMA_SOURCE <= DMA_SOURCE + ADDR_STEP;
+				DMA_LENGTH <= DMA_LENGTH - 1;
+				DMAC <= DMA_FILL_LOOP;
+
 			when DMA_FILL_WR =>
 -- synthesis translate_off					
 				write(L, string'("   VRAM WR ["));
@@ -2736,7 +2770,7 @@ begin
 					writeline(F,L);									
 -- synthesis translate_on					
 				else
-					DMAC <= DMA_FILL_WR;
+					DMAC <= DMA_FILL_START;
 				end if;
 
 ----------------------------------------------------------------

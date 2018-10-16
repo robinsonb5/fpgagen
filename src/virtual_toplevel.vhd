@@ -1108,7 +1108,7 @@ begin
 				end if;
 			else
 				-- Read
-				T80_CTRL_D <= x"FF";
+				T80_CTRL_D <= (others => '0');
 				if BAR(15) & T80_A(14 downto 8) = x"11" and T80_A(0) = '0' then
 					-- ZBUSACK_N
 					T80_CTRL_D(0) <= ZBUSACK_N;

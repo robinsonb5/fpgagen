@@ -237,6 +237,7 @@ type dtc_t is (
 	DTC_VRAM_WR2,
 	DTC_CRAM_WR,
 	DTC_VSRAM_WR,
+	DTC_WR_END,
 	DTC_VRAM_RD1,
 	DTC_VRAM_RD2,
 	DTC_CRAM_RD,
@@ -2503,9 +2504,6 @@ begin
 				end if;
 			
 			when DTC_FIFO_RD =>
-				if DMA_FILL_PRE = '1' then
-					DMAF_SET_REQ <= '1';
-				end if;
 				DT_WR_ADDR <= FIFO_ADDR( CONV_INTEGER( FIFO_RD_POS ) );
 				DT_WR_DATA <= FIFO_DATA( CONV_INTEGER( FIFO_RD_POS ) );
 				FIFO_RD_POS <= FIFO_RD_POS + 1;
@@ -2550,7 +2548,7 @@ begin
 				if early_ack_dt='0' then
 --				if DT_VRAM_DTACK_N = '0' then
 					DT_VRAM_SEL <= '0';	
-					DTC <= DTC_IDLE;
+					DTC <= DTC_WR_END;
 				end if;
 
 			when DTC_CRAM_WR =>
@@ -2565,7 +2563,7 @@ begin
 				CRAM_WE_A <= '1';
 				CRAM_ADDR_A <= DT_WR_ADDR(6 downto 1);
 				CRAM_D_A <= DT_WR_DATA(11 downto 9) & DT_WR_DATA(7 downto 5) & DT_WR_DATA(3 downto 1);
-				DTC <= DTC_IDLE;
+				DTC <= DTC_WR_END;
 
 			when DTC_VSRAM_WR =>
 -- synthesis translate_off					
@@ -2577,8 +2575,14 @@ begin
 				writeline(F,L);									
 -- synthesis translate_on											
 				VSRAM( CONV_INTEGER(DT_WR_ADDR(6 downto 1)) ) <= DT_WR_DATA(10 downto 0);
+				DTC <= DTC_WR_END;
+
+			when DTC_WR_END =>
+				if DMA_FILL_PRE = '1' then
+					DMAF_SET_REQ <= '1';
+				end if;
 				DTC <= DTC_IDLE;
-			
+
 			when DTC_VRAM_RD1 =>
 				DT_VRAM_SEL <= '1';
 				DT_VRAM_ADDR <= ADDR(15 downto 1);
@@ -2596,7 +2600,7 @@ begin
 					ADDR <= ADDR + ADDR_STEP;
 					DTC <= DTC_IDLE;
 				end if;
-			
+
 			when DTC_CRAM_RD =>
 				CRAM_ADDR_A <= ADDR(6 downto 1);
 				DTC <= DTC_CRAM_RD1;
@@ -2649,7 +2653,6 @@ begin
 			if DMA_FILL_PRE = '1' and DMAF_SET_REQ = '1' and FIFO_RD_POS = FIFO_WR_POS then
 				DT_DMAF_DATA <= DT_FF_DATA;
 				DMA_FILL <= '1';
-				DMA_FILL_PRE <= '0';
 				DMAF_SET_REQ <= '0';
 			end if;
 
@@ -2677,6 +2680,7 @@ begin
 				write(L, string'("]"));
 				writeline(F,L);									
 -- synthesis translate_on
+				DMA_SOURCE <= REG(22) & REG(21);
 				DMA_LENGTH <= REG(20) & REG(19);
 				DMAC <= DMA_FILL_WR;
 				
@@ -2698,7 +2702,7 @@ begin
 				DT_VRAM_SEL <= '1';
 				DT_VRAM_ADDR <= ADDR(15 downto 1);
 				DT_VRAM_RNW <= '0';
-				DT_VRAM_DI <= DT_DMAF_DATA(7 downto 0) & DT_DMAF_DATA(7 downto 0);
+				DT_VRAM_DI <= DT_DMAF_DATA(15 downto 8) & DT_DMAF_DATA(15 downto 8);
 				if ADDR(0) = '0' then
 					DT_VRAM_UDS_N <= '1';
 					DT_VRAM_LDS_N <= '0';
@@ -2713,6 +2717,7 @@ begin
 --				if DT_VRAM_DTACK_N = '0' then
 					DT_VRAM_SEL <= '0';	
 					ADDR <= ADDR + ADDR_STEP;
+					DMA_SOURCE <= DMA_SOURCE + ADDR_STEP;
 					DMA_LENGTH <= DMA_LENGTH - 1;
 					DMAC <= DMA_FILL_LOOP;
 				end if;
@@ -2723,6 +2728,8 @@ begin
 					DMA_FILL <= '0';
 					REG(20) <= x"00";
 					REG(19) <= x"00";
+					REG(22) <= DMA_SOURCE(15 downto 8);
+					REG(21) <= DMA_SOURCE(7 downto 0);
 					DMAC <= DMA_IDLE;
 -- synthesis translate_off										
 					write(L, string'("VDP DMA FILL END"));					

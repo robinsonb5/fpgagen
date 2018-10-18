@@ -2064,7 +2064,7 @@ begin
 					else
 						HINT_COUNT <= HIT - 1;
 					end if;
-				elsif HV_VCNT < V_DISP_HEIGHT
+				elsif HV_VCNT < V_DISP_HEIGHT - 1
 				then
 					if HINT_COUNT = 0 then
 						HINT_PENDING_SET <= '1';

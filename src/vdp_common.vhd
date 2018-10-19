@@ -70,7 +70,7 @@ constant H_DISP_WIDTH_H32       : integer := 256;
 constant H_DISP_WIDTH_H40       : integer := 320;
 
 constant H_TOTAL_WIDTH_H32      : integer := 342;
-constant H_TOTAL_WIDTH_H40      : integer := 422;
+constant H_TOTAL_WIDTH_H40      : integer := 420;
 
 constant V_DISP_START_V28       : integer := 485; -- -27;
 constant V_DISP_START_V30       : integer := 466; -- -46
@@ -78,8 +78,8 @@ constant V_DISP_START_V30       : integer := 466; -- -46
 constant V_DISP_HEIGHT_V28      : integer := 224;
 constant V_DISP_HEIGHT_V30      : integer := 240;
 
-constant V_INT_NTSC             : integer := 224;
-constant V_INT_PAL              : integer := 240;
+constant V_INT_V28              : integer := 224;
+constant V_INT_V30              : integer := 240;
 
 constant VSYNC_START_PAL_V28	: integer := 255;
 constant VSYNC_START_PAL_V30	: integer := 263;

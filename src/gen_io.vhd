@@ -240,6 +240,7 @@ begin
 					RD <= VERS;
 				when x"1" =>
 					RD <= DATA;
+					if CTLA(7) = '0' then RD(7) <= '1'; end if;
 					if DATA(6) = '1' then
 						if(J3BUT='1' or JCNT1/=3) then
 							if CTLA(5) = '0' then RD(5) <= P1_C;     end if;
@@ -282,6 +283,7 @@ begin
 					end if;
 				when x"2" =>
 					RD <= DATB;
+					if CTLB(7) = '0' then RD(7) <= '1'; end if;
 					if DATB(6) = '1' then
 						if(J3BUT='1' or JCNT2/=3) then
 							if CTLB(5) = '0' then RD(5) <= P2_C;     end if;
@@ -324,6 +326,7 @@ begin
 					end if;
 				when x"3" => -- Unconnected port
 					RD <= DATC;
+					if CTLC(7) = '0' then RD(7) <= '1'; end if;
 					if CTLC(6) = '0' then RD(6) <= '1'; end if;
 					if CTLC(5) = '0' then RD(5) <= '1'; end if;
 					if CTLC(4) = '0' then RD(4) <= '1'; end if;

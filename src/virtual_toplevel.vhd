@@ -195,6 +195,7 @@ signal TG68_STATE	: std_logic_vector(1 downto 0);
 signal TG68_FC	        : std_logic_vector(2 downto 0);
 
 signal TG68_ENA: std_logic;
+signal TG68_CYCLE: std_logic;
 signal TG68_ENA_DIV: std_logic_vector(1 downto 0);
 signal TG68_WR: std_logic;
 signal TG68_RD: std_logic;
@@ -588,7 +589,7 @@ begin
 		TG68_ENA_DIV <= "00";
 		TG68_SEL <= '0';
 	elsif rising_edge( MCLK ) then
-		if VCLK = '1' then
+		if TG68_CYCLE = '1' then
 			TG68_ENA_DIV <= TG68_ENA_DIV + 1;
 
 			-- activate memory/io SEL in bus cycle 2 if the cpu wants to do io
@@ -609,7 +610,7 @@ TG68_WR <= '1' when TG68_STATE = "11" else '0';      -- data wr
 TG68_RD <= '1' when TG68_STATE = "00" or TG68_STATE = "10" else '0';   -- inst or data rd
 TG68_IO <= '1' when TG68_WR = '1' or TG68_RD = '1' else '0';
 -- clock enable signal for tg68k. Effectively clock/28 -> 1.78 MHz
-TG68_ENA <= '1' when VCLK = '1' and TG68_ENA_DIV = "11" and (TG68_IO = '0' or TG68_DTACK_N = '0') else '0';
+TG68_ENA <= '1' when TG68_CYCLE = '1' and TG68_ENA_DIV = "11" and (TG68_IO = '0' or TG68_DTACK_N = '0') else '0';
 TG68_INTACK <= '1' when TG68_ENA = '1' and TG68_IO = '1' and TG68_FC = "111" else '0';
 
 -- 68K
@@ -844,6 +845,7 @@ begin
 		VCLK <= '1';
 		ZCLK <= '0';
 		VCLKCNT <= "001"; -- important for SDRAM controller (EDIT: not needed anymore)
+		TG68_CYCLE <= '0';
 	elsif rising_edge(MCLK) then
 		ZCLK_ENA <= '0';
 		ZCLK_nENA <= '0';
@@ -861,6 +863,11 @@ begin
 			VCLK <= '1';
 		else
 			VCLK <= '0';
+		end if;
+		if VCLKCNT = "011" then
+			TG68_CYCLE <= '1';
+		else
+			TG68_CYCLE <= '0';
 		end if;
 	end if;
 end process;

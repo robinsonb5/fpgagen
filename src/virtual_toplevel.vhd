@@ -68,12 +68,11 @@ entity Virtual_Toplevel is
 		DAC_LDATA : out std_logic_vector(15 downto 0);
 		DAC_RDATA : out std_logic_vector(15 downto 0);
 		
-		VGA_R		: out std_logic_vector(5 downto 0);
-		VGA_G		: out std_logic_vector(5 downto 0);
-		VGA_B		: out std_logic_vector(5 downto 0);
-		VGA_VS		: out std_logic;
-		VGA_HS		: out std_logic;
-		VID_15KHZ	: out std_logic;
+		RED			: out std_logic_vector(3 downto 0);
+		GREEN		: out std_logic_vector(3 downto 0);
+		BLUE		: out std_logic_vector(3 downto 0);
+		VS			: out std_logic;
+		HS			: out std_logic;
 		
 		LED : out std_logic;
 
@@ -88,8 +87,7 @@ entity Virtual_Toplevel is
 		ext_data_ack   : in std_logic := '0';
 
         -- DIP switches
-		ext_sw         : in std_logic_vector(15 downto 0) -- 0 - scandoubler
-														  -- 2 - joy swap
+		ext_sw         : in std_logic_vector(15 downto 0) -- 2 - joy swap
 														  -- 3 - PSG EN
 														  -- 4 - FM EN
 														  -- 5 - PAL
@@ -383,26 +381,6 @@ signal VDP_GREEN	: std_logic_vector(3 downto 0);
 signal VDP_BLUE	: std_logic_vector(3 downto 0);
 signal VDP_VS_N	: std_logic;
 signal VDP_HS_N	: std_logic;
-
-signal VDP_VGA_RED	: std_logic_vector(3 downto 0);
-signal VDP_VGA_GREEN	: std_logic_vector(3 downto 0);
-signal VDP_VGA_BLUE	: std_logic_vector(3 downto 0);
-signal VDP_VGA_VS_N	: std_logic;
-signal VDP_VGA_HS_N	: std_logic;
-
--- NTSC/RGB Video Output
-signal RED			: std_logic_vector(5 downto 0);
-signal GREEN			: std_logic_vector(5 downto 0);
-signal BLUE			: std_logic_vector(5 downto 0);		
-signal VS_N			: std_logic;
-signal HS_N			: std_logic;
-
--- VGA Video Output
-signal VGA_RED			: std_logic_vector(5 downto 0);
-signal VGA_GREEN			: std_logic_vector(5 downto 0);
-signal VGA_BLUE			: std_logic_vector(5 downto 0);		
-signal VGA_VS_N			: std_logic;
-signal VGA_HS_N			: std_logic;
 
 -- Joystick signals
 signal JOY_SWAP	    : std_logic;
@@ -756,13 +734,7 @@ port map(
 	G					=> VDP_GREEN,
 	B					=> VDP_BLUE,
 	HS					=> VDP_HS_N,
-	VS					=> VDP_VS_N,
-	
-	VGA_R				=> VDP_VGA_RED,
-	VGA_G				=> VDP_VGA_GREEN,
-	VGA_B				=> VDP_VGA_BLUE,
-	VGA_HS			=> VDP_VGA_HS_N,
-	VGA_VS			=> VDP_VGA_VS_N
+	VS					=> VDP_VS_N
 );
 
 -- PSG
@@ -1927,26 +1899,11 @@ begin
 end process;
 
 -- Route VDP signals to outputs
-RED <= VDP_RED & VDP_RED(3 downto 2);
-GREEN <= VDP_GREEN & VDP_GREEN(3 downto 2);
-BLUE <= VDP_BLUE & VDP_BLUE(3 downto 2);
-HS_N <= VDP_HS_N;
-VS_N <= VDP_VS_N;
-
-VGA_RED <= VDP_VGA_RED & VDP_VGA_RED(3 downto 2);
-VGA_GREEN <= VDP_VGA_GREEN & VDP_VGA_GREEN(3 downto 2);
-VGA_BLUE <= VDP_VGA_BLUE & VDP_VGA_BLUE(3 downto 2);
-VGA_HS_N <= VDP_VGA_HS_N;
-VGA_VS_N <= VDP_VGA_VS_N;
-
--- Select between VGA and TV output	
-VGA_R <= RED when SW(0)='1' else VGA_RED;
-VGA_G <= GREEN when SW(0)='1' else VGA_GREEN;
-VGA_B <= BLUE when SW(0)='1' else VGA_BLUE;
-VGA_HS <= HS_N when SW(0)='1' else VGA_HS_N;
-VGA_VS <= VS_N when SW(0)='1' else VGA_VS_N;
-VID_15KHZ <= SW(0);
-
+RED <= VDP_RED;
+GREEN <= VDP_GREEN;
+BLUE <= VDP_BLUE;
+HS <= VDP_HS_N;
+VS <= VDP_VS_N;
 
 -- #############################################################################
 -- #############################################################################

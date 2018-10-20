@@ -54,15 +54,23 @@ signal memclk      : std_logic;
 signal audiol : std_logic_vector(15 downto 0);
 signal audior : std_logic_vector(15 downto 0);
 
-signal vga_tred : std_logic_vector(5 downto 0);
-signal vga_tgreen : std_logic_vector(5 downto 0);
-signal vga_tblue : std_logic_vector(5 downto 0);
-signal vga_ths		: std_logic;
-signal vga_tvs		: std_logic;
-signal vga_window : std_logic;
-signal vid_15khz	: std_logic;
+signal gen_red      : std_logic_vector(3 downto 0);
+signal gen_green    : std_logic_vector(3 downto 0);
+signal gen_blue     : std_logic_vector(3 downto 0);
+signal gen_hs		: std_logic;
+signal gen_vs		: std_logic;
 
+signal sd_r         : std_logic_vector(5 downto 0);
+signal sd_g         : std_logic_vector(5 downto 0);
+signal sd_b         : std_logic_vector(5 downto 0);
+signal sd_hs		: std_logic;
+signal sd_vs		: std_logic;
 -- 
+signal osd_red_i    : std_logic_vector(5 downto 0);
+signal osd_green_i  : std_logic_vector(5 downto 0);
+signal osd_blue_i   : std_logic_vector(5 downto 0);
+signal osd_vs_i     : std_logic;
+signal osd_hs_i     : std_logic;
 signal osd_red_o : std_logic_vector(5 downto 0);
 signal osd_green_o : std_logic_vector(5 downto 0);
 signal osd_blue_o : std_logic_vector(5 downto 0);
@@ -101,6 +109,7 @@ signal core_led         : std_logic;
 constant CONF_STR : string :=
     "GENESIS;BINGENMD ;"&
     "O7,Display,NTSC,PAL;"&
+    "OBC,Scanlines,Off,25%,50%,75%;"&
     "O6,Joystick swap,Off,On;"&
     "O9,Swap Y axis,Off,On;"&
     "OA,Only 3 buttons,Off,On;"&
@@ -189,6 +198,25 @@ component data_io
         );
     end component data_io;
 
+component scandoubler
+    port (
+            clk_sys     : in std_logic;
+            scanlines   : in std_logic_vector(1 downto 0);
+
+            hs_in       : in std_logic;
+            vs_in       : in std_logic;
+            r_in        : in std_logic_vector(3 downto 0);
+            g_in        : in std_logic_vector(3 downto 0);
+            b_in        : in std_logic_vector(3 downto 0);
+
+            hs_out      : out std_logic;
+            vs_out      : out std_logic;
+            r_out       : out std_logic_vector(5 downto 0);
+            g_out       : out std_logic_vector(5 downto 0);
+            b_out       : out std_logic_vector(5 downto 0)
+        );
+end component scandoubler;
+
 component osd
  	 generic ( OSD_COLOR : integer := 1 );  -- blue
     port (  clk_sys     : in std_logic;
@@ -237,7 +265,6 @@ begin
 	end if;
 end process;
 
-ext_sw(0) <= scandoubler_disable;
 ext_sw(2) <= status(6); --joy swap
 ext_sw(3) <= status(5); --psg en
 ext_sw(4) <= status(4); --fm en
@@ -276,13 +303,12 @@ virtualtoplevel : entity work.Virtual_Toplevel
 	joyb => joy_0(11 downto 0),
 
 	-- Video, Audio/CMT ports
-    VGA_R => vga_tred,
-    VGA_G => vga_tgreen,
-    VGA_B => vga_tblue,
+    RED => gen_red,
+    GREEN => gen_green,
+    BLUE => gen_blue,
 
-    VGA_HS => vga_ths,
-    VGA_VS => vga_tvs,
-	 VID_15KHZ => vid_15khz,
+    HS => gen_hs,
+    VS => gen_vs,
 	 
     LED => core_led,
 
@@ -385,6 +411,24 @@ begin
     end if;
 end process;
 
+scandoubler_inst: scandoubler
+    port map (
+        clk_sys     => MCLK,
+        scanlines   => status(12 downto 11),
+
+        hs_in       => gen_hs,
+        vs_in       => gen_vs,
+        r_in        => gen_red,
+        g_in        => gen_green,
+        b_in        => gen_blue,
+
+        hs_out      => sd_hs,
+        vs_out      => sd_vs,
+        r_out       => sd_r,
+        g_out       => sd_g,
+        b_out       => sd_b
+    );
+
 osd_inst: osd
     port map (
         clk_sys     => MCLK,
@@ -393,11 +437,11 @@ osd_inst: osd
         SPI_SS3     => SPI_SS3,
         SPI_DI      => SPI_DI,
 
-        R_in        => vga_tred,
-        G_in        => vga_tgreen,
-        B_in        => vga_tblue,
-        HSync       => vga_ths,
-        VSync       => vga_tvs,
+        R_in        => osd_red_i,
+        G_in        => osd_green_i,
+        B_in        => osd_blue_i,
+        HSync       => osd_hs_i,
+        VSync       => osd_vs_i,
 
         R_out       => osd_red_o,
         G_out       => osd_green_o,
@@ -415,10 +459,16 @@ rgb2component: component rgb2ypbpr
 	   pb => vga_pb_o,
 	   pr => vga_pr_o
 	);
+
+osd_red_i   <= gen_red & gen_red(3 downto 2) when scandoubler_disable = '1' else sd_r;
+osd_green_i <= gen_green & gen_green(3 downto 2) when scandoubler_disable = '1' else sd_g;
+osd_blue_i  <= gen_blue & gen_blue(3 downto 2) when scandoubler_disable = '1' else sd_b;
+osd_hs_i    <= gen_hs when scandoubler_disable = '1' else sd_hs;
+osd_vs_i    <= gen_vs when scandoubler_disable = '1' else sd_vs;
  
  -- If 15kHz Video - composite sync to VGA_HS and VGA_VS high for MiST RGB cable
-VGA_HS <= not (vga_ths xor vga_tvs) when vid_15khz='1' or ypbpr='1' else vga_ths;
-VGA_VS <= '1' when vid_15khz='1' or ypbpr='1' else vga_tvs;
+VGA_HS <= not (gen_hs xor gen_vs) when scandoubler_disable='1' or ypbpr='1' else sd_hs;
+VGA_VS <= '1' when scandoubler_disable='1' or ypbpr='1' else sd_vs;
 VGA_R <= vga_pr_o when ypbpr='1' else osd_red_o;
 VGA_G <= vga_y_o  when ypbpr='1' else osd_green_o;
 VGA_B <= vga_pb_o when ypbpr='1' else osd_blue_o;

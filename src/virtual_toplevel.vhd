@@ -203,8 +203,6 @@ signal TG68_IO: std_logic;
 
 -- Z80
 signal T80_RESET_N	: std_logic;
-signal T80_CLK_N	: std_logic;
-signal T80_CLKEN	: std_logic;
 signal T80_WAIT_N	: std_logic;
 signal T80_INT_N           : std_logic;
 signal T80_NMI_N           : std_logic;
@@ -221,15 +219,11 @@ signal T80_A               : std_logic_vector(15 downto 0);
 signal T80_DI              : std_logic_vector(7 downto 0);
 signal T80_DO              : std_logic_vector(7 downto 0);
 
-signal SCLK_EN		: std_logic;
 signal FCLK_EN		: std_logic;
-signal SCLKCNT		: std_logic_vector(5 downto 0);
 
 -- CLOCK GENERATION
-signal VCLK			: std_logic;
 signal VCLKCNT		: std_logic_vector(2 downto 0);
 -- signal VCLKCNT		: unsigned(2 downto 0);
-signal ZCLK			: std_logic := '0';
 signal ZCLK_ENA   : std_logic;
 signal ZCLK_nENA   : std_logic;
 signal ZCLKCNT		: std_logic_vector(3 downto 0);
@@ -361,19 +355,11 @@ signal PSG_SND			: std_logic_vector(5 downto 0);
 signal PSG_MUX_SND		: std_logic_vector(5 downto 0);
 signal PSG_ENABLE		: std_logic;
 
---signal FM_DTACK_N			: std_logic;
-
 signal TG68_FM_SEL		: std_logic;
 signal TG68_FM_D			: std_logic_vector(15 downto 0);
-signal TG68_FM_DTACK_N		: std_logic;
 
 signal T80_FM_SEL		: std_logic;
 signal T80_FM_D			: std_logic_vector(7 downto 0);
-signal T80_FM_DTACK_N		: std_logic;
-
-type fmc_t is ( FMC_IDLE, FMC_TG68_ACC, FMC_T80_ACC, FMC_DESEL );
-signal FMC : fmc_t;
-
 
 -- BANK ADDRESS REGISTER
 signal BAR 					: std_logic_vector(23 downto 15);
@@ -588,7 +574,7 @@ zr : entity work.zram port map (
 -- -----------------------------------------------------------------------
 -- -----------------------------------------------------------------------
 
--- a full cpu cycle consists of 4 VCLK cycles
+-- a full cpu cycle consists of 4 TG68_CYCLE cycles
 -- VCLK = 50 MHz / 7 = 7.14 MHz
 process(MRST_N, MCLK)
 begin
@@ -649,11 +635,12 @@ port map(
 );
 
 -- Z80
-t80 : entity work.t80se
+t80 : entity work.t80pa
 port map(
 	RESET_n		=> T80_RESET_N,
-	CLK_n		=> MCLK, -- T80_CLK_N,
-	CLKEN		=> T80_CLKEN and ZCLK_ENA, -- T80_CLKEN,
+	CLK		=> MCLK,
+	CEN_p	=> ZCLK_ENA,
+	CEN_n	=> ZCLK_nENA,
 	WAIT_n	=> T80_WAIT_N,
 	INT_n		=> T80_INT_N,
 	NMI_n		=> T80_NMI_N,
@@ -784,9 +771,9 @@ port map(
 
 u_psg : work.psg
 port map(
-	clk		=> MCLK, -- T80_CLK_N,
+	clk		=> MCLK,
 	clken		=> ZCLK_ENA,
-	timing_clken	=> ZCLK_ENA and T80_CLKEN, -- T80_CLKEN,
+	timing_clken	=> ZCLK_ENA,
 	WR_n	=> not PSG_SEL,
 	D_in	=> PSG_DI,
 	output	=> PSG_SND
@@ -836,10 +823,13 @@ port map(
 	clk		=> MCLK,
 	cen		=> FCLK_EN,
 	limiter_en	=> '1',
-	addr	=> FM_FIFO_Q(9 downto 8),
-	cs_n	=> not FM_SEL and FM_RNW_FIFO,
-	wr_n	=> FM_RNW_FIFO,
-	din		=> FM_FIFO_Q(7 downto 0),
+	addr	=> FM_A,
+	--addr	=> FM_FIFO_Q(9 downto 8),
+	cs_n	=> '0',
+	--wr_n	=> FM_RNW_FIFO,
+	wr_n	=> FM_RNW,
+	--din		=> FM_FIFO_Q(7 downto 0),
+	din		=> FM_DI,
 	dout	=> FM_DO,
 
 	snd_left	=> FM_LEFT,
@@ -886,76 +876,40 @@ INTERLACE <= '0';
 process( MRST_N, MCLK, VCLKCNT )
 begin
 	if MRST_N = '0' then
-		VCLK <= '1';
-		ZCLK <= '0';
 		VCLKCNT <= "001"; -- important for SDRAM controller (EDIT: not needed anymore)
+		ZCLKCNT <= (others => '0');
 		TG68_CYCLE <= '0';
 	elsif rising_edge(MCLK) then
-		ZCLK_ENA <= '0';
-		ZCLK_nENA <= '0';
+		ZCLKCNT <= ZCLKCNT + 1;
+		if ZCLKCNT = "1110" then
+			ZCLKCNT <= (others => '0');
+		end if;
+
+		if ZCLKCNT = "0000" then
+			ZCLK_ENA <= '1';
+		else
+			ZCLK_ENA <= '0';
+		end if;
+
+		if ZCLKCNT = "1000" then
+			ZCLK_nENA <= '1';
+		else
+			ZCLK_nENA <= '0';
+		end if;
 
 		VCLKCNT <= VCLKCNT + 1;
-		if VCLKCNT = "000" then
-			ZCLK <= not ZCLK;
-			ZCLK_ENA<=not ZCLK; -- Replace rising edge
-			ZCLK_nENA<=ZCLK; -- Replace falling edge
-		end if;
 		if VCLKCNT = "110" then
 			VCLKCNT <= "000";
-		end if;
-		if VCLKCNT <= "011" then
-			VCLK <= '1';
-		else
-			VCLK <= '0';
 		end if;
 		if VCLKCNT = "011" then
 			TG68_CYCLE <= '1';
 		else
 			TG68_CYCLE <= '0';
 		end if;
-	end if;
-end process;
-
-process( MRST_N, MCLK )
-begin
-	if MRST_N = '0' then
-		SCLK_EN <= '1';
-		SCLKCNT <= "000001";
-	elsif falling_edge(MCLK) then
-
-		SCLKCNT <= SCLKCNT + 1;
-		if SCLKCNT = X"29" then
-			SCLKCNT <= (others => '0');
-		end if;
-
-		if SCLKCNT = "0" then
-			SCLK_EN <= '1';
-		else
-			SCLK_EN <= '0';
-		end if;
-
-		if VCLKCNT = "001" then
+		if VCLKCNT = "011" then
 			FCLK_EN <= '1';
 		else
 			FCLK_EN <= '0';
-		end if;
-
-	end if;
-end process;
-
-process( MRST_N, MCLK )
-begin
-	if MRST_N = '0' then
-		T80_CLKEN <= '1';
-		ZCLKCNT <= (others => '0');
-	elsif rising_edge(MCLK ) then
-		if ZCLK_ENA='1' then
-			ZCLKCNT <= ZCLKCNT + 1;
-			T80_CLKEN <= '1';
-			if ZCLKCNT = "1110" then
-				ZCLKCNT <= (others => '0');
-				T80_CLKEN <= '0';
-			end if;
 		end if;
 	end if;
 end process;
@@ -970,10 +924,8 @@ VBUS_DATA <= DMA_FLASH_D when DMA_FLASH_SEL = '1'
 
 -- 68K INPUTS
 TG68_RES_N <= MRST_N and ext_bootdone;
---TG68_CLK <= VCLK;
---TG68_CLKE <= '1';
 
-TG68_DTACK_N <= '0' when bootState /= BOOT_DONE
+TG68_DTACK_N <= '1' when bootState /= BOOT_DONE
 	else TG68_FLASH_DTACK_N when TG68_FLASH_SEL = '1'
 	else TG68_SDRAM_DTACK_N when TG68_SDRAM_SEL = '1' 
 	else TG68_ZRAM_DTACK_N when TG68_ZRAM_SEL = '1' 
@@ -982,7 +934,6 @@ TG68_DTACK_N <= '0' when bootState /= BOOT_DONE
 	else TG68_IO_DTACK_N when TG68_IO_SEL = '1' 
 	else TG68_BAR_DTACK_N when TG68_BAR_SEL = '1' 
 	else TG68_VDP_DTACK_N when TG68_VDP_SEL = '1' 
-	else TG68_FM_DTACK_N when TG68_FM_SEL = '1' 
 	else '0';
 TG68_DI(15 downto 8) <= TG68_FLASH_D(15 downto 8) when TG68_FLASH_SEL = '1' and TG68_UDS_N = '0'
 	else TG68_SDRAM_D(15 downto 8) when TG68_SDRAM_SEL = '1' and TG68_UDS_N = '0'
@@ -1025,8 +976,6 @@ begin
 	end if;
 end process;
 
-T80_CLK_N <= ZCLK;
---T80_INT_N <= '1';
 T80_NMI_N <= '1';
 T80_BUSRQ_N <= not ZBUSREQ;
 
@@ -1038,7 +987,6 @@ T80_WAIT_N <= '0' when bootState /= BOOT_DONE
 	else not T80_IO_DTACK_N when T80_IO_SEL = '1' 
 	else not T80_BAR_DTACK_N when T80_BAR_SEL = '1'
 	else not T80_VDP_DTACK_N when T80_VDP_SEL = '1'
-	else not T80_FM_DTACK_N when T80_FM_SEL = '1'
 	else '1';
 T80_DI <= T80_SDRAM_D when T80_SDRAM_SEL = '1'
 	else T80_ZRAM_D when T80_ZRAM_SEL = '1'
@@ -1054,22 +1002,6 @@ T80_DI <= T80_SDRAM_D when T80_SDRAM_SEL = '1'
 TG68_OS_DTACK_N <= '0';
 OS_OEn <= '0';
 TG68_OS_SEL <= '1' when TG68_A(23 downto 22) = "00" and TG68_RD = '1' and CART_EN = '0' else '0';
-
---process( MRST_N, MCLK, TG68_SEL, TG68_RNW,
---	TG68_A, TG68_DO, CART_EN )
---begin
---
---	if TG68_A(23 downto 22) = "00" 
---		and TG68_SEL = '1' 
---		and TG68_RNW = '1' 
---		and CART_EN = '0'
---	then
---		TG68_OS_SEL <= '1';
---	else
---		TG68_OS_SEL <= '0';
---	end if;
---
---end process;
 
 -- CONTROL AREA
 process( MRST_N, MCLK, TG68_SEL, TG68_RNW,
@@ -1426,121 +1358,14 @@ end process;
 -- C0 = 11000000
 -- DF = 11011111
 -- FM AREA
-process( MRST_N, MCLK, TG68_SEL, TG68_RNW,
-	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
-	BAR, T80_A, T80_MREQ_N, T80_RD_N, T80_WR_N )
-begin
-	if TG68_A(23 downto 16) = x"A0" and TG68_A(14 downto 13) = "10"
-		and TG68_SEL = '1' 
-	then	
-		TG68_FM_SEL <= '1';		
-	else
-		TG68_FM_SEL <= '0';
-	end if;
-
-	if T80_A(15 downto 13) = "010"
-		and T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0')
-	then
-		T80_FM_SEL <= '1';			
-	else
-		T80_FM_SEL <= '0';
-	end if;
-	
-	if MRST_N = '0' then
-		TG68_FM_DTACK_N <= '1';	
-		T80_FM_DTACK_N <= '1';	
-		
-		FM_SEL <= '0';
-		FM_RNW <= '1';
---		FM_UDS_N <= '1';
---		FM_LDS_N <= '1';
-		FM_A <= (others => 'Z');
-		
-		FMC <= FMC_IDLE;
-		
-	elsif rising_edge(MCLK) then
-		if TG68_FM_SEL = '0' then 
-			TG68_FM_DTACK_N <= '1';
-		end if;
-		if T80_FM_SEL = '0' then 
-			T80_FM_DTACK_N <= '1';
-		end if;
-
-		case FMC is
-		when FMC_IDLE =>
-			if VCLK='0' then
-				if TG68_FM_SEL = '1' and TG68_FM_DTACK_N = '1' then
-					FM_SEL <= '1';
-					FM_A <= TG68_A(1 downto 0);
-					FM_RNW <= TG68_RNW;
-					if TG68_A(0)='0' then
-						FM_DI <= TG68_DO(15 downto 8);
-					else
-						FM_DI <= TG68_DO(7 downto 0);
-					end if;
-
-	--				FM_UDS_N <= TG68_UDS_N;
-	--				FM_LDS_N <= TG68_LDS_N;
-	--				FM_DI <= TG68_DO(7 downto 0);
-					FMC <= FMC_TG68_ACC;
-				elsif T80_FM_SEL = '1' and T80_FM_DTACK_N = '1' then
-					FM_SEL <= '1';
-					FM_A <= T80_A(1 downto 0);
-					FM_RNW <= T80_WR_N;
-	--				if T80_A(0) = '0' then
-	--					FM_UDS_N <= '0';
-	--					FM_LDS_N <= '1';
-	--				else
-	--					FM_UDS_N <= '1';
-	--					FM_LDS_N <= '0';				
-	--				end if;
-					FM_DI <= T80_DO;
-					FMC <= FMC_T80_ACC;			
-				end if;
-			end if;
-		when FMC_TG68_ACC =>
-			-- sync this to 8MHz clock
-			if VCLK = '1' then
-				FM_SEL <= '0';
-				TG68_FM_D <= (others=>'0');
-				if TG68_A(0)='0' then
-					TG68_FM_D(15 downto 8) <= FM_DO;
-				else
-					TG68_FM_D(7 downto 0) <= FM_DO;
-				end if;
-
-				TG68_FM_DTACK_N <= '0';
-				FMC <= FMC_DESEL;
-			end if;
-
-		when FMC_T80_ACC =>
-			-- sync this to 8MHz clock
-			if VCLK = '1' then
-				FM_SEL <= '0';
---				if T80_A(0) = '0' then
---					T80_FM_D <= FM_DO(15 downto 8);
---				else
-					T80_FM_D <= FM_DO;
---				end if;
-				T80_FM_DTACK_N <= '0';
-				FMC <= FMC_DESEL;
-			end if;
-
-		when FMC_DESEL =>
---			if FM_DTACK_N = '1' then
-				FM_RNW <= '1';
---				FM_UDS_N <= '1';
---				FM_LDS_N <= '1';
-				FM_A <= (others => 'Z');
-
-				FMC <= FMC_IDLE;
---			end if;
-			
-		when others => null;
-		end case;
-	end if;
-	
-end process;
+TG68_FM_SEL <= '1' when  TG68_A(23 downto 16) = x"A0" and TG68_A(14 downto 13) = "10" and TG68_SEL = '1' else '0';
+T80_FM_SEL <= '1' when T80_A(15 downto 13) = "010" and T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0') else '0';
+FM_SEL <= T80_FM_SEL or TG68_FM_SEL;
+FM_RNW <= T80_WR_N when T80_FM_SEL = '1' else TG68_RNW when TG68_FM_SEL = '1' else '1';
+FM_A <= T80_A(1 downto 0) when T80_FM_SEL = '1' else TG68_A(1 downto 0);
+FM_DI <= T80_DO when T80_FM_SEL = '1' else TG68_DO(15 downto 8) when TG68_A(0)='0' else TG68_DO(7 downto 0);
+TG68_FM_D <= FM_DO & FM_DO;
+T80_FM_D <= FM_DO;
 
 -- PSG AREA
 -- Z80: 7F11h
@@ -1548,32 +1373,8 @@ end process;
 
 T80_PSG_SEL <= '1' when T80_A(15 downto 3) = x"7F1"&'0' and T80_MREQ_N = '0' and T80_WR_N = '0' else '0';
 TG68_PSG_SEL <= '1' when TG68_A(31 downto 3) = x"C0001"&'0' and TG68_SEL = '1' and TG68_RNW='0' else '0';
-
-process( MRST_N, MCLK, TG68_SEL, 
-	TG68_A, TG68_DO,
-	BAR, T80_A, T80_MREQ_N, T80_WR_N )
-begin
-	
-	if MRST_N = '0' then
-		PSG_SEL<= '0';
-	elsif rising_edge(MCLK) then
-		if ZCLK_nENA='1' then
-			PSG_SEL<= '0';
-			if TG68_PSG_SEL = '1' then
-				PSG_SEL <= '1';
-				if TG68_A(0)='0' then
-					PSG_DI <= TG68_DO(15 downto 8);
-				else
-					PSG_DI <= TG68_DO(7 downto 0);
-				end if;
-			elsif T80_PSG_SEL = '1' then
-				PSG_SEL <= '1';
-				PSG_DI <= T80_DO;		
-			end if;
-		end if;
-	end if;
-	
-end process;
+PSG_SEL <= T80_PSG_SEL or TG68_PSG_SEL;
+PSG_DI <= T80_DO when T80_PSG_SEL = '1' else TG68_DO(15 downto 8) when TG68_A(0)='0' else TG68_DO(7 downto 0);
 
 -- Z80:
 -- 60 = 01100000

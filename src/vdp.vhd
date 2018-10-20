@@ -147,6 +147,9 @@ signal FIFO_WR_POS	: std_logic_vector(1 downto 0);
 signal FIFO_RD_POS	: std_logic_vector(1 downto 0);
 signal FIFO_EMPTY	: std_logic;
 signal FIFO_FULL	: std_logic;
+signal FIFO_EN		: std_logic;
+signal FIFO_CNT		: std_logic_vector(5 downto 0);
+signal FIFO_SKIP	: std_logic;
 
 signal IN_DMA		: std_logic;
 signal IN_HBL		: std_logic;
@@ -2018,6 +2021,9 @@ begin
 		IN_HBL <= '0';
 		IN_VBL <= '1';
 
+		FIFO_EN <= '0';
+		FIFO_CNT <= (others => '0');
+
 	elsif rising_edge(CLK) then
 
 		if M3='0' then
@@ -2028,6 +2034,7 @@ begin
 		VINT_TG68_PENDING_SET <= '0';
 		VINT_T80_SET <= '0';
 		VINT_T80_CLR <= '0';
+		FIFO_EN <= '0';
 
 		HV_PIXDIV <= HV_PIXDIV + 1;
 		if (RS0 = '1' and H40 = '1' and 
@@ -2076,6 +2083,9 @@ begin
 				if HV_VCNT = V_DISP_HEIGHT - 1 then
 					IN_VBL <= '1';
 				end if;
+
+				FIFO_CNT <= (others=>'0');
+
 			end if;
 
 			if HV_HCNT = HBLANK_END then --active display
@@ -2095,6 +2105,17 @@ begin
 				then
 					VINT_T80_CLR <= '1';
 				end if;
+			end if;
+
+			if IN_VBL = '1' or DE='0' then
+				FIFO_EN <= '1';
+			else
+				FIFO_CNT <= FIFO_CNT + 1;
+				if (H40 = '0' and FIFO_CNT = 20) or
+				   (H40 = '1' and FIFO_CNT = 22) then
+				   FIFO_CNT <= (others => '0');
+				end if;
+				if FIFO_CNT = 0 then FIFO_EN <= '1'; end if;
 			end if;
 		end if;
 	end if;
@@ -2421,6 +2442,7 @@ begin
 		FIFO_WR_POS <= "00";
 		FIFO_EMPTY <= '1';
 		FIFO_FULL <= '0';
+		FIFO_SKIP <= '0';
 
 		DT_RD_DTACK_N <= '1';
 		DT_FF_DTACK_N <= '1';
@@ -2490,22 +2512,25 @@ begin
 			REG_SET_ACK <= '1';
 		end if;
 
-
 		if DT_ACTIVE = '1' then
 			case DTC is
 			when DTC_IDLE =>
-				if FIFO_RD_POS /= FIFO_WR_POS then
-					DTC <= DTC_FIFO_RD;
-				elsif DT_RD_SEL = '1' and DT_RD_DTACK_N = '1' then
-					case DT_RD_CODE is
-					when "1000" => -- CRAM Read
-						DTC <= DTC_CRAM_RD;
-					when "0100" => -- VSRAM Read
-						DTC <= DTC_VSRAM_RD;
-					when others => -- VRAM Read
-						DTC <= DTC_VRAM_RD1;
-					end case;					
-				else
+				if FIFO_EN = '1' then
+					FIFO_SKIP <= '0';
+				end if;
+				if FIFO_EN = '1' and FIFO_SKIP = '0' then
+					if FIFO_RD_POS /= FIFO_WR_POS then
+						DTC <= DTC_FIFO_RD;
+					elsif DT_RD_SEL = '1' and DT_RD_DTACK_N = '1' then
+						case DT_RD_CODE is
+						when "1000" => -- CRAM Read
+							DTC <= DTC_CRAM_RD;
+						when "0100" => -- VSRAM Read
+							DTC <= DTC_VSRAM_RD;
+						when others => -- VRAM Read
+							DTC <= DTC_VRAM_RD1;
+						end case;
+					end if;
 				end if;
 			
 			when DTC_FIFO_RD =>
@@ -2524,6 +2549,8 @@ begin
 				end case;
 			
 			when DTC_VRAM_WR1 =>
+				--skip next FIFO slot since we write 16 bit now instead of the original 8
+				FIFO_SKIP <= '1';
 -- synthesis translate_off					
 				write(L, string'("   VRAM WR ["));
 				hwrite(L, x"00" & DT_WR_ADDR(15 downto 1) & '0');

@@ -325,6 +325,7 @@ set_global_assignment -name ENABLE_NCE_PIN OFF
 set_global_assignment -name ENABLE_BOOT_SEL_PIN OFF
 set_global_assignment -name CYCLONEIII_CONFIGURATION_SCHEME "PASSIVE SERIAL"
 set_global_assignment -name FORCE_CONFIGURATION_VCCIO ON
+set_global_assignment -name QIP_FILE ../../src/T80/T80.qip
 set_global_assignment -name QIP_FILE ../../src/fm_fifo.qip
 set_global_assignment -name VHDL_FILE ../../../Board/mist/MIST_Toplevel.vhd
 set_global_assignment -name SYSTEMVERILOG_FILE ../../Board/mist/rgb2ypbpr.sv
@@ -339,12 +340,6 @@ set_global_assignment -name VHDL_FILE ../../src/TG68KdotC_Kernel.vhd
 set_global_assignment -name VHDL_FILE ../../src/TG68K_Pack.vhd
 set_global_assignment -name VHDL_FILE ../../src/TG68K_ALU.vhd
 set_global_assignment -name VHDL_FILE ../../src/virtual_toplevel.vhd
-set_global_assignment -name VHDL_FILE ../../src/T80/T80se.vhd
-set_global_assignment -name VHDL_FILE ../../src/T80/T80_Reg.vhd
-set_global_assignment -name VHDL_FILE ../../src/T80/T80_Pack.vhd
-set_global_assignment -name VHDL_FILE ../../src/T80/T80_MCode.vhd
-set_global_assignment -name VHDL_FILE ../../src/T80/T80_ALU.vhd
-set_global_assignment -name VHDL_FILE ../../src/T80/T80.vhd
 set_global_assignment -name VHDL_FILE ../../src/vdp_common.vhd
 set_global_assignment -name VHDL_FILE ../../src/vdp.vhd
 set_global_assignment -name VHDL_FILE ../../src/sdram_controller.vhd

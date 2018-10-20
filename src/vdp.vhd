@@ -202,6 +202,7 @@ signal IE0			: std_logic;
 
 signal M3			: std_logic;
 signal DE			: std_logic;
+signal M5			: std_logic;
 
 signal DMA			: std_logic;
 
@@ -731,6 +732,7 @@ IM <= REG(12)(1);
 IM2 <= REG(12)(2);
 
 DE <= REG(1)(6);
+M5 <= REG(1)(2);
 
 -- Base addresses
 HSCB <= REG(13)(5 downto 0);
@@ -2379,7 +2381,10 @@ begin
 		end if;
 
 		if REG_SET_REQ = '1' and REG_SET_ACK = '0' and IN_DMA = '0' then
-			REG( CONV_INTEGER( REG_LATCH(12 downto 8)) ) <= REG_LATCH(7 downto 0);
+			if (M5 = '1' or REG_LATCH(12 downto 8) <= 10) then
+				-- mask registers above 10 in Mode4
+				REG( CONV_INTEGER( REG_LATCH(12 downto 8)) ) <= REG_LATCH(7 downto 0);
+			end if;
 			REG_SET_ACK <= '1';
 		end if;
 

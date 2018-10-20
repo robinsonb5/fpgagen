@@ -2083,9 +2083,6 @@ begin
 				if HV_VCNT = V_DISP_HEIGHT - 1 then
 					IN_VBL <= '1';
 				end if;
-
-				FIFO_CNT <= (others=>'0');
-
 			end if;
 
 			if HV_HCNT = HBLANK_END then --active display
@@ -2107,15 +2104,17 @@ begin
 				end if;
 			end if;
 
-			if IN_VBL = '1' or DE='0' then
+			FIFO_CNT <= FIFO_CNT + 1;
+			if (H40 = '0' and FIFO_CNT = 20) or
+			   (H40 = '1' and FIFO_CNT = 22) or
+			   HV_HCNT = H_INT_POS 
+			then
+			   FIFO_CNT <= (others => '0');
+			end if;
+			if (IN_VBL = '0' and DE = '1' and FIFO_CNT = 0) or
+				IN_VBL = '1' or DE = '0'
+			then
 				FIFO_EN <= '1';
-			else
-				FIFO_CNT <= FIFO_CNT + 1;
-				if (H40 = '0' and FIFO_CNT = 20) or
-				   (H40 = '1' and FIFO_CNT = 22) then
-				   FIFO_CNT <= (others => '0');
-				end if;
-				if FIFO_CNT = 0 then FIFO_EN <= '1'; end if;
 			end if;
 		end if;
 	end if;

@@ -61,13 +61,7 @@ component vdp
                 G               : out std_logic_vector(3 downto 0);
                 B               : out std_logic_vector(3 downto 0);
                 HS              : out std_logic;
-                VS              : out std_logic;
-
-                VGA_R           : out std_logic_vector(3 downto 0);
-                VGA_G           : out std_logic_vector(3 downto 0);
-                VGA_B           : out std_logic_vector(3 downto 0);
-                VGA_HS          : out std_logic;
-                VGA_VS          : out std_logic
+                VS              : out std_logic
         );
 end component ;
 

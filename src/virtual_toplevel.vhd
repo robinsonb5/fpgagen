@@ -602,7 +602,7 @@ TG68_IO <= '1' when TG68_WR = '1' or TG68_RD = '1' else '0';
 -- When doing internal processing (TG68_IO = 0, e.g. mul, div or shift) it 
 -- is enabled at full ~7.6MHz to behave similar to a real 68000.
 TG68_ENA <= '1' when TG68_CYCLE = '1' and ((TG68_SEL = '0' and TG68_IO = '0') or (TG68_ENA_DIV = "11" and TG68_SEL = '1' and TG68_DTACK_N = '0')) else '0';
-TG68_INTACK <= '1' when TG68_ENA = '1' and TG68_IO = '1' and TG68_FC = "111" else '0';
+TG68_INTACK <= '1' when TG68_SEL = '1' and TG68_FC = "111" else '0';
 
 -- 68K
 tg68 : entity work.TG68KdotC_Kernel

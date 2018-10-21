@@ -38,10 +38,6 @@ library IEEE;
 
 package vdp_common is
 
-constant CLOCKS_PER_LINE    : integer := 3420;
-constant VGA_HS_CLOCKS          : integer := 204;       -- 3.77 us
-
-constant VGA_VS_LINES           : integer := 1;         -- 0.06 ms
 constant VS_LINES               : integer := 3;
 
 -- Timing values from the Exodus emulator in HV_HCNT and HV_VCNT values
@@ -57,11 +53,11 @@ constant HBLANK_START_H40       : integer := 357;
 
 -- HSYNC moved a bit before the active area from the reference
 -- to provide enough back porch
-constant HSYNC_START_H32        : integer := 472-5; -- -40
-constant HSYNC_START_H40        : integer := 460-2; -- -52
+constant HSYNC_START_H32        : integer := 466; --472; -- -40
+constant HSYNC_START_H40        : integer := 457; --460; -- -52
 
-constant HSYNC_END_H32          : integer := 498-5; -- -14
-constant HSYNC_END_H40          : integer := 492-2; -- -20
+constant HSYNC_END_H32          : integer := 492; --498; -- -14
+constant HSYNC_END_H40          : integer := 488; --492; -- -20
 
 constant H_INT_H32              : integer := 265;
 constant H_INT_H40              : integer := 329;

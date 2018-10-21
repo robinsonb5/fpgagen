@@ -91,13 +91,7 @@ entity vdp is
 		G		: out std_logic_vector(3 downto 0);
 		B		: out std_logic_vector(3 downto 0);
 		HS		: out std_logic;
-		VS		: out std_logic;
-		
-		VGA_R		: out std_logic_vector(3 downto 0);
-		VGA_G		: out std_logic_vector(3 downto 0);
-		VGA_B		: out std_logic_vector(3 downto 0);
-		VGA_HS		: out std_logic;
-		VGA_VS		: out std_logic
+		VS		: out std_logic
 	);
 end vdp;
 
@@ -208,6 +202,7 @@ signal IE0			: std_logic;
 
 signal M3			: std_logic;
 signal DE			: std_logic;
+signal M5			: std_logic;
 
 signal DMA			: std_logic;
 
@@ -323,10 +318,6 @@ signal DMA_SOURCE	: std_logic_vector(15 downto 0);
 ----------------------------------------------------------------
 -- VIDEO COUNTING
 ----------------------------------------------------------------
-signal H_CNT		: std_logic_vector(11 downto 0);
-signal H_VGA_CNT	: std_logic_vector(10 downto 0);
-signal V_CNT		: std_logic_vector(9 downto 0);
-
 signal V_ACTIVE		: std_logic;
 signal Y			: std_logic_vector(7 downto 0);
 
@@ -610,21 +601,6 @@ type pix_t is (
 signal PIX_MODE		: pix_t;
 signal T_COLOR			: std_logic_vector(15 downto 0);
 
-signal COLOR		: std_logic_vector(11 downto 0);
-signal FF_HS		: std_logic;
-signal FF_VS		: std_logic;
-
--- Scandoubler
-type scanline_t is array(0 to (CLOCKS_PER_LINE/2)-1) of std_logic_vector(11 downto 0);
-signal LINE0		: scanline_t;
-signal LINE1		: scanline_t; 
-
-signal FF_VGA_R			: std_logic_vector(3 downto 0);
-signal FF_VGA_G			: std_logic_vector(3 downto 0);
-signal FF_VGA_B			: std_logic_vector(3 downto 0);
-signal FF_VGA_HS		: std_logic;
-signal FF_VGA_VS		: std_logic;
-
 signal FF_R			: std_logic_vector(3 downto 0);
 signal FF_G			: std_logic_vector(3 downto 0);
 signal FF_B			: std_logic_vector(3 downto 0);
@@ -756,6 +732,7 @@ IM <= REG(12)(1);
 IM2 <= REG(12)(2);
 
 DE <= REG(1)(6);
+M5 <= REG(1)(2);
 
 -- Base addresses
 HSCB <= REG(13)(5 downto 0);
@@ -2083,9 +2060,6 @@ begin
 				if HV_VCNT = V_DISP_HEIGHT - 1 then
 					IN_VBL <= '1';
 				end if;
-
-				FIFO_CNT <= (others=>'0');
-
 			end if;
 
 			if HV_HCNT = HBLANK_END then --active display
@@ -2107,15 +2081,17 @@ begin
 				end if;
 			end if;
 
-			if IN_VBL = '1' or DE='0' then
+			FIFO_CNT <= FIFO_CNT + 1;
+			if (H40 = '0' and FIFO_CNT = 20) or
+			   (H40 = '1' and FIFO_CNT = 22) or
+			   HV_HCNT = H_INT_POS 
+			then
+			   FIFO_CNT <= (others => '0');
+			end if;
+			if (IN_VBL = '0' and DE = '1' and FIFO_CNT = 0) or
+				IN_VBL = '1' or DE = '0'
+			then
 				FIFO_EN <= '1';
-			else
-				FIFO_CNT <= FIFO_CNT + 1;
-				if (H40 = '0' and FIFO_CNT = 20) or
-				   (H40 = '1' and FIFO_CNT = 22) then
-				   FIFO_CNT <= (others => '0');
-				end if;
-				if FIFO_CNT = 0 then FIFO_EN <= '1'; end if;
 			end if;
 		end if;
 	end if;
@@ -2285,115 +2261,12 @@ end process;
 -- VIDEO OUTPUT
 ----------------------------------------------------------------
 -- VERTICAL SYNC
-FF_VS <= '0' when HV_VCNT >= VSYNC_START and HV_VCNT <= VSYNC_START + VS_LINES - 1 else '1';
-FF_HS <= '0' when HV_HCNT >= HSYNC_START and HV_HCNT <= HSYNC_END else '1';
+VS <= '0' when HV_VCNT >= VSYNC_START and HV_VCNT <= VSYNC_START + VS_LINES - 1 else '1';
+HS <= '0' when HV_HCNT >= HSYNC_START and HV_HCNT <= HSYNC_END else '1';
 
--- SCANDOUBLER
-
-process( RST_N, CLK )
-begin
-	if RST_N = '0' then
-		H_VGA_CNT <= (others => '0');
-		V_CNT <= (others => '0');
-		H_CNT <= (others => '0');
-	elsif rising_edge(CLK) then
-		if (H_CNT = CLOCKS_PER_LINE - 1) then
-			H_CNT <= (others => '0');
-		else
-			H_CNT <= H_CNT + 1;
-		end if;
-
-		if H_VGA_CNT = CLOCKS_PER_LINE/2-1 then
-			H_VGA_CNT <= (others => '0');
-			V_CNT <= V_CNT + 1;
-		else
-			H_VGA_CNT <= H_VGA_CNT + 1;
-		end if;
-
-		if HV_VCNT = VSYNC_START and HV_HCNT = HSYNC_START
-		then
-			V_CNT <= (others => '0');
-			H_VGA_CNT <= (others => '0');
-			H_CNT <= (others => '0');
-		end if;
-	end if;
-end process;
-
--- 15KHZ WRITES
-process( CLK )
-begin
-	if rising_edge(CLK) then
-		if H_CNT(0) = '1' then
-			COLOR <= FF_R & FF_G & FF_B;
-			if V_CNT(1) = '0' then
-				LINE0( CONV_INTEGER(H_CNT(11 downto 1)) ) <= FF_R & FF_G & FF_B;
-			else
-				LINE1( CONV_INTEGER(H_CNT(11 downto 1)) ) <= FF_R & FF_G & FF_B;
-			end if;
-		end if;
-	end if;
-end process;
-
--- 31KHZ READS
-process( CLK )
-variable RGB	: std_logic_vector(11 downto 0);
-begin
-	if rising_edge(CLK) then
-		if V_CNT(0) = (FIELD and INTERLACE) or INTERLACE = '0' then
-			if V_CNT(1) = '0' then
-				RGB := LINE1( CONV_INTEGER(H_VGA_CNT) );				
-			else
-				RGB := LINE0( CONV_INTEGER(H_VGA_CNT) );
-			end if;
-			FF_VGA_R <= RGB(11 downto 8);
-			FF_VGA_G <= RGB(7 downto 4);
-			FF_VGA_B <= RGB(3 downto 0);
-		else
-			FF_VGA_R <= (others => '0');
-			FF_VGA_G <= (others => '0');
-			FF_VGA_B <= (others => '0');
-		end if;
-	end if;
-end process;
-
--- VERTICAL SYNC
-process( RST_N, CLK )
-begin
-	if RST_N = '0' then
-		FF_VGA_VS <= '1';
-	elsif rising_edge(CLK) then
-		if V_CNT = 0 then
-			FF_VGA_VS <= '0';
-		elsif V_CNT = (VGA_VS_LINES*2) then
-			FF_VGA_VS <= '1';
-		end if;
-	end if;
-end process;
-
--- HORIZONTAL SYNC
-process( RST_N, CLK )
-begin
-	if RST_N = '0' then
-		FF_VGA_HS <= '1';
-	elsif rising_edge(CLK) then
-		if H_VGA_CNT = 0 then
-			FF_VGA_HS <= '0';
-		elsif H_VGA_CNT = VGA_HS_CLOCKS/2 then
-			FF_VGA_HS <= '1';
-		end if;
-	end if;
-end process;
-
-VGA_R <= FF_VGA_R;
-VGA_G <= FF_VGA_G;
-VGA_B <= FF_VGA_B;
-VGA_HS <= FF_VGA_HS;
-VGA_VS <= FF_VGA_VS;
-R <= COLOR(11 downto 8);
-G <= COLOR(7 downto 4);
-B <= COLOR(3 downto 0);
-HS <= FF_HS;
-VS <= FF_VS;
+R <= FF_R;
+G <= FF_G;
+B <= FF_B;
 
 ----------------------------------------------------------------
 -- VIDEO DEBUG
@@ -2508,7 +2381,10 @@ begin
 		end if;
 
 		if REG_SET_REQ = '1' and REG_SET_ACK = '0' and IN_DMA = '0' then
-			REG( CONV_INTEGER( REG_LATCH(12 downto 8)) ) <= REG_LATCH(7 downto 0);
+			if (M5 = '1' or REG_LATCH(12 downto 8) <= 10) then
+				-- mask registers above 10 in Mode4
+				REG( CONV_INTEGER( REG_LATCH(12 downto 8)) ) <= REG_LATCH(7 downto 0);
+			end if;
 			REG_SET_ACK <= '1';
 		end if;
 

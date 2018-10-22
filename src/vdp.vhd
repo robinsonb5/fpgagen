@@ -604,6 +604,8 @@ signal T_COLOR			: std_logic_vector(15 downto 0);
 signal FF_R			: std_logic_vector(3 downto 0);
 signal FF_G			: std_logic_vector(3 downto 0);
 signal FF_B			: std_logic_vector(3 downto 0);
+signal FF_VS		: std_logic;
+signal FF_HS		: std_logic;
 signal PIXOUT		: std_logic;
 
 begin
@@ -1967,7 +1969,8 @@ VSYNC_START     <= conv_std_logic_vector(VSYNC_START_PAL_V30, 9) when V30='1' an
               else conv_std_logic_vector(VSYNC_START_NTSC_V30, 9) when V30='1' and PAL='0'
               else conv_std_logic_vector(VSYNC_START_NTSC_V28, 9);
 V_DISP_START    <= conv_std_logic_vector(V_DISP_START_V30, 9) when V30='1'
-              else conv_std_logic_vector(V_DISP_START_V28, 9);
+              else conv_std_logic_vector(V_DISP_START_PAL_V28, 9) when PAL='1'
+			  else conv_std_logic_vector(V_DISP_START_NTSC_V28, 9);
 V_DISP_HEIGHT   <= conv_std_logic_vector(V_DISP_HEIGHT_V30, 9) when V30='1'
               else conv_std_logic_vector(V_DISP_HEIGHT_V28, 9);
 V_TOTAL_HEIGHT  <= conv_std_logic_vector(PAL_LINES, 9) when PAL='1'
@@ -2261,8 +2264,28 @@ end process;
 -- VIDEO OUTPUT
 ----------------------------------------------------------------
 -- VERTICAL SYNC
-VS <= '0' when HV_VCNT >= VSYNC_START and HV_VCNT <= VSYNC_START + VS_LINES - 1 else '1';
-HS <= '0' when HV_HCNT >= HSYNC_START and HV_HCNT <= HSYNC_END else '1';
+process( RST_N, CLK )
+begin
+	if RST_N = '0' then
+		FF_VS <= '1';
+		FF_HS <= '1';
+	elsif rising_edge(CLK) then
+		if HV_HCNT = HSYNC_START then
+			FF_HS <= '0';
+			if HV_VCNT = VSYNC_START then
+				FF_VS <= '0';
+			end if;
+		elsif HV_HCNT = HSYNC_END then
+			FF_HS <= '1';
+			if HV_VCNT = VSYNC_START + VS_LINES - 1 then
+				FF_VS <= '1';
+			end if;
+		end if;
+	end if;
+end process;
+
+VS <= FF_VS;
+HS <= FF_HS;
 
 R <= FF_R;
 G <= FF_G;

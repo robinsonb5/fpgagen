@@ -38,7 +38,7 @@ library IEEE;
 
 package vdp_common is
 
-constant VS_LINES               : integer := 3;
+constant VS_LINES               : integer := 4;
 
 -- Timing values from the Exodus emulator in HV_HCNT and HV_VCNT values
 
@@ -57,7 +57,7 @@ constant HSYNC_START_H32        : integer := 466; --472; -- -40
 constant HSYNC_START_H40        : integer := 457; --460; -- -52
 
 constant HSYNC_END_H32          : integer := 492; --498; -- -14
-constant HSYNC_END_H40          : integer := 488; --492; -- -20
+constant HSYNC_END_H40          : integer := 489; --492; -- -20
 
 constant H_INT_H32              : integer := 265;
 constant H_INT_H40              : integer := 329;
@@ -68,7 +68,8 @@ constant H_DISP_WIDTH_H40       : integer := 320;
 constant H_TOTAL_WIDTH_H32      : integer := 342;
 constant H_TOTAL_WIDTH_H40      : integer := 420;
 
-constant V_DISP_START_V28       : integer := 485; -- -27;
+constant V_DISP_START_PAL_V28   : integer := 458;
+constant V_DISP_START_NTSC_V28  : integer := 485; -- -27;
 constant V_DISP_START_V30       : integer := 466; -- -46
 
 constant V_DISP_HEIGHT_V28      : integer := 224;
@@ -77,10 +78,10 @@ constant V_DISP_HEIGHT_V30      : integer := 240;
 constant V_INT_V28              : integer := 224;
 constant V_INT_V30              : integer := 240;
 
-constant VSYNC_START_PAL_V28	: integer := 255;
-constant VSYNC_START_PAL_V30	: integer := 263;
-constant VSYNC_START_NTSC_V28	: integer := 231;
-constant VSYNC_START_NTSC_V30	: integer := 263; --never happen
+constant VSYNC_START_PAL_V28	: integer := 458;
+constant VSYNC_START_PAL_V30	: integer := 466;
+constant VSYNC_START_NTSC_V28	: integer := 485;
+constant VSYNC_START_NTSC_V30	: integer := 466;
 
 constant NTSC_LINES             : integer := 262;
 constant PAL_LINES              : integer := 312;

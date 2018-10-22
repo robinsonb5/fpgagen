@@ -467,7 +467,7 @@ osd_hs_i    <= gen_hs when scandoubler_disable = '1' else sd_hs;
 osd_vs_i    <= gen_vs when scandoubler_disable = '1' else sd_vs;
  
  -- If 15kHz Video - composite sync to VGA_HS and VGA_VS high for MiST RGB cable
-VGA_HS <= not (gen_hs xor gen_vs) when scandoubler_disable='1' or ypbpr='1' else sd_hs;
+VGA_HS <= not (gen_hs xor gen_vs) when scandoubler_disable='1' else not (sd_hs xor sd_vs) when ypbpr='1' else sd_hs;
 VGA_VS <= '1' when scandoubler_disable='1' or ypbpr='1' else sd_vs;
 VGA_R <= vga_pr_o when ypbpr='1' else osd_red_o;
 VGA_G <= vga_y_o  when ypbpr='1' else osd_green_o;

@@ -2721,18 +2721,12 @@ begin
 				DT_VRAM_SEL <= '1';
 				DT_VRAM_ADDR <= DMA_SOURCE(15 downto 1);
 				DT_VRAM_RNW <= '1';
-				if DMA_SOURCE(0) = '0' then
-					DT_VRAM_UDS_N <= '1';
-					DT_VRAM_LDS_N <= '0';
-				else
-					DT_VRAM_UDS_N <= '0';
-					DT_VRAM_LDS_N <= '1';									
-				end if;					
+				DT_VRAM_UDS_N <= '0';
+				DT_VRAM_LDS_N <= '0';
 				DMAC <= DMA_COPY_RD2;
-			
+
 			when DMA_COPY_RD2 =>
 				if early_ack_dt='0' then
---				if DT_VRAM_DTACK_N = '0' then
 -- synthesis translate_off					
 					write(L, string'("   VRAM RD ["));
 					hwrite(L, x"00" & DMA_SOURCE(15 downto 1) & '0');
@@ -2769,7 +2763,11 @@ begin
 				DT_VRAM_SEL <= '1';
 				DT_VRAM_ADDR <= ADDR(15 downto 1);
 				DT_VRAM_RNW <= '0';
-				DT_VRAM_DI <= DT_VRAM_DO;
+				if DMA_SOURCE(0) = '0' then
+					DT_VRAM_DI <= DT_VRAM_DO(7 downto 0) & DT_VRAM_DO(7 downto 0);
+				else
+					DT_VRAM_DI <= DT_VRAM_DO(15 downto 8) & DT_VRAM_DO(15 downto 8);
+				end if;
 				if ADDR(0) = '0' then
 					DT_VRAM_UDS_N <= '1';
 					DT_VRAM_LDS_N <= '0';
@@ -2781,7 +2779,6 @@ begin
 
 			when DMA_COPY_WR2 =>
 				if early_ack_dt='0' then
---				if DT_VRAM_DTACK_N = '0' then
 					DT_VRAM_SEL <= '0';	
 					ADDR <= ADDR + ADDR_STEP;
 					DMA_LENGTH <= DMA_LENGTH - 1;

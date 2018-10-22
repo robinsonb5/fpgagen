@@ -1275,16 +1275,13 @@ begin
 					BGAC <= BGAC_INIT;
 				end if;
 			when BGAC_INIT =>
-			
-				if Y = "00000000" then
-					if WVP = "00000" then
-						WIN_V <= WDOWN;
+				if Y(2 downto 0) = "000" then
+					if Y(7 downto 3) < WVP then
+						WIN_V <= not WDOWN;
 					else
-						WIN_V <= not(WDOWN);
+						WIN_V <= WDOWN;
 					end if;
-				elsif Y(2 downto 0) = "000" and Y(7 downto 3) = WVP then
-					WIN_V <= not WIN_V;
-				end if;				
+				end if;
 				if WHP = "00000" then
 					WIN_H <= WRIGT;
 				else

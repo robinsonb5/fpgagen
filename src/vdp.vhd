@@ -127,11 +127,11 @@ signal FF_DO		: std_logic_vector(15 downto 0);
 type reg_t is array(0 to 31) of std_logic_vector(7 downto 0);
 signal REG			: reg_t;
 signal PENDING		: std_logic;
-signal ADDR_LATCH	: std_logic_vector(15 downto 0);
+signal ADDR_LATCH	: std_logic_vector(16 downto 0);
 signal REG_LATCH	: std_logic_vector(15 downto 0);
 signal CODE			: std_logic_vector(5 downto 0);
 
-type fifo_addr_t is array(0 to 3) of std_logic_vector(15 downto 0);
+type fifo_addr_t is array(0 to 3) of std_logic_vector(16 downto 0);
 signal FIFO_ADDR	: fifo_addr_t;
 type fifo_data_t is array(0 to 3) of std_logic_vector(15 downto 0);
 signal FIFO_DATA	: fifo_data_t;
@@ -204,6 +204,7 @@ signal M3			: std_logic;
 signal DE			: std_logic;
 signal M5			: std_logic;
 
+signal M128			: std_logic;
 signal DMA			: std_logic;
 
 signal IM			: std_logic;
@@ -278,7 +279,7 @@ signal DT_VRAM_UDS_N	: std_logic;
 signal DT_VRAM_LDS_N	: std_logic;
 signal DT_VRAM_DTACK_N	: std_logic;
 
-signal DT_WR_ADDR	: std_logic_vector(15 downto 0);
+signal DT_WR_ADDR	: std_logic_vector(16 downto 0);
 signal DT_WR_DATA	: std_logic_vector(15 downto 0);
 
 signal DT_FF_DATA	: std_logic_vector(15 downto 0);
@@ -292,7 +293,7 @@ signal DT_RD_CODE	: std_logic_vector(3 downto 0);
 signal DT_RD_SEL	: std_logic;
 signal DT_RD_DTACK_N	: std_logic;
 
-signal ADDR			: std_logic_vector(15 downto 0);
+signal ADDR			: std_logic_vector(16 downto 0);
 signal ADDR_SET_REQ	: std_logic;
 signal ADDR_SET_ACK : std_logic;
 signal REG_SET_REQ	: std_logic;
@@ -729,6 +730,7 @@ IE0 <= REG(1)(5);
 M3 <= REG(0)(1);
 
 DMA <= REG(1)(4);
+M128 <= REG(1)(7);
 
 IM <= REG(12)(1);
 IM2 <= REG(12)(2);
@@ -804,7 +806,7 @@ begin
 						end if;
 						-- ADDR(15 downto 14) <= DI(1 downto 0);
 						-- ADDR_LATCH <= DI(1 downto 0);
-						ADDR_LATCH <= DI(1 downto 0) & ADDR(13 downto 0);
+						ADDR_LATCH <= DI(2 downto 0) & ADDR(13 downto 0);
 
 						-- In case of DMA VBUS request, hold the TG68 with DTACK_N
 						-- it should avoid the use of a CLKEN signal
@@ -2315,6 +2317,7 @@ VBUS_LDS_N <= FF_VBUS_LDS_N;
 VBUS_SEL <= FF_VBUS_SEL;
 
 process( RST_N, CLK )
+variable vram_address: std_logic_vector(16 downto 0);
 -- synthesis translate_off
 file F		: text open write_mode is "vdp_dbg.out";
 variable L	: line;
@@ -2443,11 +2446,13 @@ begin
 				when others => --invalid target
 					DTC <= DTC_WR_END;
 				end case;
-			
+
 			when DTC_VRAM_WR1 =>
-				--skip next FIFO slot since we write 16 bit now instead of the original 8
-				FIFO_SKIP <= '1';
--- synthesis translate_off					
+				if M128 = '0' then
+					--skip next FIFO slot since we write 16 bit now instead of the original 8
+					FIFO_SKIP <= '1';
+				end if;
+-- synthesis translate_off
 				write(L, string'("   VRAM WR ["));
 				hwrite(L, x"00" & DT_WR_ADDR(15 downto 1) & '0');
 				write(L, string'("] = ["));
@@ -2460,21 +2465,29 @@ begin
 				writeline(F,L);									
 -- synthesis translate_on								
 				DT_VRAM_SEL <= '1';
-				DT_VRAM_ADDR <= DT_WR_ADDR(15 downto 1);
 				DT_VRAM_RNW <= '0';
-				if DT_WR_ADDR(0) = '0' then 
-					DT_VRAM_DI <= DT_WR_DATA;
+				if M128 = '0' then
+					DT_VRAM_ADDR <= DT_WR_ADDR(15 downto 1);
+					if DT_WR_ADDR(0) = '0' then
+						DT_VRAM_DI <= DT_WR_DATA;
+					else
+						DT_VRAM_DI <= DT_WR_DATA(7 downto 0) & DT_WR_DATA(15 downto 8);
+					end if;
+					DT_VRAM_UDS_N <= '0';
+					DT_VRAM_LDS_N <= '0';
 				else
-					DT_VRAM_DI <= DT_WR_DATA(7 downto 0) & DT_WR_DATA(15 downto 8);
+				   --(((a & 2) >> 1) ^ 1) | ((a & $400) >> 9) | a & $3FC | ((a & $1F800) >> 1)
+					vram_address := (not DT_WR_ADDR(1 downto 1)) or (DT_WR_ADDR(10 downto 9) and x"2") or (DT_WR_ADDR and x"3fc") or (DT_WR_ADDR(16 downto 1) and x"fc00");
+					DT_VRAM_ADDR <= vram_address(15 downto 1);
+					DT_VRAM_DI <= DT_WR_DATA(7 downto 0) & DT_WR_DATA(7 downto 0);
+					DT_VRAM_UDS_N <= vram_address(0);
+					DT_VRAM_LDS_N <= not vram_address(0);
 				end if;
-				DT_VRAM_UDS_N <= '0';
-				DT_VRAM_LDS_N <= '0';
-					
+
 				DTC <= DTC_VRAM_WR2;
-			
+
 			when DTC_VRAM_WR2 =>
 				if early_ack_dt='0' then
---				if DT_VRAM_DTACK_N = '0' then
 					DT_VRAM_SEL <= '0';	
 					DTC <= DTC_WR_END;
 				end if;

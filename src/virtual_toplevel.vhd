@@ -193,8 +193,8 @@ signal TG68_STATE	: std_logic_vector(1 downto 0);
 signal TG68_FC	        : std_logic_vector(2 downto 0);
 
 signal TG68_ENA: std_logic;
+signal TG68_BUS_WAIT: std_logic_vector(1 downto 0);
 signal TG68_CYCLE: std_logic;
-signal TG68_ENA_DIV: std_logic_vector(1 downto 0);
 signal TG68_WR: std_logic;
 signal TG68_RD: std_logic;
 signal TG68_IO: std_logic;
@@ -551,23 +551,27 @@ zr : entity work.zram port map (
 process(MRST_N, MCLK)
 begin
 	if MRST_N = '0' then
-		TG68_ENA_DIV <= "00";
+		TG68_BUS_WAIT <= "00";
 		TG68_SEL <= '0';
 	elsif rising_edge( MCLK ) then
 		if TG68_CYCLE = '1' then
-			TG68_ENA_DIV <= TG68_ENA_DIV + 1;
-
-			-- activate memory/io SEL in bus cycle 2 if the cpu wants to do io
-			if TG68_IO = '1' and TG68_ENA_DIV = "01" then
-				TG68_SEL <= '1';
+			if TG68_BUS_WAIT = "00" then
+				-- start tg68 bus cycle for at least 4 clock cycles
+				if TG68_IO = '1' then
+					TG68_SEL <= '1';
+					TG68_BUS_WAIT <= "11";
+				end if;
+			elsif TG68_BUS_WAIT = "01" then
+				-- terminate bus cycle only on dtack
+				if TG68_DTACK_N = '0' then
+					TG68_BUS_WAIT <= "00";
+					TG68_SEL <= '0';
+				end if;
+			else
+				-- decrease bus cycle counter
+				TG68_BUS_WAIT <= TG68_BUS_WAIT - 1;
 			end if;
-
-			-- de-activate SEL in bus cycle 3 if dtack is ok. This happens at the same
-			-- time the tg68k is enabled due to dtack and proceeds one clock
-			if TG68_ENA_DIV = "11" and TG68_DTACK_N = '0' then
-				TG68_SEL <= '0';
-			end if;
-		end if;		
+		end if;
 	end if;
 end process;
 
@@ -579,7 +583,7 @@ TG68_IO <= '1' when TG68_WR = '1' or TG68_RD = '1' else '0';
 -- This matches the fact that the real 68000 spends four clock cycles per bus cycle.
 -- When doing internal processing (TG68_IO = 0, e.g. mul, div or shift) it 
 -- is enabled at full ~7.6MHz to behave similar to a real 68000.
-TG68_ENA <= '1' when TG68_CYCLE = '1' and ((TG68_SEL = '0' and TG68_IO = '0') or (TG68_ENA_DIV = "11" and TG68_SEL = '1' and TG68_DTACK_N = '0')) else '0';
+TG68_ENA <= '1' when TG68_CYCLE = '1' and (TG68_IO = '0' or (TG68_BUS_WAIT = "01" and TG68_DTACK_N = '0')) else '0';
 TG68_INTACK <= '1' when TG68_SEL = '1' and TG68_FC = "111" else '0';
 
 -- 68K

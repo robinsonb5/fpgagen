@@ -2087,16 +2087,19 @@ begin
 			end if;
 
 			FIFO_CNT <= FIFO_CNT + 1;
-			if (H40 = '0' and FIFO_CNT = 20) or
-			   (H40 = '1' and FIFO_CNT = 22) or
+			if (H40 = '0' and FIFO_CNT = 21) or
+			   (H40 = '1' and FIFO_CNT = 23) or
 			   HV_HCNT = H_INT_POS 
 			then
 			   FIFO_CNT <= (others => '0');
 			end if;
-			if (IN_VBL = '0' and DE = '1' and FIFO_CNT = 0) or
-				IN_VBL = '1' or DE = '0'
+			if IN_VBL = '0' and DE = '1' and FIFO_CNT = 0
 			then
 				FIFO_EN <= '1';
+			end if;
+			if IN_VBL = '1' or DE = '0'
+			then
+				FIFO_EN <= FIFO_CNT(0);
 			end if;
 		end if;
 	end if;

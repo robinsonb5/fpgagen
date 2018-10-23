@@ -1201,7 +1201,7 @@ begin
 		case VDPC is
 		when VDPC_IDLE =>
 			if TG68_VDP_SEL = '1' and TG68_VDP_DTACK_N = '1' then
-				if TG68_A(4) = '1' then 
+				if TG68_A(4 downto 3) = "10" then
 					-- PSG (used for debug)
 					if TG68_A(3 downto 1) = "000" and TG68_LDS_N = '0' and TG68_RNW = '0' then
 						HEXVALUE(15 downto 8) <= TG68_DO(7 downto 0);
@@ -1222,7 +1222,7 @@ begin
 					VDPC <= VDPC_TG68_ACC;
 				end if;				
 			elsif T80_VDP_SEL = '1' and T80_VDP_DTACK_N = '1' then
-				if T80_A(4) = '1' then
+				if T80_A(4 downto 3) = "10" then
 					-- PSG (used for debug)
 					if T80_A(3 downto 0) = "0001" and T80_WR_N = '0' then
 						HEXVALUE(15 downto 8) <= T80_DO;

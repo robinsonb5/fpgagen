@@ -214,6 +214,7 @@ signal ODD			: std_logic;
 signal HV8			: std_logic;
 signal HV			: std_logic_vector(15 downto 0);
 signal STATUS		: std_logic_vector(15 downto 0);
+signal DBG			: std_logic_vector(15 downto 0);
 
 -- Base addresses
 signal HSCB			: std_logic_vector(5 downto 0);
@@ -783,7 +784,7 @@ begin
 			FF_DTACK_N <= '1';
 		elsif SEL = '1' and FF_DTACK_N = '1' then			
 			if RNW = '0' then -- Write
-				if A(3 downto 2) = "00" then
+				if A(4 downto 2) = "000" then
 					-- Data Port
 					PENDING <= '0';
 
@@ -797,7 +798,7 @@ begin
 						FF_DTACK_N <= '0';
 					end if;
 
-				elsif A(3 downto 2) = "01" then
+				elsif A(4 downto 2) = "001" then
 					-- Control Port
 					if PENDING = '1' then
 						CODE(4 downto 2) <= DI(6 downto 4);
@@ -843,7 +844,9 @@ begin
 						-- Note : Genesis Plus does address setting
 						-- even in Register Set mode. Normal ?
 					end if;
-					
+				elsif A(4 downto 2) = "111" then
+					DBG <= DI;
+					FF_DTACK_N <= '0';
 				else
 					-- Unused (Lock-up)
 					FF_DTACK_N <= '0';
@@ -2117,6 +2120,8 @@ DT_ACTIVE <= '1';
 -- PIXEL COUNTER AND OUTPUT
 -- ALSO CLEARS THE SPRITE COLINFO BUFFER RIGHT AFTER RENDERING
 process( RST_N, CLK )
+	variable col : std_logic_vector(5 downto 0);
+	variable cold: std_logic_vector(5 downto 0);
 begin
 	OBJ_COLINFO_D_B <= (others => '0');
 	if RST_N = '0' then
@@ -2179,24 +2184,39 @@ begin
 				end if;
 
 				if DE='0' then
-					CRAM_ADDR_B <= BGCOL;
+					col := BGCOL;
 				elsif OBJ_COLINFO_Q_B(3 downto 0) /= "0000" and OBJ_COLINFO_Q_B(6) = '1' and
 					(SHI='0' or OBJ_COLINFO_Q_B(5 downto 1) /= "11111") then
-					CRAM_ADDR_B <= OBJ_COLINFO_Q_B(5 downto 0);
+					col := OBJ_COLINFO_Q_B(5 downto 0);
 				elsif BGA_COLINFO_Q_B(3 downto 0) /= "0000" and BGA_COLINFO_Q_B(6) = '1' then
-					CRAM_ADDR_B <= BGA_COLINFO_Q_B(5 downto 0);
+					col := BGA_COLINFO_Q_B(5 downto 0);
 				elsif BGB_COLINFO_Q_B(3 downto 0) /= "0000" and BGB_COLINFO_Q_B(6) = '1' then
-					CRAM_ADDR_B <= BGB_COLINFO_Q_B(5 downto 0);
+					col := BGB_COLINFO_Q_B(5 downto 0);
 				elsif OBJ_COLINFO_Q_B(3 downto 0) /= "0000" and
 					(SHI='0' or OBJ_COLINFO_Q_B(5 downto 1) /= "11111") then
-					CRAM_ADDR_B <= OBJ_COLINFO_Q_B(5 downto 0);
+					col := OBJ_COLINFO_Q_B(5 downto 0);
 				elsif BGA_COLINFO_Q_B(3 downto 0) /= "0000" then
-					CRAM_ADDR_B <= BGA_COLINFO_Q_B(5 downto 0);
+					col := BGA_COLINFO_Q_B(5 downto 0);
 				elsif BGB_COLINFO_Q_B(3 downto 0) /= "0000" then
-					CRAM_ADDR_B <= BGB_COLINFO_Q_B(5 downto 0);
+					col := BGB_COLINFO_Q_B(5 downto 0);
 				else
-					CRAM_ADDR_B <= BGCOL;
+					col := BGCOL;
 				end if;
+
+				case DBG(8 downto 7) is
+					when "00" => cold := BGCOL;
+					when "01" => cold := OBJ_COLINFO_Q_B(5 downto 0);
+					when "10" => cold := BGA_COLINFO_Q_B(5 downto 0);
+					when "11" => cold := BGB_COLINFO_Q_B(5 downto 0);
+				end case;
+
+				if DBG(6) = '1' then
+					col := cold;
+				elsif DBG(8 downto 7) /= "00" then
+					col := col and cold;
+				end if;
+
+				CRAM_ADDR_B <= col;
 
 			when "0101" =>
 				case PIX_MODE is

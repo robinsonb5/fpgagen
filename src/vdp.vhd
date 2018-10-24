@@ -127,11 +127,11 @@ signal FF_DO		: std_logic_vector(15 downto 0);
 type reg_t is array(0 to 31) of std_logic_vector(7 downto 0);
 signal REG			: reg_t;
 signal PENDING		: std_logic;
-signal ADDR_LATCH	: std_logic_vector(15 downto 0);
+signal ADDR_LATCH	: std_logic_vector(16 downto 0);
 signal REG_LATCH	: std_logic_vector(15 downto 0);
 signal CODE			: std_logic_vector(5 downto 0);
 
-type fifo_addr_t is array(0 to 3) of std_logic_vector(15 downto 0);
+type fifo_addr_t is array(0 to 3) of std_logic_vector(16 downto 0);
 signal FIFO_ADDR	: fifo_addr_t;
 type fifo_data_t is array(0 to 3) of std_logic_vector(15 downto 0);
 signal FIFO_DATA	: fifo_data_t;
@@ -204,6 +204,7 @@ signal M3			: std_logic;
 signal DE			: std_logic;
 signal M5			: std_logic;
 
+signal M128			: std_logic;
 signal DMA			: std_logic;
 
 signal IM			: std_logic;
@@ -213,6 +214,7 @@ signal ODD			: std_logic;
 signal HV8			: std_logic;
 signal HV			: std_logic_vector(15 downto 0);
 signal STATUS		: std_logic_vector(15 downto 0);
+signal DBG			: std_logic_vector(15 downto 0);
 
 -- Base addresses
 signal HSCB			: std_logic_vector(5 downto 0);
@@ -278,7 +280,7 @@ signal DT_VRAM_UDS_N	: std_logic;
 signal DT_VRAM_LDS_N	: std_logic;
 signal DT_VRAM_DTACK_N	: std_logic;
 
-signal DT_WR_ADDR	: std_logic_vector(15 downto 0);
+signal DT_WR_ADDR	: std_logic_vector(16 downto 0);
 signal DT_WR_DATA	: std_logic_vector(15 downto 0);
 
 signal DT_FF_DATA	: std_logic_vector(15 downto 0);
@@ -292,7 +294,7 @@ signal DT_RD_CODE	: std_logic_vector(3 downto 0);
 signal DT_RD_SEL	: std_logic;
 signal DT_RD_DTACK_N	: std_logic;
 
-signal ADDR			: std_logic_vector(15 downto 0);
+signal ADDR			: std_logic_vector(16 downto 0);
 signal ADDR_SET_REQ	: std_logic;
 signal ADDR_SET_ACK : std_logic;
 signal REG_SET_REQ	: std_logic;
@@ -729,6 +731,7 @@ IE0 <= REG(1)(5);
 M3 <= REG(0)(1);
 
 DMA <= REG(1)(4);
+M128 <= REG(1)(7);
 
 IM <= REG(12)(1);
 IM2 <= REG(12)(2);
@@ -781,7 +784,7 @@ begin
 			FF_DTACK_N <= '1';
 		elsif SEL = '1' and FF_DTACK_N = '1' then			
 			if RNW = '0' then -- Write
-				if A(3 downto 2) = "00" then
+				if A(4 downto 2) = "000" then
 					-- Data Port
 					PENDING <= '0';
 
@@ -795,7 +798,7 @@ begin
 						FF_DTACK_N <= '0';
 					end if;
 
-				elsif A(3 downto 2) = "01" then
+				elsif A(4 downto 2) = "001" then
 					-- Control Port
 					if PENDING = '1' then
 						CODE(4 downto 2) <= DI(6 downto 4);
@@ -804,7 +807,7 @@ begin
 						end if;
 						-- ADDR(15 downto 14) <= DI(1 downto 0);
 						-- ADDR_LATCH <= DI(1 downto 0);
-						ADDR_LATCH <= DI(1 downto 0) & ADDR(13 downto 0);
+						ADDR_LATCH <= DI(2 downto 0) & ADDR(13 downto 0);
 
 						-- In case of DMA VBUS request, hold the TG68 with DTACK_N
 						-- it should avoid the use of a CLKEN signal
@@ -841,7 +844,9 @@ begin
 						-- Note : Genesis Plus does address setting
 						-- even in Register Set mode. Normal ?
 					end if;
-					
+				elsif A(4 downto 2) = "111" then
+					DBG <= DI;
+					FF_DTACK_N <= '0';
 				else
 					-- Unused (Lock-up)
 					FF_DTACK_N <= '0';
@@ -2082,16 +2087,19 @@ begin
 			end if;
 
 			FIFO_CNT <= FIFO_CNT + 1;
-			if (H40 = '0' and FIFO_CNT = 20) or
-			   (H40 = '1' and FIFO_CNT = 22) or
+			if (H40 = '0' and FIFO_CNT = 21) or
+			   (H40 = '1' and FIFO_CNT = 23) or
 			   HV_HCNT = H_INT_POS 
 			then
 			   FIFO_CNT <= (others => '0');
 			end if;
-			if (IN_VBL = '0' and DE = '1' and FIFO_CNT = 0) or
-				IN_VBL = '1' or DE = '0'
+			if IN_VBL = '0' and DE = '1' and FIFO_CNT = 0
 			then
 				FIFO_EN <= '1';
+			end if;
+			if IN_VBL = '1' or DE = '0'
+			then
+				FIFO_EN <= FIFO_CNT(0);
 			end if;
 		end if;
 	end if;
@@ -2115,6 +2123,8 @@ DT_ACTIVE <= '1';
 -- PIXEL COUNTER AND OUTPUT
 -- ALSO CLEARS THE SPRITE COLINFO BUFFER RIGHT AFTER RENDERING
 process( RST_N, CLK )
+	variable col : std_logic_vector(5 downto 0);
+	variable cold: std_logic_vector(5 downto 0);
 begin
 	OBJ_COLINFO_D_B <= (others => '0');
 	if RST_N = '0' then
@@ -2177,24 +2187,39 @@ begin
 				end if;
 
 				if DE='0' then
-					CRAM_ADDR_B <= BGCOL;
+					col := BGCOL;
 				elsif OBJ_COLINFO_Q_B(3 downto 0) /= "0000" and OBJ_COLINFO_Q_B(6) = '1' and
 					(SHI='0' or OBJ_COLINFO_Q_B(5 downto 1) /= "11111") then
-					CRAM_ADDR_B <= OBJ_COLINFO_Q_B(5 downto 0);
+					col := OBJ_COLINFO_Q_B(5 downto 0);
 				elsif BGA_COLINFO_Q_B(3 downto 0) /= "0000" and BGA_COLINFO_Q_B(6) = '1' then
-					CRAM_ADDR_B <= BGA_COLINFO_Q_B(5 downto 0);
+					col := BGA_COLINFO_Q_B(5 downto 0);
 				elsif BGB_COLINFO_Q_B(3 downto 0) /= "0000" and BGB_COLINFO_Q_B(6) = '1' then
-					CRAM_ADDR_B <= BGB_COLINFO_Q_B(5 downto 0);
+					col := BGB_COLINFO_Q_B(5 downto 0);
 				elsif OBJ_COLINFO_Q_B(3 downto 0) /= "0000" and
 					(SHI='0' or OBJ_COLINFO_Q_B(5 downto 1) /= "11111") then
-					CRAM_ADDR_B <= OBJ_COLINFO_Q_B(5 downto 0);
+					col := OBJ_COLINFO_Q_B(5 downto 0);
 				elsif BGA_COLINFO_Q_B(3 downto 0) /= "0000" then
-					CRAM_ADDR_B <= BGA_COLINFO_Q_B(5 downto 0);
+					col := BGA_COLINFO_Q_B(5 downto 0);
 				elsif BGB_COLINFO_Q_B(3 downto 0) /= "0000" then
-					CRAM_ADDR_B <= BGB_COLINFO_Q_B(5 downto 0);
+					col := BGB_COLINFO_Q_B(5 downto 0);
 				else
-					CRAM_ADDR_B <= BGCOL;
+					col := BGCOL;
 				end if;
+
+				case DBG(8 downto 7) is
+					when "00" => cold := BGCOL;
+					when "01" => cold := OBJ_COLINFO_Q_B(5 downto 0);
+					when "10" => cold := BGA_COLINFO_Q_B(5 downto 0);
+					when "11" => cold := BGB_COLINFO_Q_B(5 downto 0);
+				end case;
+
+				if DBG(6) = '1' then
+					col := cold;
+				elsif DBG(8 downto 7) /= "00" then
+					col := col and cold;
+				end if;
+
+				CRAM_ADDR_B <= col;
 
 			when "0101" =>
 				case PIX_MODE is
@@ -2315,6 +2340,7 @@ VBUS_LDS_N <= FF_VBUS_LDS_N;
 VBUS_SEL <= FF_VBUS_SEL;
 
 process( RST_N, CLK )
+variable vram_address: std_logic_vector(16 downto 0);
 -- synthesis translate_off
 file F		: text open write_mode is "vdp_dbg.out";
 variable L	: line;
@@ -2443,11 +2469,13 @@ begin
 				when others => --invalid target
 					DTC <= DTC_WR_END;
 				end case;
-			
+
 			when DTC_VRAM_WR1 =>
-				--skip next FIFO slot since we write 16 bit now instead of the original 8
-				FIFO_SKIP <= '1';
--- synthesis translate_off					
+				if M128 = '0' then
+					--skip next FIFO slot since we write 16 bit now instead of the original 8
+					FIFO_SKIP <= '1';
+				end if;
+-- synthesis translate_off
 				write(L, string'("   VRAM WR ["));
 				hwrite(L, x"00" & DT_WR_ADDR(15 downto 1) & '0');
 				write(L, string'("] = ["));
@@ -2460,21 +2488,29 @@ begin
 				writeline(F,L);									
 -- synthesis translate_on								
 				DT_VRAM_SEL <= '1';
-				DT_VRAM_ADDR <= DT_WR_ADDR(15 downto 1);
 				DT_VRAM_RNW <= '0';
-				if DT_WR_ADDR(0) = '0' then 
-					DT_VRAM_DI <= DT_WR_DATA;
+				if M128 = '0' then
+					DT_VRAM_ADDR <= DT_WR_ADDR(15 downto 1);
+					if DT_WR_ADDR(0) = '0' then
+						DT_VRAM_DI <= DT_WR_DATA;
+					else
+						DT_VRAM_DI <= DT_WR_DATA(7 downto 0) & DT_WR_DATA(15 downto 8);
+					end if;
+					DT_VRAM_UDS_N <= '0';
+					DT_VRAM_LDS_N <= '0';
 				else
-					DT_VRAM_DI <= DT_WR_DATA(7 downto 0) & DT_WR_DATA(15 downto 8);
+				   --(((a & 2) >> 1) ^ 1) | ((a & $400) >> 9) | a & $3FC | ((a & $1F800) >> 1)
+					vram_address := (not DT_WR_ADDR(1 downto 1)) or (DT_WR_ADDR(10 downto 9) and x"2") or (DT_WR_ADDR and x"3fc") or (DT_WR_ADDR(16 downto 1) and x"fc00");
+					DT_VRAM_ADDR <= vram_address(15 downto 1);
+					DT_VRAM_DI <= DT_WR_DATA(7 downto 0) & DT_WR_DATA(7 downto 0);
+					DT_VRAM_UDS_N <= vram_address(0);
+					DT_VRAM_LDS_N <= not vram_address(0);
 				end if;
-				DT_VRAM_UDS_N <= '0';
-				DT_VRAM_LDS_N <= '0';
-					
+
 				DTC <= DTC_VRAM_WR2;
-			
+
 			when DTC_VRAM_WR2 =>
 				if early_ack_dt='0' then
---				if DT_VRAM_DTACK_N = '0' then
 					DT_VRAM_SEL <= '0';	
 					DTC <= DTC_WR_END;
 				end if;
@@ -2721,18 +2757,12 @@ begin
 				DT_VRAM_SEL <= '1';
 				DT_VRAM_ADDR <= DMA_SOURCE(15 downto 1);
 				DT_VRAM_RNW <= '1';
-				if DMA_SOURCE(0) = '0' then
-					DT_VRAM_UDS_N <= '1';
-					DT_VRAM_LDS_N <= '0';
-				else
-					DT_VRAM_UDS_N <= '0';
-					DT_VRAM_LDS_N <= '1';									
-				end if;					
+				DT_VRAM_UDS_N <= '0';
+				DT_VRAM_LDS_N <= '0';
 				DMAC <= DMA_COPY_RD2;
-			
+
 			when DMA_COPY_RD2 =>
 				if early_ack_dt='0' then
---				if DT_VRAM_DTACK_N = '0' then
 -- synthesis translate_off					
 					write(L, string'("   VRAM RD ["));
 					hwrite(L, x"00" & DMA_SOURCE(15 downto 1) & '0');
@@ -2769,7 +2799,11 @@ begin
 				DT_VRAM_SEL <= '1';
 				DT_VRAM_ADDR <= ADDR(15 downto 1);
 				DT_VRAM_RNW <= '0';
-				DT_VRAM_DI <= DT_VRAM_DO;
+				if DMA_SOURCE(0) = '0' then
+					DT_VRAM_DI <= DT_VRAM_DO(7 downto 0) & DT_VRAM_DO(7 downto 0);
+				else
+					DT_VRAM_DI <= DT_VRAM_DO(15 downto 8) & DT_VRAM_DO(15 downto 8);
+				end if;
 				if ADDR(0) = '0' then
 					DT_VRAM_UDS_N <= '1';
 					DT_VRAM_LDS_N <= '0';
@@ -2781,7 +2815,6 @@ begin
 
 			when DMA_COPY_WR2 =>
 				if early_ack_dt='0' then
---				if DT_VRAM_DTACK_N = '0' then
 					DT_VRAM_SEL <= '0';	
 					ADDR <= ADDR + ADDR_STEP;
 					DMA_LENGTH <= DMA_LENGTH - 1;

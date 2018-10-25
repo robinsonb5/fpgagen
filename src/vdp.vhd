@@ -1142,6 +1142,7 @@ begin
 					V_BGB_BASE := (NTBB & "0000000000000") + (BGB_X(9 downto 3) & "0") + BGB_Y(9 downto 3);
 				when "11" => -- HS 128 cells
 					V_BGB_BASE := (NTBB & "0000000000000") + (BGB_X(9 downto 3) & "0") + (BGB_Y(9 downto 3) & "0000000" & "0");
+				when others => null;
 				end case;
 				BGB_VRAM_ADDR <= V_BGB_BASE(15 downto 1);
 				BGB_SEL <= '1';
@@ -1377,6 +1378,7 @@ begin
 						V_BGA_BASE := V_BGA_XBASE + BGA_Y(9 downto 3);
 					when "11" => -- HS 128 cells
 						V_BGA_BASE := V_BGA_XBASE + (BGA_Y(9 downto 3) & "0000000" & "0");
+					when others => null;
 					end case;
 				end if;
 				
@@ -2237,6 +2239,7 @@ begin
 					when "01" => cold := OBJ_COLINFO_Q_B(5 downto 0);
 					when "10" => cold := BGA_COLINFO_Q_B(5 downto 0);
 					when "11" => cold := BGB_COLINFO_Q_B(5 downto 0);
+					when others => null;
 				end case;
 
 				if DBG(6) = '1' then

@@ -2370,7 +2370,6 @@ VBUS_LDS_N <= FF_VBUS_LDS_N;
 VBUS_SEL <= FF_VBUS_SEL;
 
 process( RST_N, CLK )
-variable vram_address: std_logic_vector(16 downto 0);
 -- synthesis translate_off
 file F		: text open write_mode is "vdp_dbg.out";
 variable L	: line;
@@ -2530,11 +2529,10 @@ begin
 					DT_VRAM_LDS_N <= '0';
 				else
 				   --(((a & 2) >> 1) ^ 1) | ((a & $400) >> 9) | a & $3FC | ((a & $1F800) >> 1)
-					vram_address := (not DT_WR_ADDR(1 downto 1)) or (DT_WR_ADDR(10 downto 9) and x"2") or (DT_WR_ADDR and x"3fc") or (DT_WR_ADDR(16 downto 1) and x"fc00");
-					DT_VRAM_ADDR <= vram_address(15 downto 1);
+					DT_VRAM_ADDR <= DT_WR_ADDR(16 downto 11) & DT_WR_ADDR(9 downto 2) & DT_WR_ADDR(10);
 					DT_VRAM_DI <= DT_WR_DATA(7 downto 0) & DT_WR_DATA(7 downto 0);
-					DT_VRAM_UDS_N <= vram_address(0);
-					DT_VRAM_LDS_N <= not vram_address(0);
+					DT_VRAM_UDS_N <= not DT_WR_ADDR(1);
+					DT_VRAM_LDS_N <= DT_WR_ADDR(1);
 				end if;
 
 				DTC <= DTC_VRAM_WR2;

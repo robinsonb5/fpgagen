@@ -583,7 +583,7 @@ TG68_IO <= '1' when TG68_WR = '1' or TG68_RD = '1' else '0';
 -- This matches the fact that the real 68000 spends four clock cycles per bus cycle.
 -- When doing internal processing (TG68_IO = 0, e.g. mul, div or shift) it 
 -- is enabled at full ~7.6MHz to behave similar to a real 68000.
-TG68_ENA <= '1' when TG68_CYCLE = '1' and (TG68_IO = '0' or (TG68_BUS_WAIT = "01" and TG68_DTACK_N = '0')) else '0';
+TG68_ENA <= '1' when TG68_CYCLE = '1' and (TG68_IO = '0' or (TG68_BUS_WAIT = "01" and TG68_DTACK_N = '0')) and VBUS_SEL = '0' else '0';
 TG68_INTACK <= '1' when TG68_SEL = '1' and TG68_FC = "111" else '0';
 
 -- 68K
@@ -795,7 +795,24 @@ DAC_RDATA <= std_logic_vector(signed(FM_MUX_RIGHT(11)&FM_MUX_RIGHT&"000") + sign
 ----------------------------------------------------------------
 
 T80_INT_N <= not VINT_T80;
-TG68_IPL_N <= "001" when VINT_TG68 = '1' else "011" when HINT = '1' else "111";
+--TG68_IPL_N <= "001" when VINT_TG68 = '1' else "011" when HINT = '1' else "111";
+process( MCLK )
+begin
+	if rising_edge(MCLK) then
+		-- some delay between the VDP and CPU interrupt lines
+		-- makes Fatal Rewind happy
+		-- probably it should belong to the CPU
+		if TG68_CYCLE = '1' and TG68_BUS_WAIT = "00" then
+			if VINT_TG68 = '1' then
+				TG68_IPL_N <= "001";
+			elsif HINT = '1' then
+				TG68_IPL_N <= "011";
+			else
+				TG68_IPL_N <= "111";
+			end if;
+		end if;
+	end if;
+end process;
 
 ----------------------------------------------------------------
 -- SWITCHES CONTROL

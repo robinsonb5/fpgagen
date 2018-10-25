@@ -90,8 +90,8 @@ entity Virtual_Toplevel is
 		ext_sw         : in std_logic_vector(15 downto 0) -- 2 - joy swap
 														  -- 3 - PSG EN
 														  -- 4 - FM EN
-														  -- 5 - PAL
-														  -- 6 - Export model
+														  -- 5 - Export
+														  -- 6 - PAL
 														  -- 7 - Swap y
 														  -- 8 - 3 Buttons only
 	);
@@ -412,6 +412,7 @@ signal KEY : std_logic_vector(3 downto 0);
 
 signal PAL : std_logic;
 signal model: std_logic;
+signal PAL_IO: std_logic;
 
 -- DEBUG
 signal HEXVALUE			: std_logic_vector(15 downto 0);
@@ -457,8 +458,8 @@ JOY_2(2) <= JOY_2_DOWN when JOY_SWAP = '0' else JOY_1_DOWN;
 JOY_2(3) <= JOY_2_UP when JOY_SWAP = '0' else JOY_1_UP;
 JOY_2(11 downto 4) <= joyb(11 downto 4) when JOY_SWAP = '0' else joya(11 downto 4);
 
-PAL <= SW(5);
-model <= SW(6);
+model <= SW(5);
+PAL <= SW(6);
 
 -- DIP Switches
 SW <= ext_sw;
@@ -689,6 +690,7 @@ port map(
 	DTACK_N		=> IO_DTACK_N,
 
 	PAL			=> PAL,
+	PAL_OUT		=> PAL_IO,
 	MODEL		=> model
 );
 
@@ -733,7 +735,7 @@ port map(
 	VBUS_SEL			=> VBUS_SEL,
 	VBUS_DTACK_N	=> VBUS_DTACK_N,
 
-	PAL					=> PAL,
+	PAL					=> PAL_IO,
 	R					=> VDP_RED,
 	G					=> VDP_GREEN,
 	B					=> VDP_BLUE,

@@ -79,8 +79,6 @@ entity vdp is
 		INTACK		: in std_logic;
 
 		VBUS_ADDR		: out std_logic_vector(23 downto 0);
-		VBUS_UDS_N		: out std_logic;
-		VBUS_LDS_N		: out std_logic;
 		VBUS_DATA		: in std_logic_vector(15 downto 0);
 		
 		VBUS_SEL		: out std_logic;
@@ -305,8 +303,6 @@ signal DT_DMAV_DATA	: std_logic_vector(15 downto 0);
 signal DMAF_SET_REQ	: std_logic;
 
 signal FF_VBUS_ADDR		: std_logic_vector(23 downto 0);
-signal FF_VBUS_UDS_N	: std_logic;
-signal FF_VBUS_LDS_N	: std_logic;
 signal FF_VBUS_SEL		: std_logic;
 
 signal DMA_VBUS		: std_logic;
@@ -2365,8 +2361,6 @@ end process;
 -- DATA TRANSFER CONTROLLER
 ----------------------------------------------------------------
 VBUS_ADDR <= FF_VBUS_ADDR;
-VBUS_UDS_N <= FF_VBUS_UDS_N;
-VBUS_LDS_N <= FF_VBUS_LDS_N;
 VBUS_SEL <= FF_VBUS_SEL;
 
 process( RST_N, CLK )
@@ -2396,8 +2390,6 @@ begin
 		DT_FF_DTACK_N <= '1';
 
 		FF_VBUS_ADDR <= (others => '0');
-		FF_VBUS_UDS_N <= '1';
-		FF_VBUS_LDS_N <= '1';
 		FF_VBUS_SEL	<= '0';
 		DT_VBUS_SEL <= '0';
 		
@@ -2888,8 +2880,6 @@ begin
 			when DMA_VBUS_RD =>
 				FF_VBUS_SEL <= '1';
 				FF_VBUS_ADDR <= REG(23)(6 downto 0) & DMA_SOURCE & '0';
-				FF_VBUS_UDS_N <= '0';
-				FF_VBUS_LDS_N <= '0';
 				DMAC <= DMA_VBUS_RD2;
 
 			when DMA_VBUS_RD2 =>

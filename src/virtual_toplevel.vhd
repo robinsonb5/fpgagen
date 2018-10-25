@@ -369,8 +369,6 @@ signal VINT_T80		: std_logic;
 
 -- VDP VBUS DMA
 signal VBUS_ADDR	: std_logic_vector(23 downto 0);
-signal VBUS_UDS_N	: std_logic;
-signal VBUS_LDS_N	: std_logic;
 signal VBUS_DATA	: std_logic_vector(15 downto 0);		
 signal VBUS_SEL		: std_logic;
 signal VBUS_DTACK_N	: std_logic;	
@@ -728,8 +726,6 @@ port map(
 	INTACK			=> TG68_INTACK,
 		
 	VBUS_ADDR		=> VBUS_ADDR,
-	VBUS_UDS_N		=> VBUS_UDS_N,
-	VBUS_LDS_N		=> VBUS_LDS_N,
 	VBUS_DATA		=> VBUS_DATA,
 		
 	VBUS_SEL			=> VBUS_SEL,

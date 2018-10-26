@@ -2512,8 +2512,10 @@ begin
 				hwrite(L, DT_WR_DATA);
 				write(L, string'("]"));
 				writeline(F,L);									
--- synthesis translate_on											
-				VSRAM( CONV_INTEGER(DT_WR_ADDR(6 downto 1)) ) <= DT_WR_DATA(10 downto 0);
+-- synthesis translate_on
+				if DT_WR_ADDR(6 downto 1) < 40 then
+					VSRAM( CONV_INTEGER(DT_WR_ADDR(6 downto 1)) ) <= DT_WR_DATA(10 downto 0);
+				end if;
 				DTC <= DTC_WR_END;
 
 			when DTC_WR_END =>
@@ -2562,7 +2564,13 @@ begin
 				DTC <= DTC_IDLE;
 				
 			when DTC_VSRAM_RD =>
-				DT_RD_DATA <= FIFO_DATA( CONV_INTEGER( FIFO_RD_POS ) )(15 downto 11) & VSRAM( CONV_INTEGER(ADDR(6 downto 1)) );
+				if ADDR(6 downto 1) < 40 then
+					DT_RD_DATA <= FIFO_DATA( CONV_INTEGER( FIFO_RD_POS ) )(15 downto 11) & VSRAM( CONV_INTEGER(ADDR(6 downto 1)) );
+				elsif ADDR(1) = '0' then
+					DT_RD_DATA <= FIFO_DATA( CONV_INTEGER( FIFO_RD_POS ) )(15 downto 11) & '0' & BGA_VSRAM0_LATCH;
+				else
+					DT_RD_DATA <= FIFO_DATA( CONV_INTEGER( FIFO_RD_POS ) )(15 downto 11) & '0' & BGB_VSRAM1_LATCH;
+				end if;
 				DT_RD_DTACK_N <= '0';
 				ADDR <= ADDR + ADDR_STEP;	
 				DTC <= DTC_IDLE;
@@ -2590,7 +2598,7 @@ begin
 			end if;
 
 			if DMA_FILL_PRE = '1' and DMAF_SET_REQ = '1' and FIFO_RD_POS = FIFO_WR_POS then
-				DT_DMAF_DATA <= DT_FF_DATA;
+				DT_DMAF_DATA <= DT_WR_DATA;
 				DMA_FILL <= '1';
 				DMAF_SET_REQ <= '0';
 			end if;
@@ -2624,14 +2632,17 @@ begin
 				DMAC <= DMA_FILL_START;
 
 			when DMA_FILL_START =>
-				case CODE(3 downto 0) is
-				when "0011" => -- CRAM Write
-					DMAC <= DMA_FILL_CRAM;
-				when "0101" => -- VSRAM Write
-					DMAC <= DMA_FILL_VSRAM;
-				when others => -- VRAM Write
-					DMAC <= DMA_FILL_WR;
-				end case;
+				if FIFO_RD_POS = FIFO_WR_POS then
+					-- suspend FILL if the FIFO is not empty
+					case CODE(3 downto 0) is
+					when "0011" => -- CRAM Write
+						DMAC <= DMA_FILL_CRAM;
+					when "0101" => -- VSRAM Write
+						DMAC <= DMA_FILL_VSRAM;
+					when others => -- VRAM Write
+						DMAC <= DMA_FILL_WR;
+					end case;
+				end if;
 
 			when DMA_FILL_CRAM =>
 				CRAM_WE_A <= '1';
@@ -2647,8 +2658,10 @@ begin
 				DMAC <= DMA_FILL_LOOP;
 				
 			when DMA_FILL_VSRAM =>
-				--VSRAM( CONV_INTEGER(ADDR(6 downto 1)) ) <= FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) )(10 downto 0);
-				VSRAM( CONV_INTEGER(ADDR(6 downto 1)) ) <= DT_DMAF_DATA(10 downto 0);
+				if ADDR(6 downto 1) < 40 then
+					VSRAM( CONV_INTEGER(ADDR(6 downto 1)) ) <= FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) )(10 downto 0);
+				end if;
+				--VSRAM( CONV_INTEGER(ADDR(6 downto 1)) ) <= DT_DMAF_DATA(10 downto 0);
 				ADDR <= ADDR + ADDR_STEP;
 				DMA_SOURCE <= DMA_SOURCE + ADDR_STEP;
 				DMA_LENGTH <= DMA_LENGTH - 1;

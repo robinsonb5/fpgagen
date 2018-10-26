@@ -109,7 +109,7 @@ signal CRAM_WE_B		: std_logic;
 signal CRAM_Q_A		: std_logic_vector(8 downto 0);
 signal CRAM_Q_B		: std_logic_vector(8 downto 0);
 
-type vsram_t is array(0 to 63) of std_logic_vector(10 downto 0);
+type vsram_t is array(0 to 39) of std_logic_vector(10 downto 0);
 signal VSRAM		: vsram_t;
 ----------------------------------------------------------------
 -- CPU INTERFACE

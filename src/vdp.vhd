@@ -95,13 +95,8 @@ end vdp;
 
 architecture rtl of vdp is
 
-
 signal vram_req_reg : std_logic;
-signal vram_we_reg : std_logic;
-signal vram_a_reg : std_logic_vector(14 downto 0);
-signal vram_d_reg : std_logic_vector(15 downto 0);
-signal vram_u_n_reg : std_logic;
-signal vram_l_n_reg : std_logic;
+
 
 ----------------------------------------------------------------
 -- ON-CHIP RAMS
@@ -353,16 +348,6 @@ signal V_INT_POS       : std_logic_vector(8 downto 0);
 ----------------------------------------------------------------
 -- VRAM CONTROLLER
 ----------------------------------------------------------------
-
--- signal FF_VRAM_ADDR	: std_logic_vector(14 downto 0);
--- signal FF_VRAM_CE_N	: std_logic;
--- signal FF_VRAM_UB_N	: std_logic;
--- signal FF_VRAM_LB_N	: std_logic;
--- signal FF_VRAM_DI	: std_logic_vector(15 downto 0);
--- signal FF_VRAM_OE_N	: std_logic;
--- signal FF_VRAM_WE_N	: std_logic;
-
--- signal FF_VRAM_SEL	: std_logic;
 
 type vmc_t is (
 	VMC_IDLE,
@@ -889,20 +874,12 @@ end process;
 ----------------------------------------------------------------
 vram_req <= vram_req_reg;
 
---vram_a <= BGA_VRAM_ADDR when VMC_SEL=VMC_BGA
---	else BGB_VRAM_ADDR when VMC_SEL=VMC_BGB
---	else DT_VRAM_ADDR when VMC_SEL=VMC_DT
---	else SP1_VRAM_ADDR when VMC_SEL=VMC_SP1
---	else SP2_VRAM_ADDR when VMC_SEL=VMC_SP2
---	else vram_a_reg;
-vram_d <= DT_VRAM_DI; --  when VMC=VMC_DT else (others=>'X');
+vram_d <= DT_VRAM_DI;
 vram_we <= not DT_VRAM_RNW when VMC=VMC_DT else '0';
 vram_u_n <= DT_VRAM_UDS_N when VMC=VMC_DT else '0';
 vram_l_n <= DT_VRAM_LDS_N when VMC=VMC_DT else '0';
 
--- SP1_VRAM_DO <= vram_q;
-
-VMC_SEL <= VMC; -- VMC_NEXT when vram_req_reg=vram_ack else VMC;
+VMC_SEL <= VMC;
 
 early_ack_bga <= '0' when VMC=VMC_BGA and vram_req_reg=vram_ack else '1';
 early_ack_bgb <= '0' when VMC=VMC_BGB and vram_req_reg=vram_ack else '1';
@@ -941,28 +918,20 @@ begin
 	else
 
 		-- Priority encoder for next port...
---		vmc_req<='0';
 		VMC_NEXT<=VMC_IDLE;
 		if BGB_SEL = '1' and BGB_DTACK_N = '1' and early_ack_bgb='1' then
 			VMC_NEXT <= VMC_BGB;
---			vmc_req<='1';
 		elsif BGA_SEL = '1' and BGA_DTACK_N = '1' and early_ack_bga='1' then
 			VMC_NEXT <= VMC_BGA;
---			vmc_req<='1';
 		elsif SP1_SEL = '1' and SP1_DTACK_N = '1' and early_ack_sp1='1'then
 			VMC_NEXT <= VMC_SP1;			
---			vmc_req<='1';
 		elsif SP2_SEL = '1' and SP2_DTACK_N = '1' and early_ack_sp2='1' then
 			VMC_NEXT <= VMC_SP2;			
---			vmc_req<='1';
 		elsif DT_VRAM_SEL = '1' and DT_VRAM_DTACK_N = '1' and early_ack_dt='1' then
 			VMC_NEXT <= VMC_DT;
---			vmc_req<='1';
 		end if;
 
 	if rising_edge(CLK) then
-	
-		vram_a_reg<=vram_a;
 	
 		if BGB_SEL = '0' then 
 			BGB_DTACK_N <= '1';
@@ -1005,23 +974,6 @@ begin
 		when VMC_IDLE =>
 			null;
 
---			if BGB_SEL = '1' and BGB_DTACK_N = '1' then
---				vram_req_reg <= not vram_req_reg;
---				VMC <= VMC_BGB;
---			elsif BGA_SEL = '1' and BGA_DTACK_N = '1' then
---				vram_req_reg <= not vram_req_reg;
---				VMC <= VMC_BGA;
---			elsif SP1_SEL = '1' and SP1_DTACK_N = '1' then
---				vram_req_reg <= not vram_req_reg;
---				VMC <= VMC_SP1;			
---			elsif SP2_SEL = '1' and SP2_DTACK_N = '1' then
---				vram_req_reg <= not vram_req_reg;
---				VMC <= VMC_SP2;			
---			elsif DT_VRAM_SEL = '1' and DT_VRAM_DTACK_N = '1' then
---				vram_req_reg <= not vram_req_reg;				
---				VMC <= VMC_DT;
---			end if;
-		
 		when VMC_BGB =>		-- BACKGROUND B
 			if vram_req_reg = vram_ack then
 				BGB_VRAM_DO_REG <= vram_q;
@@ -1032,7 +984,7 @@ begin
 				BGA_VRAM_DO_REG <= vram_q;
 				BGA_DTACK_N <= '0';
 			end if;
-			
+
 		when VMC_SP1 =>		-- SPRITE ENGINE PART 1
 			if vram_req_reg = vram_ack then
 				SP1_VRAM_DO_REG <= vram_q;
@@ -1044,13 +996,13 @@ begin
 				SP2_VRAM_DO_REG <= vram_q;
 				SP2_DTACK_N <= '0';
 			end if;
-	
+
 		when VMC_DT =>		-- DATA TRANSFER
 			if vram_req_reg = vram_ack then
 				DT_VRAM_DO_REG <= vram_q;
 				DT_VRAM_DTACK_N <= '0';
 			end if;
-			
+
 		when others => null;
 		end case;
 	end if;

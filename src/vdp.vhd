@@ -79,8 +79,6 @@ entity vdp is
 		INTACK		: in std_logic;
 
 		VBUS_ADDR		: out std_logic_vector(23 downto 0);
-		VBUS_UDS_N		: out std_logic;
-		VBUS_LDS_N		: out std_logic;
 		VBUS_DATA		: in std_logic_vector(15 downto 0);
 		
 		VBUS_SEL		: out std_logic;
@@ -305,8 +303,6 @@ signal DT_DMAV_DATA	: std_logic_vector(15 downto 0);
 signal DMAF_SET_REQ	: std_logic;
 
 signal FF_VBUS_ADDR		: std_logic_vector(23 downto 0);
-signal FF_VBUS_UDS_N	: std_logic;
-signal FF_VBUS_LDS_N	: std_logic;
 signal FF_VBUS_SEL		: std_logic;
 
 signal DMA_VBUS		: std_logic;
@@ -1146,6 +1142,7 @@ begin
 					V_BGB_BASE := (NTBB & "0000000000000") + (BGB_X(9 downto 3) & "0") + BGB_Y(9 downto 3);
 				when "11" => -- HS 128 cells
 					V_BGB_BASE := (NTBB & "0000000000000") + (BGB_X(9 downto 3) & "0") + (BGB_Y(9 downto 3) & "0000000" & "0");
+				when others => null;
 				end case;
 				BGB_VRAM_ADDR <= V_BGB_BASE(15 downto 1);
 				BGB_SEL <= '1';
@@ -1381,6 +1378,7 @@ begin
 						V_BGA_BASE := V_BGA_XBASE + BGA_Y(9 downto 3);
 					when "11" => -- HS 128 cells
 						V_BGA_BASE := V_BGA_XBASE + (BGA_Y(9 downto 3) & "0000000" & "0");
+					when others => null;
 					end case;
 				end if;
 				
@@ -2241,6 +2239,7 @@ begin
 					when "01" => cold := OBJ_COLINFO_Q_B(5 downto 0);
 					when "10" => cold := BGA_COLINFO_Q_B(5 downto 0);
 					when "11" => cold := BGB_COLINFO_Q_B(5 downto 0);
+					when others => null;
 				end case;
 
 				if DBG(6) = '1' then
@@ -2365,12 +2364,9 @@ end process;
 -- DATA TRANSFER CONTROLLER
 ----------------------------------------------------------------
 VBUS_ADDR <= FF_VBUS_ADDR;
-VBUS_UDS_N <= FF_VBUS_UDS_N;
-VBUS_LDS_N <= FF_VBUS_LDS_N;
 VBUS_SEL <= FF_VBUS_SEL;
 
 process( RST_N, CLK )
-variable vram_address: std_logic_vector(16 downto 0);
 -- synthesis translate_off
 file F		: text open write_mode is "vdp_dbg.out";
 variable L	: line;
@@ -2397,8 +2393,6 @@ begin
 		DT_FF_DTACK_N <= '1';
 
 		FF_VBUS_ADDR <= (others => '0');
-		FF_VBUS_UDS_N <= '1';
-		FF_VBUS_LDS_N <= '1';
 		FF_VBUS_SEL	<= '0';
 		DT_VBUS_SEL <= '0';
 		
@@ -2530,11 +2524,10 @@ begin
 					DT_VRAM_LDS_N <= '0';
 				else
 				   --(((a & 2) >> 1) ^ 1) | ((a & $400) >> 9) | a & $3FC | ((a & $1F800) >> 1)
-					vram_address := (not DT_WR_ADDR(1 downto 1)) or (DT_WR_ADDR(10 downto 9) and x"2") or (DT_WR_ADDR and x"3fc") or (DT_WR_ADDR(16 downto 1) and x"fc00");
-					DT_VRAM_ADDR <= vram_address(15 downto 1);
+					DT_VRAM_ADDR <= DT_WR_ADDR(16 downto 11) & DT_WR_ADDR(9 downto 2) & DT_WR_ADDR(10);
 					DT_VRAM_DI <= DT_WR_DATA(7 downto 0) & DT_WR_DATA(7 downto 0);
-					DT_VRAM_UDS_N <= vram_address(0);
-					DT_VRAM_LDS_N <= not vram_address(0);
+					DT_VRAM_UDS_N <= not DT_WR_ADDR(1);
+					DT_VRAM_LDS_N <= DT_WR_ADDR(1);
 				end if;
 
 				DTC <= DTC_VRAM_WR2;
@@ -2890,8 +2883,6 @@ begin
 			when DMA_VBUS_RD =>
 				FF_VBUS_SEL <= '1';
 				FF_VBUS_ADDR <= REG(23)(6 downto 0) & DMA_SOURCE & '0';
-				FF_VBUS_UDS_N <= '0';
-				FF_VBUS_LDS_N <= '0';
 				DMAC <= DMA_VBUS_RD2;
 
 			when DMA_VBUS_RD2 =>

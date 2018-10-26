@@ -90,8 +90,8 @@ entity Virtual_Toplevel is
 		ext_sw         : in std_logic_vector(15 downto 0) -- 2 - joy swap
 														  -- 3 - PSG EN
 														  -- 4 - FM EN
-														  -- 5 - PAL
-														  -- 6 - Export model
+														  -- 5 - Export
+														  -- 6 - PAL
 														  -- 7 - Swap y
 														  -- 8 - 3 Buttons only
 	);
@@ -369,8 +369,6 @@ signal VINT_T80		: std_logic;
 
 -- VDP VBUS DMA
 signal VBUS_ADDR	: std_logic_vector(23 downto 0);
-signal VBUS_UDS_N	: std_logic;
-signal VBUS_LDS_N	: std_logic;
 signal VBUS_DATA	: std_logic_vector(15 downto 0);		
 signal VBUS_SEL		: std_logic;
 signal VBUS_DTACK_N	: std_logic;	
@@ -412,6 +410,7 @@ signal KEY : std_logic_vector(3 downto 0);
 
 signal PAL : std_logic;
 signal model: std_logic;
+signal PAL_IO: std_logic;
 
 -- DEBUG
 signal HEXVALUE			: std_logic_vector(15 downto 0);
@@ -457,8 +456,8 @@ JOY_2(2) <= JOY_2_DOWN when JOY_SWAP = '0' else JOY_1_DOWN;
 JOY_2(3) <= JOY_2_UP when JOY_SWAP = '0' else JOY_1_UP;
 JOY_2(11 downto 4) <= joyb(11 downto 4) when JOY_SWAP = '0' else joya(11 downto 4);
 
-PAL <= SW(5);
-model <= SW(6);
+model <= SW(5);
+PAL <= SW(6);
 
 -- DIP Switches
 SW <= ext_sw;
@@ -689,6 +688,7 @@ port map(
 	DTACK_N		=> IO_DTACK_N,
 
 	PAL			=> PAL,
+	PAL_OUT		=> PAL_IO,
 	MODEL		=> model
 );
 
@@ -726,14 +726,12 @@ port map(
 	INTACK			=> TG68_INTACK,
 		
 	VBUS_ADDR		=> VBUS_ADDR,
-	VBUS_UDS_N		=> VBUS_UDS_N,
-	VBUS_LDS_N		=> VBUS_LDS_N,
 	VBUS_DATA		=> VBUS_DATA,
 		
 	VBUS_SEL			=> VBUS_SEL,
 	VBUS_DTACK_N	=> VBUS_DTACK_N,
 
-	PAL					=> PAL,
+	PAL					=> PAL_IO,
 	R					=> VDP_RED,
 	G					=> VDP_GREEN,
 	B					=> VDP_BLUE,

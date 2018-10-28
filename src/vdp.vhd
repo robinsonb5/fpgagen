@@ -135,6 +135,7 @@ signal FIFO_RD_POS	: std_logic_vector(1 downto 0);
 signal FIFO_EMPTY	: std_logic;
 signal FIFO_FULL	: std_logic;
 signal FIFO_EN		: std_logic;
+signal FIFO_CNT		: std_logic_vector(5 downto 0);
 signal FIFO_SKIP	: std_logic;
 
 signal IN_DMA		: std_logic;
@@ -380,7 +381,6 @@ type bgbc_t is (
 	BGBC_INIT,
 	BGBC_HS_RD,
 	BGBC_CALC_Y,
-	BGBC_CALC_Y2,
 	BGBC_CALC_BASE,
 	BGBC_BASE_RD,
 	BGBC_LOOP,
@@ -422,7 +422,6 @@ type bgac_t is (
 	BGAC_INIT,
 	BGAC_HS_RD,
 	BGAC_CALC_Y,
-	BGAC_CALC_Y2,
 	BGAC_CALC_BASE,
 	BGAC_BASE_RD,
 	BGAC_LOOP,
@@ -1037,9 +1036,6 @@ begin
 				BGB_SEL <= '0';
 				BGB_COLINFO_WE_A <= '0';
 				BGB_COLINFO_ADDR_A <= (others => '0');
-				if HV_HCNT = H_INT_POS + 1 then
-					BGB_VSRAM1_LATCH <= VSRAM(1)(9 downto 0);
-				end if;
 				if BGEN_ACTIVATE = '1' then
 					BGBC <= BGBC_INIT;
 				end if;
@@ -1074,23 +1070,22 @@ begin
 				end if;
 
 			when BGBC_CALC_Y =>
-				BGB_COLINFO_WE_A <= '0';
-				if BGB_POS(9) = '1' or (BGB_POS(9) = '0' and BGB_POS(8 downto 0) < (HV_HCNT + 16 - HBLANK_END)) then
-					if VSCR = '1' and BGB_POS(9) = '0' and BGB_POS(8 downto 4) /= "0000" and BGB_POS (3 downto 0) = "0000" then
-						BGB_VSRAM1_LATCH <= VSRAM( CONV_INTEGER(BGB_POS(8 downto 4) & "1") )(9 downto 0);
-					end if;
-					BGBC <= BGBC_CALC_Y2;
-				end if;
-
-			when BGBC_CALC_Y2 =>
 				if HSIZE = "10" then
 					-- illegal mode, 32x1
 					vscroll_mask := "0000000111";
 				else
 					vscroll_mask := (VSIZE & "11111111");
 				end if;
-				BGB_Y <= (BGB_VSRAM1_LATCH + Y) and vscroll_mask;
-
+				BGB_COLINFO_WE_A <= '0';
+				if BGB_POS(9) = '1' then
+					BGB_Y <= (BGB_VSRAM1_LATCH + Y) and vscroll_mask;
+				else
+					if VSCR = '1' then
+						BGB_Y <= (VSRAM( CONV_INTEGER(BGB_POS(8 downto 4) & "1") )(9 downto 0) + Y) and vscroll_mask;
+					else
+						BGB_Y <= (BGB_VSRAM1_LATCH + Y) and vscroll_mask;
+					end if;
+				end if;
 				BGBC <= BGBC_CALC_BASE;
 
 			when BGBC_CALC_BASE =>
@@ -1200,7 +1195,6 @@ begin
 					end if;
 					BGB_SEL <= '0';					
 				end if;
-
 			when BGBC_TILE_RD =>
 				if early_ack_bgb = '0' then
 --				if BGB_DTACK_N = '0' then
@@ -1252,9 +1246,6 @@ begin
 				BGA_SEL <= '0';
 				BGA_COLINFO_ADDR_A <= (others => '0');
 				BGA_COLINFO_WE_A <= '0';
-				if HV_HCNT = H_INT_POS + 1 then
-					BGA_VSRAM0_LATCH <= VSRAM(0)(9 downto 0);
-				end if;
 				if BGEN_ACTIVATE = '1' then
 					BGAC <= BGAC_INIT;
 				end if;
@@ -1303,15 +1294,6 @@ begin
 
 			when BGAC_CALC_Y =>
 				BGA_COLINFO_WE_A <= '0';
-				if BGA_POS(9) = '1' or (BGA_POS(9) = '0' and BGA_POS(8 downto 0) < (HV_HCNT + 16 - HBLANK_END)) then
-					if VSCR = '1' and BGA_POS(9) = '0' and BGA_POS(8 downto 4) /= "0000" and BGA_POS (3 downto 0) = "0000" then
-						BGA_VSRAM0_LATCH <= VSRAM( CONV_INTEGER(BGA_POS(8 downto 4) & "0") )(9 downto 0);
-					end if;
-					BGAC <= BGAC_CALC_Y2;
-				end if;
-
-			when BGAC_CALC_Y2 =>
-				BGA_COLINFO_WE_A <= '0';
 				if WIN_H = '1' or WIN_V = '1' then
 					BGA_Y <= "00" & Y;					
 				else
@@ -1321,7 +1303,15 @@ begin
 					else
 						vscroll_mask := (VSIZE & "11111111");
 					end if;
-					BGA_Y <= (BGA_VSRAM0_LATCH + Y) and vscroll_mask;
+					if BGA_POS(9) = '1' then
+						BGA_Y <= (BGA_VSRAM0_LATCH + Y) and vscroll_mask;
+					else
+						if VSCR = '1' then
+							BGA_Y <= (VSRAM( CONV_INTEGER(BGA_POS(8 downto 4) & "0") )(9 downto 0) + Y) and vscroll_mask;
+						else
+							BGA_Y <= (BGA_VSRAM0_LATCH + Y) and vscroll_mask;
+						end if;
+					end if;
 				end if;
 				BGAC <= BGAC_CALC_BASE;
 				
@@ -1998,6 +1988,7 @@ begin
 		IN_VBL <= '1';
 
 		FIFO_EN <= '0';
+		FIFO_CNT <= (others => '0');
 
 	elsif rising_edge(CLK) then
 
@@ -2034,6 +2025,8 @@ begin
 				else
 					HV_VCNT <= HV_VCNT + 1;
 				end if;
+				BGB_VSRAM1_LATCH <= VSRAM(1)(9 downto 0);
+				BGA_VSRAM0_LATCH <= VSRAM(0)(9 downto 0);
 
 				if HV_VCNT = "1"&x"FE" then
 					IN_VBL <= '0';
@@ -2077,22 +2070,20 @@ begin
 				end if;
 			end if;
 
+			FIFO_CNT <= FIFO_CNT + 1;
+			if (H40 = '0' and FIFO_CNT = 21) or
+			   (H40 = '1' and FIFO_CNT = 23) or
+			   HV_HCNT = H_INT_POS 
+			then
+			   FIFO_CNT <= (others => '0');
+			end if;
+			if IN_VBL = '0' and DE = '1' and FIFO_CNT = 0
+			then
+				FIFO_EN <= '1';
+			end if;
 			if IN_VBL = '1' or DE = '0'
 			then
-				if HV_HCNT /= 50 and HV_HCNT /= 114 and HV_HCNT /= 178 and 
-				   HV_HCNT /= 242 and HV_HCNT /= 496
-				then
-					--skip refresh slots even in VBL
-					FIFO_EN <= not HV_HCNT(0);
-				end if;
-			end if;
-			if IN_VBL = '0' and DE = '1' then
-				if (HV_HCNT(3 downto 0) = "0000" and HV_HCNT(5 downto 4) /= "00" and HV_HCNT < H_DISP_WIDTH) or
-					(H40 = '1' and (HV_HCNT = 318 or HV_HCNT = 320 or HV_HCNT = 460)) or
-					(H40 = '0' and (HV_HCNT = 254 or HV_HCNT = 256 or HV_HCNT = 284 or HV_HCNT = 482))
-				then
-					FIFO_EN <= '1';
-				end if;
+				FIFO_EN <= FIFO_CNT(0);
 			end if;
 		end if;
 	end if;
@@ -2105,7 +2096,7 @@ DISP_ACTIVE <= '1' when V_ACTIVE = '1' and HV_HCNT > HBLANK_END and HV_HCNT <= H
 -- Background generation runs during active display.
 -- Original timing is 2 pixels (or cells?) before the actual pixel.
 -- But the background generators are not timed, but free running now.
-BGEN_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = 511 else '0';
+BGEN_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = HBLANK_END - 8 else '0';
 
 -- Stage 1 runs during active display
 SP1E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = HBLANK_END + 30 else '0';
@@ -2340,6 +2331,7 @@ begin
 	if RST_N = '0' then
 
 		REG <= (others => (others => '0'));
+		VSRAM <= (others => (others => '0'));
 
 		ADDR <= (others => '0');
 		ADDR_SET_ACK <= '0';

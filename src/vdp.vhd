@@ -473,20 +473,32 @@ type sp1c_t is (
 );
 signal SP1C		: sp1c_t;
 
--- type obj_y_t is array(0 to 80) of std_logic_vector(8 downto 0);
--- type OBJ_OBJINFO_t is array(0 to 80) of std_logic_vector(10 downto 0);	-- HS & VS & LINK
--- signal OBJ_Y		: obj_y_t;
--- signal OBJ_OBJINFO	: OBJ_OBJINFO_t;
+signal OBJ_Y 				: std_logic_vector(15 downto 0);
 
-signal OBJ_Y 				: std_logic_vector(8 downto 0);
-signal OBJ_OBJINFO_D		: std_logic_vector(19 downto 0);
-signal OBJ_OBJINFO_ADDR_RD	: std_logic_vector(6 downto 0);
-signal OBJ_OBJINFO_ADDR_WR	: std_logic_vector(6 downto 0);
-signal OBJ_OBJINFO_WE		: std_logic;
-signal OBJ_OBJINFO_Q		: std_logic_vector(19 downto 0);
+signal OBJ_CACHE_Y_L_D		: std_logic_vector(7 downto 0);
+signal OBJ_CACHE_Y_L_WE		: std_logic;
+signal OBJ_CACHE_Y_L_Q		: std_logic_vector(7 downto 0);
+signal OBJ_CACHE_Y_H_D		: std_logic_vector(7 downto 0);
+signal OBJ_CACHE_Y_H_WE		: std_logic;
+signal OBJ_CACHE_Y_H_Q		: std_logic_vector(7 downto 0);
 
+signal OBJ_CACHE_Y_D		: std_logic_vector(15 downto 0);
+signal OBJ_CACHE_Y_ADDR_RD	: std_logic_vector(6 downto 0);
+signal OBJ_CACHE_Y_ADDR_WR	: std_logic_vector(6 downto 0);
+signal OBJ_CACHE_Y_Q		: std_logic_vector(15 downto 0);
 
--- signal OBJ_COLINFO		: colinfo_t;
+signal OBJ_CACHE_SL_L_D		: std_logic_vector(7 downto 0);
+signal OBJ_CACHE_SL_L_WE	: std_logic;
+signal OBJ_CACHE_SL_L_Q		: std_logic_vector(7 downto 0);
+signal OBJ_CACHE_SL_H_D		: std_logic_vector(7 downto 0);
+signal OBJ_CACHE_SL_H_WE	: std_logic;
+signal OBJ_CACHE_SL_H_Q		: std_logic_vector(7 downto 0);
+
+signal OBJ_CACHE_SL_D		: std_logic_vector(15 downto 0);
+signal OBJ_CACHE_SL_ADDR_RD	: std_logic_vector(6 downto 0);
+signal OBJ_CACHE_SL_ADDR_WR	: std_logic_vector(6 downto 0);
+signal OBJ_CACHE_SL_Q		: std_logic_vector(15 downto 0);
+
 signal OBJ_COLINFO_ADDR_A	: std_logic_vector(8 downto 0);
 signal OBJ_COLINFO_ADDR_B	: std_logic_vector(8 downto 0);
 signal OBJ_COLINFO_D_A		: std_logic_vector(6 downto 0);
@@ -495,13 +507,6 @@ signal OBJ_COLINFO_WE_A		: std_logic;
 signal OBJ_COLINFO_WE_B		: std_logic;
 signal OBJ_COLINFO_Q_A		: std_logic_vector(6 downto 0);
 signal OBJ_COLINFO_Q_B		: std_logic_vector(6 downto 0);
-
--- signal OBJ_COLINFO_ADDR_A_SP1	: std_logic_vector(8 downto 0);
--- signal OBJ_COLINFO_D_A_SP1		: std_logic_vector(6 downto 0);
--- signal OBJ_COLINFO_WE_A_SP1		: std_logic;
--- signal OBJ_COLINFO_ADDR_A_SP2	: std_logic_vector(8 downto 0);
--- signal OBJ_COLINFO_D_A_SP2		: std_logic_vector(6 downto 0);
--- signal OBJ_COLINFO_WE_A_SP2		: std_logic;
 
 signal SP1_X		: std_logic_vector(7 downto 0);
 
@@ -646,22 +651,81 @@ port map(
 	q_b			=> OBJ_COLINFO_Q_B
 );
 
-obj_oi : entity work.DualPortRAM
+obj_cache_y_l : entity work.DualPortRAM
 generic map (
 	addrbits	=> 7,
-	databits	=> 20
+	databits	=> 8
 )
 port map(
 	clock		=> MEMCLK,
 	data_a		=> (others => '0'),
-	data_b		=> OBJ_OBJINFO_D,
-	address_a	=> OBJ_OBJINFO_ADDR_RD,
-	address_b	=> OBJ_OBJINFO_ADDR_WR,
+	data_b		=> OBJ_CACHE_Y_L_D,
+	address_a	=> OBJ_CACHE_Y_ADDR_RD,
+	address_b	=> OBJ_CACHE_Y_ADDR_WR,
 	wren_a		=> '0',
-	wren_b		=> OBJ_OBJINFO_WE,
-	q_a			=> OBJ_OBJINFO_Q,
+	wren_b		=> OBJ_CACHE_Y_L_WE,
+	q_a			=> OBJ_CACHE_Y_L_Q,
 	q_b			=> open
  );
+
+obj_cache_y_h : entity work.DualPortRAM
+generic map (
+	addrbits	=> 7,
+	databits	=> 8
+)
+port map(
+	clock		=> MEMCLK,
+	data_a		=> (others => '0'),
+	data_b		=> OBJ_CACHE_Y_H_D,
+	address_a	=> OBJ_CACHE_Y_ADDR_RD,
+	address_b	=> OBJ_CACHE_Y_ADDR_WR,
+	wren_a		=> '0',
+	wren_b		=> OBJ_CACHE_Y_H_WE,
+	q_a			=> OBJ_CACHE_Y_H_Q,
+	q_b			=> open
+ );
+
+OBJ_CACHE_Y_L_D <= OBJ_CACHE_Y_D(7 downto 0);
+OBJ_CACHE_Y_H_D <= OBJ_CACHE_Y_D(15 downto 8);
+OBJ_CACHE_Y_Q <= OBJ_CACHE_Y_H_Q & OBJ_CACHE_Y_L_Q;
+
+obj_cache_sl_l : entity work.DualPortRAM
+generic map (
+	addrbits	=> 7,
+	databits	=> 8
+)
+port map(
+	clock		=> MEMCLK,
+	data_a		=> (others => '0'),
+	data_b		=> OBJ_CACHE_SL_L_D,
+	address_a	=> OBJ_CACHE_SL_ADDR_RD,
+	address_b	=> OBJ_CACHE_SL_ADDR_WR,
+	wren_a		=> '0',
+	wren_b		=> OBJ_CACHE_SL_L_WE,
+	q_a			=> OBJ_CACHE_SL_L_Q,
+	q_b			=> open
+ );
+
+obj_cache_sl_h : entity work.DualPortRAM
+generic map (
+	addrbits	=> 7,
+	databits	=> 8
+)
+port map(
+	clock		=> MEMCLK,
+	data_a		=> (others => '0'),
+	data_b		=> OBJ_CACHE_SL_H_D,
+	address_a	=> OBJ_CACHE_SL_ADDR_RD,
+	address_b	=> OBJ_CACHE_SL_ADDR_WR,
+	wren_a		=> '0',
+	wren_b		=> OBJ_CACHE_SL_H_WE,
+	q_a			=> OBJ_CACHE_SL_H_Q,
+	q_b			=> open
+ );
+
+OBJ_CACHE_SL_L_D <= OBJ_CACHE_SL_D(7 downto 0);
+OBJ_CACHE_SL_H_D <= OBJ_CACHE_SL_D(15 downto 8);
+OBJ_CACHE_SL_Q <= OBJ_CACHE_SL_H_Q & OBJ_CACHE_SL_L_Q;
 
 cram : entity work.DualPortRAM
 generic map (
@@ -1531,10 +1595,15 @@ begin
 	if RST_N = '0' then
 		SP1_SEL <= '0';
 		SP1C <= SP1C_DONE;
-		
-		OBJ_OBJINFO_WE <= '0';
-		OBJ_OBJINFO_ADDR_WR <= (others => '0');
-		
+
+		OBJ_CACHE_Y_L_WE <= '0';
+		OBJ_CACHE_Y_H_WE <= '0';
+		OBJ_CACHE_Y_ADDR_WR <= (others => '0');
+
+		OBJ_CACHE_SL_L_WE <= '0';
+		OBJ_CACHE_SL_H_WE <= '0';
+		OBJ_CACHE_SL_ADDR_WR <= (others => '0');
+
 	elsif rising_edge(MEMCLK) then
 		case SP1C is
 			when SP1C_INIT =>
@@ -1544,7 +1613,10 @@ begin
 			
 			when SP1C_LOOP =>
 			
-				OBJ_OBJINFO_WE <= '0';
+				OBJ_CACHE_Y_L_WE <= '0';
+				OBJ_CACHE_Y_H_WE <= '0';
+				OBJ_CACHE_SL_L_WE <= '0';
+				OBJ_CACHE_SL_H_WE <= '0';
 			
 				if SP1_X(0) = '0' then
 					SP1_VRAM_ADDR <= (SATB & "00000000") + (OBJ_CUR & "00");
@@ -1555,10 +1627,10 @@ begin
 					SP1_SEL <= '1';
 					SP1C <= SP1C_SZL_RD;
 				end if;
-			
+
 			when SP1C_Y_RD =>
 				if early_ack_sp1='0' then
-					OBJ_Y <= SP1_VRAM_DO(8 downto 0);
+					OBJ_Y <= SP1_VRAM_DO;
 
 					SP1_X <= SP1_X + 1;
 					SP1C <= SP1C_LOOP;
@@ -1567,21 +1639,19 @@ begin
 			
 			when SP1C_SZL_RD =>
 				if early_ack_sp1='0' then
-					OBJ_OBJINFO_ADDR_WR <= SP1_X(7 downto 1);
-					OBJ_OBJINFO_D <= OBJ_Y & SP1_VRAM_DO(11 downto 8) & SP1_VRAM_DO(6 downto 0);
-					OBJ_OBJINFO_WE <= '1';					
-					
-					OBJ_CUR <= SP1_VRAM_DO(6 downto 0);
+					OBJ_CACHE_Y_ADDR_WR <= SP1_X(7 downto 1);
+					OBJ_CACHE_Y_D <= OBJ_Y;
+					OBJ_CACHE_Y_L_WE <= '1';
+					OBJ_CACHE_Y_H_WE <= '1';
+					OBJ_CACHE_SL_ADDR_WR <= SP1_X(7 downto 1);
+					OBJ_CACHE_SL_D <= SP1_VRAM_DO;
+					OBJ_CACHE_SL_L_WE <= '1';
+					OBJ_CACHE_SL_H_WE <= '1';
 
-					-- check a total of 80 sprites in H40 mode and 64 sprites in H32 mode
-					if ((H40 = '1' and SP1_X(7 downto 1) = 80) or 
-						 (H40 = '0' and SP1_X(7 downto 1) = 64) or
-						 -- the following checks are inspired by the gens-ii emulator
-					    (H40 = '1' and SP1_VRAM_DO(6 downto 0) >= 80) or 
-						 (H40 = '0' and SP1_VRAM_DO(6 downto 0) >= 64) or
-						 -- don't loop through short sprite attribute table
-						 (SP1_VRAM_DO(6 downto 0) = "0000000") ) then
- 					   OBJ_OBJINFO_D(6 downto 0) <= (others => '0');
+					OBJ_CUR <= OBJ_CUR + 1;
+
+					if ((H40 = '1' and OBJ_CUR = 79) or 
+						(H40 = '0' and OBJ_CUR = 63)) then
 						SP1C <= SP1C_DONE;
 					else
 						SP1_X <= SP1_X + 1;
@@ -1589,12 +1659,14 @@ begin
 					end if;
 					SP1_SEL <= '0';
 				end if;
-			
+
 			when others => -- SP1C_DONE
 				SP1_SEL <= '0';
 
-				OBJ_OBJINFO_WE <= '0';
-				OBJ_OBJINFO_ADDR_WR <= (others => '0');
+				OBJ_CACHE_Y_L_WE <= '0';
+				OBJ_CACHE_Y_H_WE <= '0';
+				OBJ_CACHE_SL_L_WE <= '0';
+				OBJ_CACHE_SL_H_WE <= '0';
 				if SP1E_ACTIVATE = '1' then
 					SP1C <= SP1C_INIT;
 				end if;
@@ -1615,7 +1687,8 @@ begin
 		OBJ_COLINFO_ADDR_A <= (others => '0');
 		OBJ_COLINFO_WE_A <= '0';
 		
-		OBJ_OBJINFO_ADDR_RD <= (others => '0');
+		OBJ_CACHE_Y_ADDR_RD <= (others => '0');
+		OBJ_CACHE_SL_ADDR_RD <= (others => '0');
 		OBJ_DOT_OVERFLOW <= '0';
 		
 		SCOL_SET <= '0';
@@ -1641,13 +1714,8 @@ begin
 			
 			when SP2C_Y_RD =>
 				OBJ_COLINFO_WE_A <= '0';
-				-- OBJ_Y_OFS <= "010000000" + ("0" & SP2_Y) - OBJ_Y( CONV_INTEGER( OBJ_TOT ) );
-				-- V_SZ_LINK := OBJ_OBJINFO( CONV_INTEGER(OBJ_TOT) );
-				-- OBJ_HS <= V_SZ_LINK(10 downto 9);
-				-- OBJ_VS <= V_SZ_LINK(8 downto 7);
-				-- OBJ_LINK <= V_SZ_LINK(6 downto 0);				
-				-- SP2C <= SP2C_Y_TST;
-				OBJ_OBJINFO_ADDR_RD <= OBJ_TOT;
+				OBJ_CACHE_Y_ADDR_RD <= OBJ_NEXT;
+				OBJ_CACHE_SL_ADDR_RD <= OBJ_NEXT;
 				SP2C <= SP2C_Y_RD2;
 			
 			when SP2C_Y_RD2 =>
@@ -1656,10 +1724,10 @@ begin
 				SP2C <= SP2C_Y_RD4;
 			
 			when SP2C_Y_RD4 =>
-				OBJ_Y_OFS <= "010000000" + ("0" & SP2_Y) - OBJ_OBJINFO_Q(19 downto 11);
-				OBJ_HS <= OBJ_OBJINFO_Q(10 downto 9);
-				OBJ_VS <= OBJ_OBJINFO_Q(8 downto 7);
-				OBJ_LINK <= OBJ_OBJINFO_Q(6 downto 0);				
+				OBJ_Y_OFS <= "010000000" + ("0" & SP2_Y) - OBJ_CACHE_Y_Q(8 downto 0);
+				OBJ_HS <= OBJ_CACHE_SL_Q(11 downto 10);
+				OBJ_VS <= OBJ_CACHE_SL_Q(9 downto 8);
+				OBJ_LINK <= OBJ_CACHE_SL_Q(6 downto 0);
 				SP2C <= SP2C_Y_TST;
 
 			when SP2C_Y_TST =>
@@ -1900,7 +1968,7 @@ begin
 					SP2C <= SP2C_PLOT;
 --					SP2C <= SP2C_LOOP;
 				end if;
-			
+
 			when SP2C_NEXT =>
 				OBJ_COLINFO_WE_A <= '0';
 				OBJ_TOT <= OBJ_TOT + 1;
@@ -1910,19 +1978,25 @@ begin
 				if (H40 = '1' and OBJ_NB = 20) or (H40 = '0' and OBJ_NB = 16) then
 					SP2C <= SP2C_DONE;
 					SOVR_SET <= '1';
-				elsif OBJ_LINK = "0000000" then
+				-- check a total of 80 sprites in H40 mode and 64 sprites in H32 mode
+				elsif (H40 = '1' and OBJ_TOT = 79) or 
+				      (H40 = '0' and OBJ_TOT = 63) or
+					 -- the following checks are inspired by the gens-ii emulator
+				      (H40 = '1' and OBJ_LINK >= 80) or 
+				      (H40 = '0' and OBJ_LINK >= 64) or
+				      OBJ_LINK = "0000000" 
+				then
 					SP2C <= SP2C_DONE;
 				else
 					SP2C <= SP2C_Y_RD;
 				end if;
-			
+
 			when others => -- SP2C_DONE
 				SP2_SEL <= '0';
 
 				OBJ_COLINFO_WE_A <= '0';
 				OBJ_COLINFO_ADDR_A <= (others => '0');
 
-				OBJ_OBJINFO_ADDR_RD <= (others => '0');
 				if SP2E_ACTIVATE = '1' then
 					SP2C <= SP2C_INIT;
 				end if;

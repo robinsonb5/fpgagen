@@ -743,9 +743,9 @@ port map(
 
 u_psg : work.psg
 port map(
+	reset	=> not MRST_N,
 	clk		=> MCLK,
-	clken		=> ZCLK_ENA,
-	timing_clken	=> ZCLK_ENA,
+	clken	=> ZCLK_ENA,
 	WR_n	=> not PSG_SEL,
 	D_in	=> PSG_DI,
 	output	=> PSG_SND

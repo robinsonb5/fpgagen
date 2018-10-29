@@ -23,7 +23,12 @@ unsigned short regs[][2] = {
   { 4, 0x9001}, // Set the scroll size to V32 H64
   { 4, 0x8F02}, // Set the auto-increment data to 2
 
+  { 4, 0x4000}, // prepare vsram access
+  { 4, 0x0010},
+  { 0, 0x0000}, // vsram(0) = 0
+
   { 4, 0xc000}, // prepare cram access
+  { 4, 0x0000},
 };
 
 unsigned short *cram = NULL;
@@ -89,7 +94,7 @@ void cpu_c(char clk, char rst_n, char sel[1], char dtack_n, char rnw[1], char ds
 	  d_i = regs[cnt++][1];
 	  wait = 0;
 
-	  // all regsisters written?
+	  // all registers written?
 	  if(cnt == sizeof(regs)/(2*sizeof(unsigned short))) {
 	    state = 1;  // next-> write cram
 	    wait = 2;

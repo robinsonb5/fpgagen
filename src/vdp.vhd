@@ -757,7 +757,9 @@ begin
 		
 		SOVR_CLR <= '0';
 		SCOL_CLR <= '0';
-		
+
+                DBG <= (others => '0');
+
 	elsif rising_edge(CLK) then
 		SOVR_CLR <= '0';
 		SCOL_CLR <= '0';

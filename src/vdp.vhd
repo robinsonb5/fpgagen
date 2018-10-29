@@ -96,7 +96,7 @@ end vdp;
 architecture rtl of vdp is
 
 signal vram_req_reg : std_logic;
-
+signal vram_a_reg	: std_logic_vector(16 downto 1);
 
 ----------------------------------------------------------------
 -- ON-CHIP RAMS
@@ -265,7 +265,7 @@ signal DMAC	: dmac_t;
 
 signal DT_VRAM_SEL		: std_logic;
 signal DT_VRAM_SEL_D	: std_logic;
-signal DT_VRAM_ADDR		: std_logic_vector(14 downto 0);
+signal DT_VRAM_ADDR		: std_logic_vector(16 downto 1);
 signal DT_VRAM_DI		: std_logic_vector(15 downto 0);
 signal DT_VRAM_DO		: std_logic_vector(15 downto 0);
 signal DT_VRAM_DO_REG		: std_logic_vector(15 downto 0);
@@ -918,10 +918,11 @@ end process;
 ----------------------------------------------------------------
 vram_req <= vram_req_reg;
 
-vram_d <= DT_VRAM_DI;
+vram_d <= DT_VRAM_DI when M128 = '0' else DT_VRAM_DI(7 downto 0) & DT_VRAM_DI(7 downto 0);
 vram_we <= not DT_VRAM_RNW when VMC=VMC_DT else '0';
-vram_u_n <= DT_VRAM_UDS_N when VMC=VMC_DT else '0';
-vram_l_n <= DT_VRAM_LDS_N when VMC=VMC_DT else '0';
+vram_u_n <= (DT_VRAM_UDS_N or M128) and (not vram_a_reg(1) or not M128) when VMC=VMC_DT else '0';
+vram_l_n <= (DT_VRAM_LDS_N or M128) and (vram_a_reg(1) or not M128) when VMC=VMC_DT else '0';
+vram_a <= vram_a_reg(15 downto 1) when M128 = '0' else vram_a_reg(16 downto 11) & vram_a_reg(9 downto 2) & vram_a_reg(10);
 
 VMC_SEL <= VMC;
 
@@ -991,13 +992,13 @@ begin
 				when VMC_IDLE =>
 					null;
 				when VMC_BGA =>
-					vram_a <= BGA_VRAM_ADDR;
+					vram_a_reg <= '0'&BGA_VRAM_ADDR;
 				when VMC_BGB =>
-					vram_a <= BGB_VRAM_ADDR;
+					vram_a_reg <= '0'&BGB_VRAM_ADDR;
 				when VMC_SP2 =>
-					vram_a <= SP2_VRAM_ADDR;
+					vram_a_reg <= '0'&SP2_VRAM_ADDR;
 				when VMC_DT =>
-					vram_a <= DT_VRAM_ADDR;
+					vram_a_reg <= DT_VRAM_ADDR;
 			end case;
 			if VMC_NEXT /= VMC_IDLE then
 				vram_req_reg <= not vram_req_reg;
@@ -1548,7 +1549,7 @@ end process;
 ----------------------------------------------------------------
 -- Write-through cache for Y, Link and size fields
 process( RST_N, CLK )
-variable cache_addr: std_logic_vector(12 downto 0);
+variable cache_addr: std_logic_vector(13 downto 0);
 begin
 	if RST_N = '0' then
 		OBJ_CACHE_Y_L_WE <= '0';
@@ -1564,19 +1565,19 @@ begin
 		OBJ_CACHE_SL_L_WE <= '0';
 		OBJ_CACHE_SL_H_WE <= '0';
 
-		cache_addr := DT_VRAM_ADDR(14 downto 2) - (SATB & "000000");
+		cache_addr := DT_VRAM_ADDR(16 downto 3) - (SATB & "000000");
 		DT_VRAM_SEL_D <= DT_VRAM_SEL;
 		if DT_VRAM_SEL_D = '0' and DT_VRAM_SEL = '1' and DT_VRAM_RNW = '0' and
-		   DT_VRAM_ADDR(1) = '0' and
+		   DT_VRAM_ADDR(2) = '0' and
 		   ((H40 = '1' and cache_addr < 80) or (H40 = '0' and cache_addr < 64))
 		then
-			if DT_VRAM_ADDR(0) = '0' then
+			if DT_VRAM_ADDR(1) = '0' then
 				OBJ_CACHE_Y_L_WE <= not DT_VRAM_LDS_N;
 				OBJ_CACHE_Y_H_WE <= not DT_VRAM_UDS_N;
 				OBJ_CACHE_Y_ADDR_WR <= cache_addr(6 downto 0);
 				OBJ_CACHE_Y_D <= DT_VRAM_DI;
 			end if;
-			if DT_VRAM_ADDR(0) = '1' then
+			if DT_VRAM_ADDR(1) = '1' then
 				OBJ_CACHE_SL_ADDR_WR <= cache_addr(6 downto 0);
 				OBJ_CACHE_SL_L_WE <= not DT_VRAM_LDS_N;
 				OBJ_CACHE_SL_H_WE <= not DT_VRAM_UDS_N;
@@ -2452,21 +2453,13 @@ begin
 -- synthesis translate_on								
 				DT_VRAM_SEL <= '1';
 				DT_VRAM_RNW <= '0';
-				if M128 = '0' then
-					DT_VRAM_ADDR <= DT_WR_ADDR(15 downto 1);
-					if DT_WR_ADDR(0) = '0' then
-						DT_VRAM_DI <= DT_WR_DATA;
-					else
-						DT_VRAM_DI <= DT_WR_DATA(7 downto 0) & DT_WR_DATA(15 downto 8);
-					end if;
-					DT_VRAM_UDS_N <= '0';
-					DT_VRAM_LDS_N <= '0';
+				DT_VRAM_ADDR <= DT_WR_ADDR(16 downto 1);
+				DT_VRAM_UDS_N <= '0';
+				DT_VRAM_LDS_N <= '0';
+				if DT_WR_ADDR(0) = '0' or M128 = '1' then
+					DT_VRAM_DI <= DT_WR_DATA;
 				else
-				   --(((a & 2) >> 1) ^ 1) | ((a & $400) >> 9) | a & $3FC | ((a & $1F800) >> 1)
-					DT_VRAM_ADDR <= DT_WR_ADDR(16 downto 11) & DT_WR_ADDR(9 downto 2) & DT_WR_ADDR(10);
-					DT_VRAM_DI <= DT_WR_DATA(7 downto 0) & DT_WR_DATA(7 downto 0);
-					DT_VRAM_UDS_N <= not DT_WR_ADDR(1);
-					DT_VRAM_LDS_N <= DT_WR_ADDR(1);
+					DT_VRAM_DI <= DT_WR_DATA(7 downto 0) & DT_WR_DATA(15 downto 8);
 				end if;
 
 				DTC <= DTC_VRAM_WR2;
@@ -2513,7 +2506,7 @@ begin
 
 			when DTC_VRAM_RD1 =>
 				DT_VRAM_SEL <= '1';
-				DT_VRAM_ADDR <= ADDR(15 downto 1);
+				DT_VRAM_ADDR <= '0'&ADDR(15 downto 1);
 				DT_VRAM_RNW <= '1';
 				DT_VRAM_UDS_N <= '0';
 				DT_VRAM_LDS_N <= '0';
@@ -2670,7 +2663,7 @@ begin
 				writeline(F,L);									
 -- synthesis translate_on					
 				DT_VRAM_SEL <= '1';
-				DT_VRAM_ADDR <= ADDR(15 downto 1);
+				DT_VRAM_ADDR <= '0'&ADDR(15 downto 1);
 				DT_VRAM_RNW <= '0';
 				DT_VRAM_DI <= DT_DMAF_DATA(15 downto 8) & DT_DMAF_DATA(15 downto 8);
 				if ADDR(0) = '0' then
@@ -2730,7 +2723,7 @@ begin
 				
 			when DMA_COPY_RD =>
 				DT_VRAM_SEL <= '1';
-				DT_VRAM_ADDR <= DMA_SOURCE(15 downto 1);
+				DT_VRAM_ADDR <= '0'&DMA_SOURCE(15 downto 1);
 				DT_VRAM_RNW <= '1';
 				DT_VRAM_UDS_N <= '0';
 				DT_VRAM_LDS_N <= '0';
@@ -2772,7 +2765,7 @@ begin
 					writeline(F,L);									
 -- synthesis translate_on									
 				DT_VRAM_SEL <= '1';
-				DT_VRAM_ADDR <= ADDR(15 downto 1);
+				DT_VRAM_ADDR <= '0'&ADDR(15 downto 1);
 				DT_VRAM_RNW <= '0';
 				if DMA_SOURCE(0) = '0' then
 					DT_VRAM_DI <= DT_VRAM_DO(7 downto 0) & DT_VRAM_DO(7 downto 0);

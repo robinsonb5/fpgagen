@@ -2014,16 +2014,13 @@ begin
 				BGB_VSRAM1_LATCH <= VSRAM(1)(9 downto 0);
 				BGA_VSRAM0_LATCH <= VSRAM(0)(9 downto 0);
 
+				if HV_VCNT >= (V_DISP_HEIGHT - 1) or HV_VCNT < "1"&x"FF"
+					then HINT_COUNT <= HIT;
+				end if;
+
 				if HV_VCNT = "1"&x"FE" then
 					IN_VBL <= '0';
-				elsif HV_VCNT = "1"&x"FF" then
-					if HIT = 0 then
-						HINT_PENDING_SET <= '1';
-						HINT_COUNT <= (others => '0');
-					else
-						HINT_COUNT <= HIT - 1;
-					end if;
-				elsif HV_VCNT < V_DISP_HEIGHT - 1
+				elsif HV_VCNT = "1"&x"FF" or HV_VCNT < V_DISP_HEIGHT - 1
 				then
 					if HINT_COUNT = 0 then
 						HINT_PENDING_SET <= '1';

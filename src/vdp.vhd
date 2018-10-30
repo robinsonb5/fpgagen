@@ -33,10 +33,7 @@
 -- you have the latest version of this file.
 
 -- TODOs/Known issues (according to http://md.squee.co/VDP)
--- - highlight and shadow completely missing
---    - needs 1 additional color bit in the entire video chain
--- - only bit 0..8 of the 10 bit vertical sprite position are processed
--- - window has priority over sprites
+-- - window has priority over sprites?
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
@@ -359,7 +356,6 @@ type vmc_t is (
 );
 signal VMC	: vmc_t := VMC_IDLE;
 signal VMC_NEXT : vmc_t := VMC_IDLE;
-signal VMC_SEL	: vmc_t := VMC_IDLE;
 
 signal early_ack_bga : std_logic;
 signal early_ack_bgb : std_logic;
@@ -372,8 +368,6 @@ signal early_ack : std_logic;
 ----------------------------------------------------------------
 
 signal BGEN_ACTIVATE	: std_logic;
-
--- type colinfo_t is array(0 to 319) of std_logic_vector(6 downto 0);	-- PRI & PAL & COLNO
 
 -- BACKGROUND B
 type bgbc_t is (
@@ -533,8 +527,6 @@ signal OBJ_NB			: std_logic_vector(6 downto 0);
 signal OBJ_PIX			: std_logic_vector(8 downto 0);
 
 signal OBJ_Y_OFS		: std_logic_vector(8 downto 0);
-signal T_OBJ_HS			: std_logic_vector(1 downto 0);
-signal T_OBJ_VS			: std_logic_vector(1 downto 0);
 signal OBJ_LINK			: std_logic_vector(6 downto 0);
 
 signal OBJ_HS			: std_logic_vector(1 downto 0);
@@ -552,7 +544,6 @@ signal OBJ_PAT			: std_logic_vector(10 downto 0);
 signal OBJ_POS			: std_logic_vector(8 downto 0);
 signal OBJ_TILEBASE		: std_logic_vector(14 downto 0);
 signal OBJ_COLNO		: std_logic_vector(3 downto 0);
-signal T_PREV_OBJ_COLINFO		: std_logic_vector(6 downto 0);
 
 ----------------------------------------------------------------
 -- VIDEO OUTPUT
@@ -830,8 +821,6 @@ begin
 						if DMA = '1' then
 							CODE(5) <= DI(7);
 						end if;
-						-- ADDR(15 downto 14) <= DI(1 downto 0);
-						-- ADDR_LATCH <= DI(1 downto 0);
 						ADDR_LATCH <= DI(2 downto 0) & ADDR(13 downto 0);
 
 						-- In case of DMA VBUS request, hold the TG68 with DTACK_N
@@ -924,8 +913,6 @@ vram_u_n <= (DT_VRAM_UDS_N or M128) and (not vram_a_reg(1) or not M128) when VMC
 vram_l_n <= (DT_VRAM_LDS_N or M128) and (vram_a_reg(1) or not M128) when VMC=VMC_DT else '0';
 vram_a <= vram_a_reg(15 downto 1) when M128 = '0' else vram_a_reg(16 downto 11) & vram_a_reg(9 downto 2) & vram_a_reg(10);
 
-VMC_SEL <= VMC;
-
 early_ack_bga <= '0' when VMC=VMC_BGA and vram_req_reg=vram_ack else '1';
 early_ack_bgb <= '0' when VMC=VMC_BGB and vram_req_reg=vram_ack else '1';
 early_ack_sp2 <= '0' when VMC=VMC_SP2 and vram_req_reg=vram_ack else '1';
@@ -939,7 +926,7 @@ DT_VRAM_DO <= vram_q when early_ack_dt='0' and SP2_DTACK_N = '1' else DT_VRAM_DO
 
 process( RST_N, CLK,
 	BGA_SEL, BGA_DTACK_N, BGB_SEL, BGB_DTACK_N,
-	SP2_DTACK_N, DT_VRAM_SEL, DT_VRAM_DTACK_N,
+	SP2_SEL, SP2_DTACK_N, DT_VRAM_SEL, DT_VRAM_DTACK_N,
 	early_ack_bga, early_ack_bgb, early_ack_sp2, early_ack_dt)
 -- synthesis translate_off
 file F		: text open write_mode is "vram_dbg.out";
@@ -1131,7 +1118,6 @@ begin
 				
 			when BGBC_BASE_RD =>
 				if early_ack_bgb='0' then
---				if BGB_DTACK_N = '0' then
 -- synthesis translate_off					
 					write(L, string'("BGB BASE_RD Y="));
 					hwrite(L, "000000" & BGB_Y(9 downto 0));
@@ -1222,7 +1208,6 @@ begin
 				end if;
 			when BGBC_TILE_RD =>
 				if early_ack_bgb = '0' then
---				if BGB_DTACK_N = '0' then
 -- synthesis translate_off					
 					write(L, string'("BGB TILE_RD Y="));
 					hwrite(L, "000000" & BGB_Y(9 downto 0));
@@ -1369,7 +1354,6 @@ begin
 				
 			when BGAC_BASE_RD =>
 				if early_ack_bga='0' then
---				if BGA_DTACK_N = '0' then
 -- synthesis translate_off					
 					write(L, string'("BGA BASE_RD Y="));
 					hwrite(L, "000000" & BGA_Y(9 downto 0));
@@ -1518,7 +1502,6 @@ begin
 				end if;
 			when BGAC_TILE_RD =>
 				if early_ack_bga='0' then
---				if BGA_DTACK_N = '0' then
 -- synthesis translate_off					
 					write(L, string'("BGA TILE_RD Y="));
 					hwrite(L, "000000" & BGA_Y(9 downto 0));
@@ -1670,7 +1653,6 @@ begin
 				
 			when SP2C_X_RD =>
 				if early_ack_sp2='0' then
---				if SP2_DTACK_N = '0' then
 					SP2_SEL <= '0';
 					OBJ_X <= SP2_VRAM_DO(8 downto 0);
 					SP2C <= SP2C_X_TST;
@@ -1692,7 +1674,6 @@ begin
 			
 			when SP2C_TDEF_RD =>
 				if early_ack_sp2='0' then
---				if SP2_DTACK_N = '0' then
 					SP2_SEL <= '0';
 					OBJ_PRI <= SP2_VRAM_DO(15);
 					OBJ_PAL <= SP2_VRAM_DO(14 downto 13);
@@ -1805,9 +1786,6 @@ begin
 					when others =>
 						OBJ_COLNO <= SP2_VRAM_DO(3 downto 0);
 					end case;
-					-- if OBJ_POS < 320 then
-						-- T_PREV_OBJ_COLINFO <= OBJ_COLINFO( CONV_INTEGER(OBJ_POS) );
-					-- end if;					
 					SP2C <= SP2C_PLOT_RD;
 				end if;
 
@@ -1824,9 +1802,6 @@ begin
 			when SP2C_PLOT =>
 				SP2_SEL <= '0';
 				if OBJ_POS < 320 then
-					-- if T_PREV_OBJ_COLINFO(3 downto 0) = "0000" then
-						-- OBJ_COLINFO( CONV_INTEGER(OBJ_POS) ) <= OBJ_PRI & OBJ_PAL & OBJ_COLNO;
-					-- end if;
 
 					if OBJ_COLINFO_Q_A(3 downto 0) = "0000" then
 						if OBJ_MASKED = '0' then
@@ -1863,7 +1838,6 @@ begin
 			
 			when SP2C_TILE_RD =>
 				if early_ack_sp2='0' then
---				if SP2_DTACK_N = '0' then
 					case OBJ_X_OFS(1 downto 0) is
 					when "00" =>
 						OBJ_COLNO <= SP2_VRAM_DO(15 downto 12);
@@ -1874,11 +1848,7 @@ begin
 					when others =>
 						OBJ_COLNO <= SP2_VRAM_DO(3 downto 0);
 					end case;
-					-- if OBJ_POS < 320 then
-						-- T_PREV_OBJ_COLINFO <= OBJ_COLINFO( CONV_INTEGER(OBJ_POS) );
-					-- end if;					
 					SP2C <= SP2C_PLOT;
---					SP2C <= SP2C_LOOP;
 				end if;
 
 			when SP2C_NEXT =>
@@ -2511,7 +2481,6 @@ begin
 			
 			when DTC_VRAM_RD2 =>
 				if early_ack_dt='0' then
---				if DT_VRAM_DTACK_N = '0' then
 					DT_VRAM_SEL <= '0';	
 					DT_RD_DATA <= DT_VRAM_DO;
 					DT_RD_DTACK_N <= '0';
@@ -2674,7 +2643,6 @@ begin
 				
 			when DMA_FILL_WR2 =>
 				if early_ack_dt='0' then
---				if DT_VRAM_DTACK_N = '0' then
 					DT_VRAM_SEL <= '0';	
 					ADDR <= ADDR + ADDR_STEP;
 					DMA_SOURCE <= DMA_SOURCE + ADDR_STEP;

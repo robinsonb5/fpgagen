@@ -17,7 +17,7 @@ unsigned char chr[] = { 'U','X','0','1','Z','W','L','H','-' };
 unsigned char *rom = NULL;
 
 void load_rom(void) {
-  FILE *f = fopen("SpriteMaskingTestRomSrc/vram - h32.bin", "rb");
+  FILE *f = fopen("dump/vram.bin", "rb");
   if(!f) perror("fopen");
   rom = malloc(65536);
   fread(rom, 65536, 1, f);

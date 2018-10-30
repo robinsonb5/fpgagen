@@ -765,9 +765,9 @@ M5 <= REG(1)(2);
 -- Base addresses
 HSCB <= REG(13)(5 downto 0);
 NTBB <= REG(4)(2 downto 0);
-NTWB <= REG(3)(5 downto 1);
+NTWB <= REG(3)(5 downto 2)&(REG(3)(1) and not H40);
 NTAB <= REG(2)(5 downto 3);
-SATB <= REG(5)(6 downto 0);
+SATB <= REG(5)(6 downto 1)&(REG(5)(0) and not H40);
 
 -- Read-only registers
 ODD <= FIELD when IM = '1' else '0';
@@ -1342,7 +1342,7 @@ begin
 				
 			when BGAC_CALC_BASE =>
 				if WIN_H = '1' or WIN_V = '1' then
-					V_BGA_XBASE := (NTWB(4 downto 1) & (not H40 and NTWB(0))  & "00000000000") + (BGA_POS(9 downto 3) & "0");
+					V_BGA_XBASE := (NTWB & "00000000000") + (BGA_POS(9 downto 3) & "0");
 					if H40 = '0' then -- WIN is 32 tiles wide in H32 mode
 						V_BGA_BASE := V_BGA_XBASE + (BGA_Y(9 downto 3) & "00000" & "0");
 					else              -- WIN is 64 tiles wide in H40 mode

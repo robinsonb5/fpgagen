@@ -696,7 +696,9 @@ V30 <= REG(1)(3);
 -- V30 <= '0';
 HSCR <= REG(11)(1 downto 0);
 HSIZE <= REG(16)(1 downto 0);
-VSIZE <= REG(16)(5 downto 4);
+-- VSIZE is limited to 64 if HSIZE is 64
+-- TODO: should it be limited to 32 if HSIZE = 128?
+VSIZE <= "01" when REG(16)(5 downto 4) = "11" and HSIZE = "01" else REG(16)(5 downto 4);
 VSCR <= REG(11)(2);
 
 WVP <= REG(18)(4 downto 0);

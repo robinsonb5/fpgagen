@@ -124,6 +124,57 @@ void cpu_c(char clk, char rst_n, char sel[1], char dtack_n, char rnw[1], char ds
 	    a_i = 4;
 	    d_i = ((0x80 + cnt)<<8) + regs[cnt];
 	    printf("REG %04x\n", d_i);
+
+	    // dump some extra info
+	    switch(cnt) {
+	    case 0:
+	      printf("  left 8 pixels: %s\n", (regs[0]&0x20)?"hidden":"visible");
+	      printf("  display enable: %s\n", (regs[0]&0x01)?"overlay":"normal");
+	      break;
+	    case 1:
+	      printf("  vram size: %s\n", (regs[1]&0x80)?"128k":"64k");
+	      printf("  display: %s\n", (regs[1]&0x40)?"enabled":"disabled");
+	      printf("  image height: %s\n", (regs[1]&0x04)?"V30 (30 cells, 240 pixels)":"V28 (28 cells, 224 pixels)");
+	      printf("  master system mode 4: %s\n", (regs[1]&0x02)?"enaled":"disabled");
+	      break;
+	    case 2:
+	      printf("  plane a nametable: $%04x\n", (regs[2] & 0x78)<<10 );
+	      break;
+	    case 3:
+	      printf("  window nametable: $%04x\n", (regs[3] & 0x7e)<<10 );
+	      if(regs[3] & 0x40) printf("  WARNING: window plane addresses second 64k!!!\n");  
+	      break;
+	    case 4:
+	      printf("  plane b nametable: $%04x\n", (regs[4] & 0x0f)<<13 );
+	      break;
+	    case 5:
+	      printf("  sprite table location: $%04x\n", regs[5]<<9 );
+	      break;
+	    case 10:
+	      printf("  hint counter: %d\n", regs[10]);
+	      break;
+	    case 11: {
+	      char *hsmode[]={"once", "forbidden", "8 pix per long", "one line per long" };
+	      printf("  vscroll: %s\n", (regs[11]&4)?"2 cells per VSRAM entry":"entire screen from VSRAM(0)");
+	      printf("  hscroll: %s\n", hsmode[regs[11]&3] );
+	      } break;
+	    case 12:
+	      printf("  H40 R0: %s\n", (regs[12]&0x80)?"40 cells, 320 pixel":"32 cells, 256 pixel");
+	      printf("  H40 R1: %s\n", (regs[12]&0x01)?"40 cells, 320 pixel":"32 cells, 256 pixel");
+	      break;
+	    case 13:
+	      printf("  hscroll data: $%04x\n", (regs[13]&0x7f)<<10);
+	      break;
+	    case 15:
+	      printf("  auto increment: $%02x\n", regs[15]);
+	      break;
+	    case 16: {
+	      char *size[]={"32", "64", "forbidden", "128" };
+	      printf("  vertical plane size: %s\n", size[(regs[16]>>4)&3]);
+	      printf("  horizontal plane size: %s\n", size[regs[16]&3]);
+	      } break;
+	    }
+	    
 	    cnt++;
 	    wait = 0;
 	  }

@@ -140,7 +140,8 @@ signal IN_HBL		: std_logic;
 signal IN_VBL		: std_logic;
 
 signal SOVR			: std_logic;
-signal SOVR_SET		: std_logic;
+signal SP1_SOVR_SET	: std_logic;
+signal SP3_SOVR_SET	: std_logic;
 signal SOVR_CLR		: std_logic;
 
 signal SCOL			: std_logic;
@@ -351,6 +352,7 @@ type vmc_t is (
 	VMC_IDLE,
 	VMC_BGB,
 	VMC_BGA,
+	VMC_SP2,
 	VMC_SP3,
 	VMC_DT
 );
@@ -359,6 +361,7 @@ signal VMC_NEXT : vmc_t := VMC_IDLE;
 
 signal early_ack_bga : std_logic;
 signal early_ack_bgb : std_logic;
+signal early_ack_sp2 : std_logic;
 signal early_ack_sp3 : std_logic;
 signal early_ack_dt : std_logic;
 signal early_ack : std_logic;
@@ -479,6 +482,12 @@ signal OBJ_CACHE_SL_ADDR_RD	: std_logic_vector(6 downto 0);
 signal OBJ_CACHE_SL_ADDR_WR	: std_logic_vector(6 downto 0);
 signal OBJ_CACHE_SL_Q		: std_logic_vector(15 downto 0);
 
+signal OBJ_VISINFO_ADDR_RD	: std_logic_vector(4 downto 0);
+signal OBJ_VISINFO_ADDR_WR	: std_logic_vector(4 downto 0);
+signal OBJ_VISINFO_D		: std_logic_vector(19 downto 0);
+signal OBJ_VISINFO_WE		: std_logic;
+signal OBJ_VISINFO_Q		: std_logic_vector(19 downto 0);
+
 signal OBJ_COLINFO_ADDR_A	: std_logic_vector(8 downto 0);
 signal OBJ_COLINFO_ADDR_B	: std_logic_vector(8 downto 0);
 signal OBJ_COLINFO_D_A		: std_logic_vector(6 downto 0);
@@ -488,17 +497,43 @@ signal OBJ_COLINFO_WE_B		: std_logic;
 signal OBJ_COLINFO_Q_A		: std_logic_vector(6 downto 0);
 signal OBJ_COLINFO_Q_B		: std_logic_vector(6 downto 0);
 
+-- PART 1
+signal SP1E_ACTIVATE	: std_logic;
+
+type sp1c_t is (
+	SP1C_INIT,
+	SP1C_Y_RD,
+	SP1C_Y_RD2,
+	SP1C_Y_RD3,
+	SP1C_Y_TST,
+	SP1C_SHOW,
+	SP1C_NEXT,
+	SP1C_DONE
+);
+signal SP1C	: SP1C_t;
+signal SP1_Y : std_logic_vector(7 downto 0);
+signal OBJ_TOT			: std_logic_vector(6 downto 0);
+signal OBJ_NEXT			: std_logic_vector(6 downto 0);
+signal OBJ_NB			: std_logic_vector(4 downto 0);
+signal OBJ_Y_OFS1		: std_logic_vector(8 downto 0);
+
+signal OBJ_HS1			: std_logic_vector(1 downto 0);
+signal OBJ_VS1			: std_logic_vector(1 downto 0);
+
 -- PART 2
+signal SP2_VRAM_ADDR	: std_logic_vector(14 downto 0);
+signal SP2_VRAM_DO		: std_logic_vector(15 downto 0);
+signal SP2_VRAM_DO_REG	: std_logic_vector(15 downto 0);
+signal SP2_SEL			: std_logic;
+signal SP2_DTACK_N		: std_logic;
+
+-- PART 3
 signal SP3E_ACTIVATE	: std_logic;
 
 type sp3c_t is (
 	SP3C_INIT,
 	SP3C_Y_RD,
 	SP3C_Y_RD2,
-	SP3C_Y_RD3,
-	SP3C_Y_RD4,
-	SP3C_Y_TST,
-	SP3C_SHOW,
 	SP3C_X_RD,
 	SP3C_X_TST,
 	SP3C_TDEF_RD,
@@ -521,10 +556,8 @@ signal SP3_VRAM_DO_REG	: std_logic_vector(15 downto 0);
 signal SP3_SEL		: std_logic;
 signal SP3_DTACK_N	: std_logic;
 
-signal OBJ_TOT			: std_logic_vector(6 downto 0);
-signal OBJ_NEXT			: std_logic_vector(6 downto 0);
-signal OBJ_NB			: std_logic_vector(6 downto 0);
 signal OBJ_PIX			: std_logic_vector(8 downto 0);
+signal OBJ_NO			: std_logic_vector(4 downto 0);
 
 signal OBJ_Y_OFS		: std_logic_vector(8 downto 0);
 signal OBJ_LINK			: std_logic_vector(6 downto 0);
@@ -693,6 +726,24 @@ port map(
 OBJ_CACHE_SL_L_D <= OBJ_CACHE_SL_D(7 downto 0);
 OBJ_CACHE_SL_H_D <= OBJ_CACHE_SL_D(15 downto 8);
 OBJ_CACHE_SL_Q <= OBJ_CACHE_SL_H_Q & OBJ_CACHE_SL_L_Q;
+
+obj_visinfo : entity work.DualPortRAM
+generic map (
+	addrbits	=> 5,
+	databits	=> 20
+)
+port map(
+	clock		=> MEMCLK,
+	data_a		=> (others => '0'),
+	data_b		=> OBJ_VISINFO_D,
+	address_a	=> OBJ_VISINFO_ADDR_RD,
+	address_b	=> OBJ_VISINFO_ADDR_WR,
+	wren_a		=> '0',
+	wren_b		=> OBJ_VISINFO_WE,
+	q_a			=> OBJ_VISINFO_Q,
+	q_b			=> open
+ );
+
 
 cram : entity work.DualPortRAM
 generic map (
@@ -915,18 +966,20 @@ vram_a <= vram_a_reg(15 downto 1) when M128 = '0' else vram_a_reg(16 downto 11) 
 
 early_ack_bga <= '0' when VMC=VMC_BGA and vram_req_reg=vram_ack else '1';
 early_ack_bgb <= '0' when VMC=VMC_BGB and vram_req_reg=vram_ack else '1';
+early_ack_sp2 <= '0' when VMC=VMC_SP2 and vram_req_reg=vram_ack else '1';
 early_ack_sp3 <= '0' when VMC=VMC_SP3 and vram_req_reg=vram_ack else '1';
 early_ack_dt <= '0' when VMC=VMC_DT and vram_req_reg=vram_ack else '1';
 
 BGA_VRAM_DO <= vram_q when early_ack_bga='0' and BGA_DTACK_N = '1' else BGA_VRAM_DO_REG;
 BGB_VRAM_DO <= vram_q when early_ack_bgb='0' and BGB_DTACK_N = '1' else BGB_VRAM_DO_REG;
+SP2_VRAM_DO <= vram_q when early_ack_sp2='0' and SP2_DTACK_N = '1' else SP2_VRAM_DO_REG;
 SP3_VRAM_DO <= vram_q when early_ack_sp3='0' and SP3_DTACK_N = '1' else SP3_VRAM_DO_REG;
 DT_VRAM_DO <= vram_q when early_ack_dt='0' and SP3_DTACK_N = '1' else DT_VRAM_DO_REG;
 
 
 process( RST_N, CLK,
 	BGA_SEL, BGA_DTACK_N, BGB_SEL, BGB_DTACK_N,
-	SP3_SEL, SP3_DTACK_N, DT_VRAM_SEL, DT_VRAM_DTACK_N,
+	SP2_SEL, SP2_DTACK_N, SP3_SEL, SP3_DTACK_N, DT_VRAM_SEL, DT_VRAM_DTACK_N,
 	early_ack_bga, early_ack_bgb, early_ack_sp3, early_ack_dt)
 -- synthesis translate_off
 file F		: text open write_mode is "vram_dbg.out";
@@ -937,6 +990,7 @@ begin
 		
 		BGB_DTACK_N <= '1';
 		BGA_DTACK_N <= '1';
+		SP2_DTACK_N <= '1';
 		SP3_DTACK_N <= '1';
 		DT_VRAM_DTACK_N <= '1';
 
@@ -952,6 +1006,8 @@ begin
 			VMC_NEXT <= VMC_BGB;
 		elsif BGA_SEL = '1' and BGA_DTACK_N = '1' and early_ack_bga='1' then
 			VMC_NEXT <= VMC_BGA;
+		elsif SP2_SEL = '1' and SP2_DTACK_N = '1' and early_ack_sp2='1' then
+			VMC_NEXT <= VMC_SP2;
 		elsif SP3_SEL = '1' and SP3_DTACK_N = '1' and early_ack_sp3='1' then
 			VMC_NEXT <= VMC_SP3;
 		elsif DT_VRAM_SEL = '1' and DT_VRAM_DTACK_N = '1' and early_ack_dt='1' then
@@ -966,6 +1022,9 @@ begin
 		if BGA_SEL = '0' then 
 			BGA_DTACK_N <= '1';
 		end if;
+--		if SP2_SEL = '0' then 
+			SP2_DTACK_N <= '1';
+--		end if;
 --		if SP3_SEL = '0' then 
 			SP3_DTACK_N <= '1';
 --		end if;
@@ -982,6 +1041,8 @@ begin
 					vram_a_reg <= '0'&BGA_VRAM_ADDR;
 				when VMC_BGB =>
 					vram_a_reg <= '0'&BGB_VRAM_ADDR;
+				when VMC_SP2 =>
+					vram_a_reg <= '0'&SP2_VRAM_ADDR;
 				when VMC_SP3 =>
 					vram_a_reg <= '0'&SP3_VRAM_ADDR;
 				when VMC_DT =>
@@ -1005,6 +1066,12 @@ begin
 			if vram_req_reg = vram_ack then
 				BGA_VRAM_DO_REG <= vram_q;
 				BGA_DTACK_N <= '0';
+			end if;
+
+		when VMC_SP2 =>		-- SPRITE ENGINE PART 1
+			if vram_req_reg = vram_ack then
+				SP2_VRAM_DO_REG <= vram_q;
+				SP2_DTACK_N <= '0';
 			end if;
 
 		when VMC_SP3 =>		-- SPRITE ENGINE PART 2
@@ -1571,7 +1638,112 @@ begin
 end process;
 
 ----------------------------------------------------------------
--- SPRITE ENGINE - PART TWO
+-- SPRITE ENGINE - PART ONE
+------------------------------------------------------------------
+-- determine the first 16/20 visible sprites
+process( RST_N, CLK )
+begin
+	if RST_N = '0' then
+		SP1C <= SP1C_DONE;
+		OBJ_CACHE_Y_ADDR_RD <= (others => '0');
+		OBJ_CACHE_SL_ADDR_RD <= (others => '0');
+
+		OBJ_VISINFO_ADDR_WR <= (others => '0');
+
+		SP1_SOVR_SET <= '0';
+
+	elsif rising_edge(CLK) then
+
+		SP1_SOVR_SET <= '0';
+
+		case SP1C is
+			when SP1C_INIT =>
+				SP1_Y <= PRE_Y;	-- Latch the current PRE_Y value as it will change during the rendering process
+				OBJ_TOT <= (others => '0');
+				OBJ_NEXT <= (others => '0');
+				OBJ_NB <= (others => '0');
+				OBJ_VISINFO_WE <= '0';
+
+				SP1C <= SP1C_Y_RD;
+
+			when SP1C_Y_RD =>
+				OBJ_CACHE_Y_ADDR_RD <= OBJ_NEXT;
+				OBJ_CACHE_SL_ADDR_RD <= OBJ_NEXT;
+				SP1C <= SP1C_Y_RD2;
+
+			when SP1C_Y_RD2 =>
+				SP1C <= SP1C_Y_RD3;
+
+			when SP1C_Y_RD3 =>
+				OBJ_Y_OFS1 <= "010000000" + ("0" & SP1_Y) - OBJ_CACHE_Y_Q(8 downto 0);
+				OBJ_HS1 <= OBJ_CACHE_SL_Q(11 downto 10);
+				OBJ_VS1 <= OBJ_CACHE_SL_Q(9 downto 8);
+				OBJ_LINK <= OBJ_CACHE_SL_Q(6 downto 0);
+				SP1C <= SP1C_Y_TST;
+
+			when SP1C_Y_TST =>
+				SP1C <= SP1C_NEXT;
+				case OBJ_VS1 is
+				when "00" =>	-- 8 pixels
+					if OBJ_Y_OFS1(8 downto 3) = "000000" then
+						SP1C <= SP1C_SHOW;
+					end if;
+				when "01" =>	-- 16 pixels
+					if OBJ_Y_OFS1(8 downto 4) = "00000" then
+						SP1C <= SP1C_SHOW;
+					end if;
+				when "11" =>	-- 32 pixels
+					if OBJ_Y_OFS1(8 downto 5) = "0000" then
+						SP1C <= SP1C_SHOW;
+					end if;
+				when others =>	-- 24 pixels
+					if OBJ_Y_OFS1(8 downto 5) = "0000" and OBJ_Y_OFS1(4 downto 3) /= "11" then
+						SP1C <= SP1C_SHOW;
+					end if;
+				end case;
+
+			when SP1C_SHOW =>
+				OBJ_NB <= OBJ_NB + 1;
+				OBJ_VISINFO_WE <= '1';
+				OBJ_VISINFO_ADDR_WR <= OBJ_NB;
+				OBJ_VISINFO_D <= OBJ_HS1 & OBJ_VS1 & OBJ_CACHE_Y_Q(8 downto 0) & OBJ_NEXT;
+				SP1C <= SP1C_NEXT;
+
+			when SP1C_NEXT =>
+				OBJ_VISINFO_WE <= '0';
+				OBJ_TOT <= OBJ_TOT + 1;
+				OBJ_NEXT <= OBJ_LINK;
+
+				-- limit number of sprites per line to 20 / 16
+				if (H40 = '1' and OBJ_NB = 20) or (H40 = '0' and OBJ_NB = 16) then
+					SP1C <= SP1C_DONE;
+					SP1_SOVR_SET <= '1';
+				-- check a total of 80 sprites in H40 mode and 64 sprites in H32 mode
+				elsif (H40 = '1' and OBJ_TOT = 79) or 
+				      (H40 = '0' and OBJ_TOT = 63) or
+					 -- the following checks are inspired by the gens-ii emulator
+				      (H40 = '1' and OBJ_LINK >= 80) or 
+				      (H40 = '0' and OBJ_LINK >= 64) or
+				      OBJ_LINK = "0000000" 
+				then
+					SP1C <= SP1C_DONE;
+				else
+					SP1C <= SP1C_Y_RD;
+				end if;
+
+			when others => -- SP1C_DONE
+				OBJ_VISINFO_WE <= '0';
+				OBJ_VISINFO_ADDR_WR <= (others => '0');
+
+				if SP1E_ACTIVATE = '1' then
+					SP1C <= SP1C_INIT;
+				end if;
+		end case;
+	end if;
+end process;
+
+----------------------------------------------------------------
+-- SPRITE ENGINE - PART THREE
 ----------------------------------------------------------------
 process( RST_N, MEMCLK )
 -- variable V_SZ_LINK		: std_logic_vector(10 downto 0);
@@ -1581,73 +1753,43 @@ begin
 		SP3C <= SP3C_DONE;
 		OBJ_COLINFO_ADDR_A <= (others => '0');
 		OBJ_COLINFO_WE_A <= '0';
-		
-		OBJ_CACHE_Y_ADDR_RD <= (others => '0');
-		OBJ_CACHE_SL_ADDR_RD <= (others => '0');
+
 		OBJ_DOT_OVERFLOW <= '0';
-		
+
 		SCOL_SET <= '0';
-		SOVR_SET <= '0';
-		
+		SP3_SOVR_SET <= '0';
+
 	elsif rising_edge(MEMCLK) then
-	
+
 		SCOL_SET <= '0';
-		SOVR_SET <= '0';
-	
+		SP3_SOVR_SET <= '0';
+
 		case SP3C is
 			when SP3C_INIT =>
 				SP3_Y <= PRE_Y;	-- Latch the current PRE_Y value as it will change during the rendering process
-				OBJ_TOT <= (others => '0');
-				OBJ_NEXT <= (others => '0');
-				OBJ_NB <= (others => '0');
+				OBJ_NO <= (others => '0');
+				OBJ_VISINFO_ADDR_RD <= (others => '0');
 				OBJ_PIX <= (others => '0');
 				OBJ_MASKED <= '0';
 				OBJ_VALID_X <= OBJ_DOT_OVERFLOW;
 				OBJ_DOT_OVERFLOW <= '0';
 
 				SP3C <= SP3C_Y_RD;
-			
+
 			when SP3C_Y_RD =>
 				OBJ_COLINFO_WE_A <= '0';
-				OBJ_CACHE_Y_ADDR_RD <= OBJ_NEXT;
-				OBJ_CACHE_SL_ADDR_RD <= OBJ_NEXT;
-				SP3C <= SP3C_Y_RD2;
+				if OBJ_NO = OBJ_NB
+				then
+					SP3C <= SP3C_DONE;
+				else
+					SP3C <= SP3C_Y_RD2;
+				end if;
 			
 			when SP3C_Y_RD2 =>
-				SP3C <= SP3C_Y_RD3;
-			when SP3C_Y_RD3 =>
-				SP3C <= SP3C_Y_RD4;
-			
-			when SP3C_Y_RD4 =>
-				OBJ_Y_OFS <= "010000000" + ("0" & SP3_Y) - OBJ_CACHE_Y_Q(8 downto 0);
-				OBJ_HS <= OBJ_CACHE_SL_Q(11 downto 10);
-				OBJ_VS <= OBJ_CACHE_SL_Q(9 downto 8);
-				OBJ_LINK <= OBJ_CACHE_SL_Q(6 downto 0);
-				SP3C <= SP3C_Y_TST;
-
-			when SP3C_Y_TST =>
-				SP3C <= SP3C_NEXT;
-				case OBJ_VS is
-				when "00" =>	-- 8 pixels
-					if OBJ_Y_OFS(8 downto 3) = "000000" then
-						SP3C <= SP3C_SHOW;
-					end if;
-				when "01" =>	-- 16 pixels
-					if OBJ_Y_OFS(8 downto 4) = "00000" then
-						SP3C <= SP3C_SHOW;
-					end if;
-				when "11" =>	-- 32 pixels
-					if OBJ_Y_OFS(8 downto 5) = "0000" then
-						SP3C <= SP3C_SHOW;
-					end if;
-				when others =>	-- 24 pixels
-					if OBJ_Y_OFS(8 downto 5) = "0000" and OBJ_Y_OFS(4 downto 3) /= "11" then
-						SP3C <= SP3C_SHOW;
-					end if;
-				end case;
-			
-			when SP3C_SHOW =>
-				SP3_VRAM_ADDR <= (SATB(6 downto 0) & "00000000") + (OBJ_NEXT & "11");
+				OBJ_Y_OFS <= "010000000" + ("0" & SP3_Y) - OBJ_VISINFO_Q(15 downto 7);
+				OBJ_HS <= OBJ_VISINFO_Q(19 downto 18);
+				OBJ_VS <= OBJ_VISINFO_Q(17 downto 16);
+				SP3_VRAM_ADDR <= (SATB(6 downto 0) & "00000000") + (OBJ_VISINFO_Q(6 downto 0) & "11");
 				SP3_SEL <= '1';
 				SP3C <= SP3C_X_RD;
 				
@@ -1668,7 +1810,7 @@ begin
 					OBJ_VALID_X <= '1';
 				end if;
 
-				SP3_VRAM_ADDR <= (SATB(6 downto 0) & "00000000") + (OBJ_NEXT & "10");
+				SP3_VRAM_ADDR <= (SATB(6 downto 0) & "00000000") + (OBJ_VISINFO_Q(6 downto 0) & "10");
 				SP3_SEL <= '1';
 				SP3C <= SP3C_TDEF_RD;
 			
@@ -1738,7 +1880,6 @@ begin
 					end if;
 				end case;
 				
-				OBJ_NB <= OBJ_NB + 1;
 				SP3C <= SP3C_CALC_BASE;
 				
 			when SP3C_CALC_BASE =>
@@ -1793,7 +1934,7 @@ begin
 				if (H40 = '1' and OBJ_PIX = 320) or (H40 = '0' and OBJ_PIX = 256) then
 					OBJ_DOT_OVERFLOW <= '1';
 					SP3C <= SP3C_DONE;
-					SOVR_SET <= '1';
+					SP3_SOVR_SET <= '1';
 				end if;
 
 			when SP3C_PLOT_RD =>
@@ -1853,25 +1994,9 @@ begin
 
 			when SP3C_NEXT =>
 				OBJ_COLINFO_WE_A <= '0';
-				OBJ_TOT <= OBJ_TOT + 1;
-				OBJ_NEXT <= OBJ_LINK;
-
-				-- limit number of sprites per line to 20 / 16
-				if (H40 = '1' and OBJ_NB = 20) or (H40 = '0' and OBJ_NB = 16) then
-					SP3C <= SP3C_DONE;
-					SOVR_SET <= '1';
-				-- check a total of 80 sprites in H40 mode and 64 sprites in H32 mode
-				elsif (H40 = '1' and OBJ_TOT = 79) or 
-				      (H40 = '0' and OBJ_TOT = 63) or
-					 -- the following checks are inspired by the gens-ii emulator
-				      (H40 = '1' and OBJ_LINK >= 80) or 
-				      (H40 = '0' and OBJ_LINK >= 64) or
-				      OBJ_LINK = "0000000" 
-				then
-					SP3C <= SP3C_DONE;
-				else
-					SP3C <= SP3C_Y_RD;
-				end if;
+				OBJ_VISINFO_ADDR_RD <= OBJ_NO + 1;
+				OBJ_NO <= OBJ_NO + 1;
+				SP3C <= SP3C_Y_RD;
 
 			when others => -- SP3C_DONE
 				SP3_SEL <= '0';
@@ -2051,6 +2176,8 @@ DISP_ACTIVE <= '1' when V_ACTIVE = '1' and HV_HCNT > HBLANK_END and HV_HCNT <= H
 -- But the background generators are not timed, but free running now.
 BGEN_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = HBLANK_END - 8 else '0';
 
+-- Stage 1
+SP1E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = HBLANK_END else '0';
 -- Stage 2 runs during HBLANK
 SP3E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = H_INT_POS-2 else '0';
 DT_ACTIVE <= '1';
@@ -2939,7 +3066,7 @@ begin
 	if RST_N = '0' then
 		SOVR <= '0';
 	elsif rising_edge( CLK) then
-		if SOVR_SET = '1' then
+		if SP1_SOVR_SET = '1' or SP3_SOVR_SET = '1' then
 			SOVR <= '1';
 		elsif SOVR_CLR = '1' then
 			SOVR <= '0';

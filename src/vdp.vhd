@@ -211,7 +211,7 @@ signal HSCB			: std_logic_vector(5 downto 0);
 signal NTBB			: std_logic_vector(2 downto 0);
 signal NTWB			: std_logic_vector(4 downto 0);
 signal NTAB			: std_logic_vector(2 downto 0);
-signal SATB			: std_logic_vector(6 downto 0);
+signal SATB			: std_logic_vector(7 downto 0);
 
 
 
@@ -758,7 +758,7 @@ HSCB <= REG(13)(5 downto 0);
 NTBB <= REG(4)(2 downto 0);
 NTWB <= REG(3)(5 downto 2)&(REG(3)(1) and not H40);
 NTAB <= REG(2)(5 downto 3);
-SATB <= REG(5)(6 downto 1)&(REG(5)(0) and not H40);
+SATB <= REG(5)(7 downto 1)&(REG(5)(0) and not H40);
 
 -- Read-only registers
 ODD <= FIELD when IM = '1' else '0';
@@ -1647,7 +1647,7 @@ begin
 				end case;
 			
 			when SP2C_SHOW =>
-				SP2_VRAM_ADDR <= (SATB & "00000000") + (OBJ_NEXT & "11");
+				SP2_VRAM_ADDR <= (SATB(6 downto 0) & "00000000") + (OBJ_NEXT & "11");
 				SP2_SEL <= '1';
 				SP2C <= SP2C_X_RD;
 				
@@ -1668,7 +1668,7 @@ begin
 					OBJ_VALID_X <= '1';
 				end if;
 
-				SP2_VRAM_ADDR <= (SATB & "00000000") + (OBJ_NEXT & "10");
+				SP2_VRAM_ADDR <= (SATB(6 downto 0) & "00000000") + (OBJ_NEXT & "10");
 				SP2_SEL <= '1';
 				SP2C <= SP2C_TDEF_RD;
 			

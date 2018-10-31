@@ -23,6 +23,11 @@ unsigned short cram_prepare[][2] = {
   { 4, 0x0000}
 };
 
+unsigned short vram_prepare[][2] = {
+  { 4, 0x4000}, // prepare vram access
+  { 4, 0x0000}
+};
+
 unsigned short *cram = NULL;
 int cram_entries = 0;
 
@@ -31,6 +36,8 @@ int vsram_entries = 0;
 
 unsigned char *regs = NULL;
 int reg_entries = 0;
+
+unsigned short *vram = NULL;
 
 void cpu_c(char clk, char rst_n, char sel[1], char dtack_n, char rnw[1], char ds[2], char a[5], char d[16]) {
   static char last_clk = -1;
@@ -45,6 +52,8 @@ void cpu_c(char clk, char rst_n, char sel[1], char dtack_n, char rnw[1], char ds
   static int a_i   = 0;
   static int d_i   = 0;
 
+  static int sprite_table = -1;
+  
   if(!cram) {
     FILE *f=fopen("dump/cram.bin", "rb");
     if(!f) { perror("cram"); exit(-1); }
@@ -63,6 +72,19 @@ void cpu_c(char clk, char rst_n, char sel[1], char dtack_n, char rnw[1], char ds
     fclose(f);
   }
   
+  if(!vram) {
+    FILE *f=fopen("dump/vram.bin", "rb");
+    if(!f) { perror("cram"); exit(-1); }
+    fseek(f, 0, SEEK_END);
+    int len = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    vram = malloc(len);
+    fread(vram, 1, len, f);
+
+    fclose(f);
+  }
+
   if(!vsram) {
     FILE *f=fopen("dump/vsram.bin", "rb");
     if(!f) { perror("vsram"); exit(-1); }
@@ -149,6 +171,9 @@ void cpu_c(char clk, char rst_n, char sel[1], char dtack_n, char rnw[1], char ds
 	      break;
 	    case 5:
 	      printf("  sprite table location: $%04x\n", regs[5]<<9 );
+	      // we need to save this as we have to write this via the CPU to fill the
+	      // VDP sprite cache
+	      sprite_table = regs[5]<<9;
 	      break;
 	    case 10:
 	      printf("  hint counter: %d\n", regs[10]);
@@ -252,7 +277,50 @@ void cpu_c(char clk, char rst_n, char sel[1], char dtack_n, char rnw[1], char ds
 
 	  // all cram entries written?
 	  if(cnt == cram_entries) {
+	    printf("VRAM prepare for %04x\n", sprite_table);
+
+	    // xyz
+	    vram_prepare[0][1] |= sprite_table & 0x3fff;
+	    vram_prepare[1][1] |= (sprite_table>>14) & 0x3;
+	      
 	    state = 5;
+	    cnt = 0;
+	  }
+	}
+
+	// state 5: prepare vram access
+	else if(state == 5) {
+	  sel_i = 1;
+	  ds_i = 0;
+	  rnw_i = 0;
+	  a_i = vram_prepare[cnt][0];
+	  d_i = vram_prepare[cnt++][1];
+	  wait = 0;
+
+	  // all registers written?
+	  if(cnt == sizeof(vram_prepare)/(2*sizeof(unsigned short))) {
+	    state = 6;  // next-> write vram
+	    wait = 2;
+	    cnt = 0;
+	  }
+	}
+
+	// state 6: load vram
+	else if(state == 6) {
+	  //	  printf("XXX %d\n", cnt+sprite_table/2);
+	  
+	  sel_i = 1;
+	  rnw_i = 0;
+	  ds_i = 0;
+	  a_i = 0;
+	  d_i = htons(vram[cnt+sprite_table/2]);
+	  cnt++;
+	  wait = 0;
+
+	  // all vram sprite table entries written?
+	  if(cnt == 80*4) {
+	    printf("VRAM sprite table upload done\n");
+	    state = 7;
 	    cnt = 0;
 	  }
 	}

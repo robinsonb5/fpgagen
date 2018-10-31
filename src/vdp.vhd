@@ -484,9 +484,15 @@ signal OBJ_CACHE_SL_Q		: std_logic_vector(15 downto 0);
 
 signal OBJ_VISINFO_ADDR_RD	: std_logic_vector(4 downto 0);
 signal OBJ_VISINFO_ADDR_WR	: std_logic_vector(4 downto 0);
-signal OBJ_VISINFO_D		: std_logic_vector(19 downto 0);
+signal OBJ_VISINFO_D		: std_logic_vector(6 downto 0);
 signal OBJ_VISINFO_WE		: std_logic;
-signal OBJ_VISINFO_Q		: std_logic_vector(19 downto 0);
+signal OBJ_VISINFO_Q		: std_logic_vector(6 downto 0);
+
+signal OBJ_SPINFO_ADDR_RD	: std_logic_vector(4 downto 0);
+signal OBJ_SPINFO_ADDR_WR	: std_logic_vector(4 downto 0);
+signal OBJ_SPINFO_D			: std_logic_vector(37 downto 0);
+signal OBJ_SPINFO_WE		: std_logic;
+signal OBJ_SPINFO_Q			: std_logic_vector(37 downto 0);
 
 signal OBJ_COLINFO_ADDR_A	: std_logic_vector(8 downto 0);
 signal OBJ_COLINFO_ADDR_B	: std_logic_vector(8 downto 0);
@@ -517,15 +523,36 @@ signal OBJ_NEXT			: std_logic_vector(6 downto 0);
 signal OBJ_NB			: std_logic_vector(4 downto 0);
 signal OBJ_Y_OFS1		: std_logic_vector(8 downto 0);
 
-signal OBJ_HS1			: std_logic_vector(1 downto 0);
 signal OBJ_VS1			: std_logic_vector(1 downto 0);
 
+signal OBJ_CACHE_ADDR_RD_SP1	: std_logic_vector(6 downto 0);
+
 -- PART 2
+signal SP2E_ACTIVATE	: std_logic;
+
+type sp2c_t is (
+	SP2C_INIT,
+	SP2C_Y_RD,
+	SP2C_Y_RD2,
+	SP2C_Y_RD3,
+	SP2C_Y_RD4,
+	SP2C_X_RD,
+	SP2C_X_TST,
+	SP2C_TDEF_RD,
+	SP2C_NEXT,
+	SP2C_DONE
+);
+signal SP2C		: SP2C_t;
+
 signal SP2_VRAM_ADDR	: std_logic_vector(14 downto 0);
 signal SP2_VRAM_DO		: std_logic_vector(15 downto 0);
 signal SP2_VRAM_DO_REG	: std_logic_vector(15 downto 0);
 signal SP2_SEL			: std_logic;
 signal SP2_DTACK_N		: std_logic;
+
+signal OBJ_IDX			: std_logic_vector(4 downto 0);
+
+signal OBJ_CACHE_ADDR_RD_SP2	: std_logic_vector(6 downto 0);
 
 -- PART 3
 signal SP3E_ACTIVATE	: std_logic;
@@ -534,9 +561,7 @@ type sp3c_t is (
 	SP3C_INIT,
 	SP3C_Y_RD,
 	SP3C_Y_RD2,
-	SP3C_X_RD,
 	SP3C_X_TST,
-	SP3C_TDEF_RD,
 	SP3C_CALC_XY,
 	SP3C_CALC_BASE,
 	SP3C_LOOP,
@@ -657,7 +682,7 @@ generic map (
 	databits	=> 8
 )
 port map(
-	clock		=> MEMCLK,
+	clock		=> CLK,
 	data_a		=> (others => '0'),
 	data_b		=> OBJ_CACHE_Y_L_D,
 	address_a	=> OBJ_CACHE_Y_ADDR_RD,
@@ -674,7 +699,7 @@ generic map (
 	databits	=> 8
 )
 port map(
-	clock		=> MEMCLK,
+	clock		=> CLK,
 	data_a		=> (others => '0'),
 	data_b		=> OBJ_CACHE_Y_H_D,
 	address_a	=> OBJ_CACHE_Y_ADDR_RD,
@@ -695,7 +720,7 @@ generic map (
 	databits	=> 8
 )
 port map(
-	clock		=> MEMCLK,
+	clock		=> CLK,
 	data_a		=> (others => '0'),
 	data_b		=> OBJ_CACHE_SL_L_D,
 	address_a	=> OBJ_CACHE_SL_ADDR_RD,
@@ -712,7 +737,7 @@ generic map (
 	databits	=> 8
 )
 port map(
-	clock		=> MEMCLK,
+	clock		=> CLK,
 	data_a		=> (others => '0'),
 	data_b		=> OBJ_CACHE_SL_H_D,
 	address_a	=> OBJ_CACHE_SL_ADDR_RD,
@@ -730,10 +755,10 @@ OBJ_CACHE_SL_Q <= OBJ_CACHE_SL_H_Q & OBJ_CACHE_SL_L_Q;
 obj_visinfo : entity work.DualPortRAM
 generic map (
 	addrbits	=> 5,
-	databits	=> 20
+	databits	=> 7
 )
 port map(
-	clock		=> MEMCLK,
+	clock		=> CLK,
 	data_a		=> (others => '0'),
 	data_b		=> OBJ_VISINFO_D,
 	address_a	=> OBJ_VISINFO_ADDR_RD,
@@ -744,6 +769,22 @@ port map(
 	q_b			=> open
  );
 
+obj_spinfo : entity work.DualPortRAM
+generic map (
+	addrbits	=> 5,
+	databits	=> 38
+)
+port map(
+	clock		=> MEMCLK,
+	data_a		=> (others => '0'),
+	data_b		=> OBJ_SPINFO_D,
+	address_a	=> OBJ_SPINFO_ADDR_RD,
+	address_b	=> OBJ_SPINFO_ADDR_WR,
+	wren_a		=> '0',
+	wren_b		=> OBJ_SPINFO_WE,
+	q_a			=> OBJ_SPINFO_Q,
+	q_b			=> open
+ );
 
 cram : entity work.DualPortRAM
 generic map (
@@ -980,7 +1021,7 @@ DT_VRAM_DO <= vram_q when early_ack_dt='0' and SP3_DTACK_N = '1' else DT_VRAM_DO
 process( RST_N, CLK,
 	BGA_SEL, BGA_DTACK_N, BGB_SEL, BGB_DTACK_N,
 	SP2_SEL, SP2_DTACK_N, SP3_SEL, SP3_DTACK_N, DT_VRAM_SEL, DT_VRAM_DTACK_N,
-	early_ack_bga, early_ack_bgb, early_ack_sp3, early_ack_dt)
+	early_ack_bga, early_ack_bgb, early_ack_sp2, early_ack_sp3, early_ack_dt)
 -- synthesis translate_off
 file F		: text open write_mode is "vram_dbg.out";
 variable L	: line;
@@ -1068,13 +1109,13 @@ begin
 				BGA_DTACK_N <= '0';
 			end if;
 
-		when VMC_SP2 =>		-- SPRITE ENGINE PART 1
+		when VMC_SP2 =>		-- SPRITE ENGINE PART 2
 			if vram_req_reg = vram_ack then
 				SP2_VRAM_DO_REG <= vram_q;
 				SP2_DTACK_N <= '0';
 			end if;
 
-		when VMC_SP3 =>		-- SPRITE ENGINE PART 2
+		when VMC_SP3 =>		-- SPRITE ENGINE PART 3
 			if vram_req_reg = vram_ack then
 				SP3_VRAM_DO_REG <= vram_q;
 				SP3_DTACK_N <= '0';
@@ -1595,8 +1636,9 @@ end process;
 
 
 ----------------------------------------------------------------
--- SPRITE ENGINE - PART ONE
+-- SPRITE ENGINE
 ----------------------------------------------------------------
+
 -- Write-through cache for Y, Link and size fields
 process( RST_N, CLK )
 variable cache_addr: std_logic_vector(13 downto 0);
@@ -1637,6 +1679,10 @@ begin
 	end if;
 end process;
 
+
+OBJ_CACHE_SL_ADDR_RD <= OBJ_CACHE_ADDR_RD_SP1 when SP1C /= SP1C_DONE else OBJ_CACHE_ADDR_RD_SP2;
+OBJ_CACHE_Y_ADDR_RD <= OBJ_CACHE_ADDR_RD_SP1 when SP1C /= SP1C_DONE else OBJ_CACHE_ADDR_RD_SP2;
+
 ----------------------------------------------------------------
 -- SPRITE ENGINE - PART ONE
 ------------------------------------------------------------------
@@ -1645,8 +1691,7 @@ process( RST_N, CLK )
 begin
 	if RST_N = '0' then
 		SP1C <= SP1C_DONE;
-		OBJ_CACHE_Y_ADDR_RD <= (others => '0');
-		OBJ_CACHE_SL_ADDR_RD <= (others => '0');
+		OBJ_CACHE_ADDR_RD_SP1 <= (others => '0');
 
 		OBJ_VISINFO_ADDR_WR <= (others => '0');
 
@@ -1667,8 +1712,7 @@ begin
 				SP1C <= SP1C_Y_RD;
 
 			when SP1C_Y_RD =>
-				OBJ_CACHE_Y_ADDR_RD <= OBJ_NEXT;
-				OBJ_CACHE_SL_ADDR_RD <= OBJ_NEXT;
+				OBJ_CACHE_ADDR_RD_SP1 <= OBJ_NEXT;
 				SP1C <= SP1C_Y_RD2;
 
 			when SP1C_Y_RD2 =>
@@ -1676,7 +1720,6 @@ begin
 
 			when SP1C_Y_RD3 =>
 				OBJ_Y_OFS1 <= "010000000" + ("0" & SP1_Y) - OBJ_CACHE_Y_Q(8 downto 0);
-				OBJ_HS1 <= OBJ_CACHE_SL_Q(11 downto 10);
 				OBJ_VS1 <= OBJ_CACHE_SL_Q(9 downto 8);
 				OBJ_LINK <= OBJ_CACHE_SL_Q(6 downto 0);
 				SP1C <= SP1C_Y_TST;
@@ -1706,7 +1749,7 @@ begin
 				OBJ_NB <= OBJ_NB + 1;
 				OBJ_VISINFO_WE <= '1';
 				OBJ_VISINFO_ADDR_WR <= OBJ_NB;
-				OBJ_VISINFO_D <= OBJ_HS1 & OBJ_VS1 & OBJ_CACHE_Y_Q(8 downto 0) & OBJ_NEXT;
+				OBJ_VISINFO_D <= OBJ_NEXT;
 				SP1C <= SP1C_NEXT;
 
 			when SP1C_NEXT =>
@@ -1743,10 +1786,93 @@ begin
 end process;
 
 ----------------------------------------------------------------
+-- SPRITE ENGINE - PART TWO
+----------------------------------------------------------------
+--fetch X and size info for visible sprites
+process( RST_N, CLK )
+begin
+	if RST_N = '0' then
+		SP2_SEL <= '0';
+		SP2C <= SP2C_DONE;
+		OBJ_CACHE_ADDR_RD_SP2 <= (others => '0');
+		OBJ_SPINFO_ADDR_WR <= (others => '0');
+		OBJ_SPINFO_WE <= '0';
+
+	elsif rising_edge(CLK) then
+
+		case SP2C is
+			when SP2C_INIT =>
+				OBJ_IDX <= (others => '0');
+				OBJ_VISINFO_ADDR_RD <= (others => '0');
+
+				SP2C <= SP2C_Y_RD;
+
+			when SP2C_Y_RD =>
+				if OBJ_IDX = OBJ_NB
+				then
+					SP2C <= SP2C_DONE;
+				else
+					SP2C <= SP2C_Y_RD2;
+				end if;
+
+			when SP2C_Y_RD2 =>
+				OBJ_CACHE_ADDR_RD_SP2 <= OBJ_VISINFO_Q(6 downto 0);
+				SP2C <= SP2C_Y_RD3;
+			when SP2C_Y_RD3 =>
+				SP2C <= SP2C_Y_RD4;
+			when SP2C_Y_RD4 =>
+				OBJ_SPINFO_D(8 downto 0) <= OBJ_CACHE_Y_Q(8 downto 0); --Y
+				OBJ_SPINFO_D(10 downto 9) <= OBJ_CACHE_SL_Q(9 downto 8); --VS
+				OBJ_SPINFO_D(12 downto 11) <= OBJ_CACHE_SL_Q(11 downto 10); --HS
+				SP2_VRAM_ADDR <= (SATB(6 downto 0) & "00000000") + (OBJ_VISINFO_Q(6 downto 0) & "11");
+				SP2_SEL <= '1';
+				SP2C <= SP2C_X_RD;
+
+			when SP2C_X_RD =>
+				if early_ack_sp2='0' then
+					SP2_SEL <= '0';
+					OBJ_SPINFO_D(21 downto 13) <= SP2_VRAM_DO(8 downto 0); --X
+					SP2C <= SP2C_X_TST;
+				end if;
+
+			when SP2C_X_TST =>
+				SP2_VRAM_ADDR <= (SATB(6 downto 0) & "00000000") + (OBJ_VISINFO_Q(6 downto 0) & "10");
+				SP2_SEL <= '1';
+				SP2C <= SP2C_TDEF_RD;
+
+			when SP2C_TDEF_RD =>
+				if early_ack_sp2='0' then
+					SP2_SEL <= '0';
+					OBJ_SPINFO_D(37) <= SP2_VRAM_DO(15); --PRI
+					OBJ_SPINFO_D(36 downto 35) <= SP2_VRAM_DO(14 downto 13); --PAL
+					OBJ_SPINFO_D(34) <= SP2_VRAM_DO(12); --VF
+					OBJ_SPINFO_D(33) <= SP2_VRAM_DO(11); --HF
+					OBJ_SPINFO_D(32 downto 22) <= SP2_VRAM_DO(10 downto 0); --PAT
+					OBJ_SPINFO_ADDR_WR <= OBJ_IDX;
+					OBJ_SPINFO_WE <= '1';
+					SP2C <= SP2C_NEXT;
+				end if;
+
+			when SP2C_NEXT =>
+				OBJ_SPINFO_WE <= '0';
+				OBJ_VISINFO_ADDR_RD <= OBJ_IDX + 1;
+				OBJ_IDX <= OBJ_IDX + 1;
+				SP2C <= SP2C_Y_RD;
+
+			when others => -- SP2C_DONE
+				SP2_SEL <= '0';
+
+				if SP2E_ACTIVATE = '1' then
+					SP2C <= SP2C_INIT;
+				end if;
+		end case;
+	end if;
+end process;
+
+----------------------------------------------------------------
 -- SPRITE ENGINE - PART THREE
 ----------------------------------------------------------------
 process( RST_N, MEMCLK )
--- variable V_SZ_LINK		: std_logic_vector(10 downto 0);
 begin
 	if RST_N = '0' then
 		SP3_SEL <= '0';
@@ -1768,7 +1894,7 @@ begin
 			when SP3C_INIT =>
 				SP3_Y <= PRE_Y;	-- Latch the current PRE_Y value as it will change during the rendering process
 				OBJ_NO <= (others => '0');
-				OBJ_VISINFO_ADDR_RD <= (others => '0');
+				OBJ_SPINFO_ADDR_RD <= (others => '0');
 				OBJ_PIX <= (others => '0');
 				OBJ_MASKED <= '0';
 				OBJ_VALID_X <= OBJ_DOT_OVERFLOW;
@@ -1778,28 +1904,20 @@ begin
 
 			when SP3C_Y_RD =>
 				OBJ_COLINFO_WE_A <= '0';
-				if OBJ_NO = OBJ_NB
+				if OBJ_NO = OBJ_IDX
 				then
 					SP3C <= SP3C_DONE;
 				else
 					SP3C <= SP3C_Y_RD2;
 				end if;
-			
+
 			when SP3C_Y_RD2 =>
-				OBJ_Y_OFS <= "010000000" + ("0" & SP3_Y) - OBJ_VISINFO_Q(15 downto 7);
-				OBJ_HS <= OBJ_VISINFO_Q(19 downto 18);
-				OBJ_VS <= OBJ_VISINFO_Q(17 downto 16);
-				SP3_VRAM_ADDR <= (SATB(6 downto 0) & "00000000") + (OBJ_VISINFO_Q(6 downto 0) & "11");
-				SP3_SEL <= '1';
-				SP3C <= SP3C_X_RD;
-				
-			when SP3C_X_RD =>
-				if early_ack_sp3='0' then
-					SP3_SEL <= '0';
-					OBJ_X <= SP3_VRAM_DO(8 downto 0);
-					SP3C <= SP3C_X_TST;
-				end if;
-			
+				OBJ_Y_OFS <= "010000000" + ("0" & SP3_Y) - OBJ_SPINFO_Q(8 downto 0);
+				OBJ_HS <= OBJ_SPINFO_Q(12 downto 11);
+				OBJ_VS <= OBJ_SPINFO_Q(10 downto 9);
+				OBJ_X <= OBJ_SPINFO_Q(21 downto 13);
+				SP3C <= SP3C_X_TST;
+
 			when SP3C_X_TST =>
 				-- sprite masking algorithm as implemented by gens-ii
 				if OBJ_X = "000000000" and OBJ_VALID_X = '1' then
@@ -1810,20 +1928,12 @@ begin
 					OBJ_VALID_X <= '1';
 				end if;
 
-				SP3_VRAM_ADDR <= (SATB(6 downto 0) & "00000000") + (OBJ_VISINFO_Q(6 downto 0) & "10");
-				SP3_SEL <= '1';
-				SP3C <= SP3C_TDEF_RD;
-			
-			when SP3C_TDEF_RD =>
-				if early_ack_sp3='0' then
-					SP3_SEL <= '0';
-					OBJ_PRI <= SP3_VRAM_DO(15);
-					OBJ_PAL <= SP3_VRAM_DO(14 downto 13);
-					OBJ_VF <= SP3_VRAM_DO(12);
-					OBJ_HF <= SP3_VRAM_DO(11);
-					OBJ_PAT <= SP3_VRAM_DO(10 downto 0);
-					SP3C <= SP3C_CALC_XY;
-				end if;
+				OBJ_PRI <= OBJ_SPINFO_Q(37);
+				OBJ_PAL <= OBJ_SPINFO_Q(36 downto 35);
+				OBJ_VF <= OBJ_SPINFO_Q(34);
+				OBJ_HF <= OBJ_SPINFO_Q(33);
+				OBJ_PAT <= OBJ_SPINFO_Q(32 downto 22);
+				SP3C <= SP3C_CALC_XY;
 			
 			when SP3C_CALC_XY =>
 				case OBJ_HS is
@@ -1994,7 +2104,7 @@ begin
 
 			when SP3C_NEXT =>
 				OBJ_COLINFO_WE_A <= '0';
-				OBJ_VISINFO_ADDR_RD <= OBJ_NO + 1;
+				OBJ_SPINFO_ADDR_RD <= OBJ_NO + 1;
 				OBJ_NO <= OBJ_NO + 1;
 				SP3C <= SP3C_Y_RD;
 
@@ -2177,8 +2287,10 @@ DISP_ACTIVE <= '1' when V_ACTIVE = '1' and HV_HCNT > HBLANK_END and HV_HCNT <= H
 BGEN_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = HBLANK_END - 8 else '0';
 
 -- Stage 1
-SP1E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = HBLANK_END else '0';
--- Stage 2 runs during HBLANK
+SP1E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = H_INT_POS + 2 else '0';
+-- Stage 2
+SP2E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = HBLANK_END + 10 else '0';
+-- Stage 3 runs during HBLANK
 SP3E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = H_INT_POS-2 else '0';
 DT_ACTIVE <= '1';
 

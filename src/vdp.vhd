@@ -490,9 +490,9 @@ signal OBJ_VISINFO_Q		: std_logic_vector(6 downto 0);
 
 signal OBJ_SPINFO_ADDR_RD	: std_logic_vector(4 downto 0);
 signal OBJ_SPINFO_ADDR_WR	: std_logic_vector(4 downto 0);
-signal OBJ_SPINFO_D			: std_logic_vector(37 downto 0);
+signal OBJ_SPINFO_D			: std_logic_vector(33 downto 0);
 signal OBJ_SPINFO_WE		: std_logic;
-signal OBJ_SPINFO_Q			: std_logic_vector(37 downto 0);
+signal OBJ_SPINFO_Q			: std_logic_vector(33 downto 0);
 
 signal OBJ_COLINFO_ADDR_A	: std_logic_vector(8 downto 0);
 signal OBJ_COLINFO_ADDR_B	: std_logic_vector(8 downto 0);
@@ -544,6 +544,7 @@ type sp2c_t is (
 	SP2C_DONE
 );
 signal SP2C		: SP2C_t;
+signal SP2_Y		: std_logic_vector(7 downto 0);
 
 signal SP2_VRAM_ADDR	: std_logic_vector(14 downto 0);
 signal SP2_VRAM_DO		: std_logic_vector(15 downto 0);
@@ -573,8 +574,6 @@ type sp3c_t is (
 	SP3C_DONE
 );
 signal SP3C		: SP3C_t;
-
-signal SP3_Y		: std_logic_vector(7 downto 0);
 
 signal SP3_VRAM_ADDR	: std_logic_vector(14 downto 0);
 signal SP3_VRAM_DO	: std_logic_vector(15 downto 0);
@@ -773,7 +772,7 @@ port map(
 obj_spinfo : entity work.DualPortRAM
 generic map (
 	addrbits	=> 5,
-	databits	=> 38
+	databits	=> 34
 )
 port map(
 	clock		=> MEMCLK,
@@ -1705,7 +1704,7 @@ begin
 
 		case SP1C is
 			when SP1C_INIT =>
-				SP1_Y <= PRE_Y;	-- Latch the current PRE_Y value as it will change during the rendering process
+				SP1_Y <= PRE_Y;	-- Latch the current PRE_Y value
 				OBJ_TOT <= (others => '0');
 				OBJ_NEXT <= (others => '0');
 				OBJ_NB <= (others => '0');
@@ -1798,6 +1797,7 @@ end process;
 ----------------------------------------------------------------
 --fetch X and size info for visible sprites
 process( RST_N, CLK )
+variable y_offset: std_logic_vector(8 downto 0);
 begin
 	if RST_N = '0' then
 		SP2_SEL <= '0';
@@ -1810,6 +1810,7 @@ begin
 
 		case SP2C is
 			when SP2C_INIT =>
+				SP2_Y <= PRE_Y;	-- Latch the current PRE_Y value
 				OBJ_IDX <= (others => '0');
 				OBJ_VISINFO_ADDR_RD <= (others => '0');
 
@@ -1829,9 +1830,12 @@ begin
 			when SP2C_Y_RD3 =>
 				SP2C <= SP2C_Y_RD4;
 			when SP2C_Y_RD4 =>
-				OBJ_SPINFO_D(8 downto 0) <= OBJ_CACHE_Y_Q(8 downto 0); --Y
-				OBJ_SPINFO_D(10 downto 9) <= OBJ_CACHE_SL_Q(9 downto 8); --VS
-				OBJ_SPINFO_D(12 downto 11) <= OBJ_CACHE_SL_Q(11 downto 10); --HS
+				y_offset := "010000000" + ("0" & SP2_Y) - OBJ_CACHE_Y_Q(8 downto 0);
+				--save only the last 5 bits of the offset for part 3
+				--Titan 2 textured cube (ab)uses this
+				OBJ_SPINFO_D(4 downto 0) <= y_offset(4 downto 0); --Y offset
+				OBJ_SPINFO_D(6 downto 5) <= OBJ_CACHE_SL_Q(9 downto 8); --VS
+				OBJ_SPINFO_D(8 downto 7) <= OBJ_CACHE_SL_Q(11 downto 10); --HS
 				SP2_VRAM_ADDR <= (SATB(6 downto 0) & "00000000") + (OBJ_VISINFO_Q(6 downto 0) & "11");
 				SP2_SEL <= '1';
 				SP2C <= SP2C_X_RD;
@@ -1839,7 +1843,7 @@ begin
 			when SP2C_X_RD =>
 				if early_ack_sp2='0' then
 					SP2_SEL <= '0';
-					OBJ_SPINFO_D(21 downto 13) <= SP2_VRAM_DO(8 downto 0); --X
+					OBJ_SPINFO_D(17 downto 9) <= SP2_VRAM_DO(8 downto 0); --X
 					SP2C <= SP2C_X_TST;
 				end if;
 
@@ -1851,11 +1855,11 @@ begin
 			when SP2C_TDEF_RD =>
 				if early_ack_sp2='0' then
 					SP2_SEL <= '0';
-					OBJ_SPINFO_D(37) <= SP2_VRAM_DO(15); --PRI
-					OBJ_SPINFO_D(36 downto 35) <= SP2_VRAM_DO(14 downto 13); --PAL
-					OBJ_SPINFO_D(34) <= SP2_VRAM_DO(12); --VF
-					OBJ_SPINFO_D(33) <= SP2_VRAM_DO(11); --HF
-					OBJ_SPINFO_D(32 downto 22) <= SP2_VRAM_DO(10 downto 0); --PAT
+					OBJ_SPINFO_D(33) <= SP2_VRAM_DO(15); --PRI
+					OBJ_SPINFO_D(32 downto 31) <= SP2_VRAM_DO(14 downto 13); --PAL
+					OBJ_SPINFO_D(30) <= SP2_VRAM_DO(12); --VF
+					OBJ_SPINFO_D(29) <= SP2_VRAM_DO(11); --HF
+					OBJ_SPINFO_D(28 downto 18) <= SP2_VRAM_DO(10 downto 0); --PAT
 					OBJ_SPINFO_ADDR_WR <= OBJ_IDX;
 					OBJ_SPINFO_WE <= '1';
 					SP2C <= SP2C_NEXT;
@@ -1900,7 +1904,6 @@ begin
 
 		case SP3C is
 			when SP3C_INIT =>
-				SP3_Y <= PRE_Y;	-- Latch the current PRE_Y value as it will change during the rendering process
 				OBJ_NO <= (others => '0');
 				OBJ_SPINFO_ADDR_RD <= (others => '0');
 				OBJ_PIX <= (others => '0');
@@ -1920,10 +1923,10 @@ begin
 				end if;
 
 			when SP3C_Y_RD2 =>
-				OBJ_Y_OFS <= "010000000" + ("0" & SP3_Y) - OBJ_SPINFO_Q(8 downto 0);
-				OBJ_HS <= OBJ_SPINFO_Q(12 downto 11);
-				OBJ_VS <= OBJ_SPINFO_Q(10 downto 9);
-				OBJ_X <= OBJ_SPINFO_Q(21 downto 13);
+				OBJ_Y_OFS <= "0000"&OBJ_SPINFO_Q(4 downto 0);
+				OBJ_VS <= OBJ_SPINFO_Q(6 downto 5);
+				OBJ_HS <= OBJ_SPINFO_Q(8 downto 7);
+				OBJ_X <= OBJ_SPINFO_Q(17 downto 9);
 				SP3C <= SP3C_X_TST;
 
 			when SP3C_X_TST =>
@@ -1936,11 +1939,11 @@ begin
 					OBJ_VALID_X <= '1';
 				end if;
 
-				OBJ_PRI <= OBJ_SPINFO_Q(37);
-				OBJ_PAL <= OBJ_SPINFO_Q(36 downto 35);
-				OBJ_VF <= OBJ_SPINFO_Q(34);
-				OBJ_HF <= OBJ_SPINFO_Q(33);
-				OBJ_PAT <= OBJ_SPINFO_Q(32 downto 22);
+				OBJ_PRI <= OBJ_SPINFO_Q(33);
+				OBJ_PAL <= OBJ_SPINFO_Q(32 downto 31);
+				OBJ_VF <= OBJ_SPINFO_Q(30);
+				OBJ_HF <= OBJ_SPINFO_Q(29);
+				OBJ_PAT <= OBJ_SPINFO_Q(28 downto 18);
 				SP3C <= SP3C_CALC_XY;
 			
 			when SP3C_CALC_XY =>
@@ -2299,7 +2302,8 @@ BGEN_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = HBLANK_END - 8 else '0';
 -- "Your emulator suxx" in Titan I demo
 SP1E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = H_INT_POS + 6 else '0';
 -- Stage 2 - runs in the active area
-SP2E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = HBLANK_END + 10 else '0';
+-- Need better timing, now just start it late
+SP2E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = HBLANK_END + 180 else '0';
 -- Stage 3 runs during HBLANK, just before the vcounter incremented
 SP3E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = H_INT_POS-2 else '0';
 DT_ACTIVE <= '1';

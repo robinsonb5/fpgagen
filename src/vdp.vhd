@@ -519,6 +519,8 @@ type sp1c_t is (
 signal SP1C	: SP1C_t;
 signal SP1_Y : std_logic_vector(7 downto 0);
 signal SP1_STOP			: std_logic;
+signal SP1_EN			: std_logic;
+
 signal OBJ_TOT			: std_logic_vector(6 downto 0);
 signal OBJ_NEXT			: std_logic_vector(6 downto 0);
 signal OBJ_NB			: std_logic_vector(4 downto 0);
@@ -544,8 +546,8 @@ type sp2c_t is (
 	SP2C_DONE
 );
 signal SP2C		: SP2C_t;
-signal SP2_Y		: std_logic_vector(7 downto 0);
-
+signal SP2_Y	: std_logic_vector(7 downto 0);
+signal SP2_EN	: std_logic;
 signal SP2_VRAM_ADDR	: std_logic_vector(14 downto 0);
 signal SP2_VRAM_DO		: std_logic_vector(15 downto 0);
 signal SP2_VRAM_DO_REG	: std_logic_vector(15 downto 0);
@@ -1714,7 +1716,7 @@ begin
 				if DE='0' then
 					SP1_STOP <= '1';
 				end if;
-				if HV_PIXDIV = 0 then --check one sprite/pixel, this matches the original HW behavior
+				if SP1_EN = '1' then --check one sprite/pixel, this matches the original HW behavior
 					OBJ_CACHE_ADDR_RD_SP1 <= OBJ_NEXT;
 					SP1C <= SP1C_Y_RD2;
 				end if;
@@ -1809,16 +1811,24 @@ begin
 		case SP2C is
 			when SP2C_INIT =>
 				SP2_Y <= PRE_Y;	-- Latch the current PRE_Y value
-				OBJ_IDX <= (others => '0');
-				OBJ_VISINFO_ADDR_RD <= (others => '0');
+
+				-- Treat VISINFO as a shift register, so start reading
+				-- from the first unused location.
+				-- This way visible sprites processed late.
+				if (H40 = '0' and OBJ_NB = 16) or
+				   (H40 = '1' and OBJ_NB = 20)
+				then
+					OBJ_IDX <= (others => '0');
+					OBJ_VISINFO_ADDR_RD <= (others => '0');
+				else
+					OBJ_IDX <= OBJ_NB;
+					OBJ_VISINFO_ADDR_RD <= OBJ_NB;
+				end if;
 
 				SP2C <= SP2C_Y_RD;
 
 			when SP2C_Y_RD =>
-				if OBJ_IDX = OBJ_NB
-				then
-					SP2C <= SP2C_DONE;
-				else
+				if SP2_EN = '1' then
 					SP2C <= SP2C_Y_RD2;
 				end if;
 
@@ -1865,9 +1875,28 @@ begin
 
 			when SP2C_NEXT =>
 				OBJ_SPINFO_WE <= '0';
-				OBJ_VISINFO_ADDR_RD <= OBJ_IDX + 1;
-				OBJ_IDX <= OBJ_IDX + 1;
 				SP2C <= SP2C_Y_RD;
+				if (H40 = '0' and OBJ_IDX = 15) or
+				   (H40 = '1' and OBJ_IDX = 19)
+				then
+					if OBJ_NB = 0 or
+					(H40 = '0' and OBJ_NB = 16) or
+					(H40 = '1' and OBJ_NB = 20) then
+						OBJ_IDX <= OBJ_NB;
+						SP2C <= SP2C_DONE;
+					else
+						OBJ_IDX <= (others => '0');
+						OBJ_VISINFO_ADDR_RD <= (others => '0');
+					end if;
+				else
+					if OBJ_NB = OBJ_IDX + 1 then
+						OBJ_IDX <= OBJ_NB;
+						SP2C <= SP2C_DONE;
+					else
+						OBJ_IDX <= OBJ_IDX + 1;
+						OBJ_VISINFO_ADDR_RD <= OBJ_IDX + 1;
+					end if;
+				end if;
 
 			when others => -- SP2C_DONE
 				SP2_SEL <= '0';
@@ -2185,6 +2214,9 @@ begin
 		FIFO_EN <= '0';
 		FIFO_CNT <= (others => '0');
 
+		SP1_EN <= '0';
+		SP2_EN <= '0';
+
 	elsif rising_edge(CLK) then
 
 		if M3='0' then
@@ -2196,6 +2228,9 @@ begin
 		VINT_T80_SET <= '0';
 		VINT_T80_CLR <= '0';
 		FIFO_EN <= '0';
+
+		SP1_EN <= '0';
+		SP2_EN <= '0';
 
 		HV_PIXDIV <= HV_PIXDIV + 1;
 		if (RS0 = '1' and H40 = '1' and 
@@ -2277,6 +2312,12 @@ begin
 			then
 				FIFO_EN <= FIFO_CNT(0);
 			end if;
+
+			SP1_EN <= '1'; --SP1 Engine checks one sprite/pixel
+			if HV_HCNT(3 downto 0) = "0000" then
+				SP2_EN <= '1'; --Sprite mapping slots in every two cells
+			end if;
+
 		end if;
 	end if;
 end process;
@@ -2295,8 +2336,7 @@ BGEN_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = HBLANK_END - 8 else '0';
 -- "Your emulator suxx" in Titan I demo
 SP1E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = H_INT_POS + 6 else '0';
 -- Stage 2 - runs in the active area
--- Need better timing, now just start it late
-SP2E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = HBLANK_END + 180 else '0';
+SP2E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = HBLANK_END else '0';
 -- Stage 3 runs during HBLANK, just before the vcounter incremented
 SP3E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = H_INT_POS-2 else '0';
 DT_ACTIVE <= '1';

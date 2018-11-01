@@ -561,16 +561,14 @@ signal SP3E_ACTIVATE	: std_logic;
 
 type sp3c_t is (
 	SP3C_INIT,
+	SP3C_NEXT,
 	SP3C_Y_RD,
-	SP3C_Y_RD2,
-	SP3C_X_TST,
 	SP3C_CALC_XY,
 	SP3C_CALC_BASE,
 	SP3C_LOOP,
 	SP3C_PLOT_RD,
 	SP3C_PLOT,
 	SP3C_TILE_RD,
-	SP3C_NEXT,
 	SP3C_DONE
 );
 signal SP3C		: SP3C_t;
@@ -1911,25 +1909,34 @@ begin
 				OBJ_VALID_X <= OBJ_DOT_OVERFLOW;
 				OBJ_DOT_OVERFLOW <= '0';
 
-				SP3C <= SP3C_Y_RD;
+				SP3C <= SP3C_NEXT;
 
-			when SP3C_Y_RD =>
+			when SP3C_NEXT =>
 				OBJ_COLINFO_WE_A <= '0';
 				if OBJ_NO = OBJ_IDX
 				then
 					SP3C <= SP3C_DONE;
 				else
-					SP3C <= SP3C_Y_RD2;
+					SP3C <= SP3C_Y_RD;
 				end if;
 
-			when SP3C_Y_RD2 =>
+			when SP3C_Y_RD =>
 				OBJ_Y_OFS <= "0000"&OBJ_SPINFO_Q(4 downto 0);
 				OBJ_VS <= OBJ_SPINFO_Q(6 downto 5);
 				OBJ_HS <= OBJ_SPINFO_Q(8 downto 7);
 				OBJ_X <= OBJ_SPINFO_Q(17 downto 9);
-				SP3C <= SP3C_X_TST;
+				OBJ_PAT <= OBJ_SPINFO_Q(28 downto 18);
+				OBJ_HF <= OBJ_SPINFO_Q(29);
+				OBJ_VF <= OBJ_SPINFO_Q(30);
+				OBJ_PAL <= OBJ_SPINFO_Q(32 downto 31);
+				OBJ_PRI <= OBJ_SPINFO_Q(33);
 
-			when SP3C_X_TST =>
+				OBJ_SPINFO_ADDR_RD <= OBJ_NO + 1;
+				OBJ_NO <= OBJ_NO + 1;
+
+				SP3C <= SP3C_CALC_XY;
+
+			when SP3C_CALC_XY =>
 				-- sprite masking algorithm as implemented by gens-ii
 				if OBJ_X = "000000000" and OBJ_VALID_X = '1' then
 					OBJ_MASKED <= '1';
@@ -1938,15 +1945,7 @@ begin
 				if OBJ_X /= "000000000" then
 					OBJ_VALID_X <= '1';
 				end if;
-
-				OBJ_PRI <= OBJ_SPINFO_Q(33);
-				OBJ_PAL <= OBJ_SPINFO_Q(32 downto 31);
-				OBJ_VF <= OBJ_SPINFO_Q(30);
-				OBJ_HF <= OBJ_SPINFO_Q(29);
-				OBJ_PAT <= OBJ_SPINFO_Q(28 downto 18);
-				SP3C <= SP3C_CALC_XY;
 			
-			when SP3C_CALC_XY =>
 				case OBJ_HS is
 				when "00" =>	-- 8 pixels
 					if OBJ_HF = '0' then
@@ -2062,7 +2061,6 @@ begin
 				SP3C <= SP3C_PLOT;
 				
 			when SP3C_PLOT =>
-				SP3_SEL <= '0';
 				if OBJ_POS < 320 then
 
 					if OBJ_COLINFO_Q_A(3 downto 0) = "0000" then
@@ -2100,6 +2098,7 @@ begin
 			
 			when SP3C_TILE_RD =>
 				if early_ack_sp3='0' then
+					SP3_SEL <= '0';
 					case OBJ_X_OFS(1 downto 0) is
 					when "00" =>
 						OBJ_COLNO <= SP3_VRAM_DO(15 downto 12);
@@ -2110,14 +2109,8 @@ begin
 					when others =>
 						OBJ_COLNO <= SP3_VRAM_DO(3 downto 0);
 					end case;
-					SP3C <= SP3C_PLOT;
+					SP3C <= SP3C_PLOT_RD;
 				end if;
-
-			when SP3C_NEXT =>
-				OBJ_COLINFO_WE_A <= '0';
-				OBJ_SPINFO_ADDR_RD <= OBJ_NO + 1;
-				OBJ_NO <= OBJ_NO + 1;
-				SP3C <= SP3C_Y_RD;
 
 			when others => -- SP3C_DONE
 				SP3_SEL <= '0';

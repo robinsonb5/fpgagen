@@ -1829,7 +1829,11 @@ begin
 
 			when SP2C_Y_RD =>
 				if SP2_EN = '1' then
-					SP2C <= SP2C_Y_RD2;
+					if OBJ_IDX < OBJ_NB then
+						SP2C <= SP2C_Y_RD2;
+					else
+						SP2C <= SP2C_NEXT;
+					end if;
 				end if;
 
 			when SP2C_Y_RD2 =>

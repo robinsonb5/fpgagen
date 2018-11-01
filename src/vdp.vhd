@@ -518,6 +518,7 @@ type sp1c_t is (
 );
 signal SP1C	: SP1C_t;
 signal SP1_Y : std_logic_vector(7 downto 0);
+signal SP1_STOP			: std_logic;
 signal OBJ_TOT			: std_logic_vector(6 downto 0);
 signal OBJ_NEXT			: std_logic_vector(6 downto 0);
 signal OBJ_NB			: std_logic_vector(4 downto 0);
@@ -1696,6 +1697,7 @@ begin
 		OBJ_VISINFO_ADDR_WR <= (others => '0');
 
 		SP1_SOVR_SET <= '0';
+		SP1_STOP <= '0';
 
 	elsif rising_edge(CLK) then
 
@@ -1708,12 +1710,17 @@ begin
 				OBJ_NEXT <= (others => '0');
 				OBJ_NB <= (others => '0');
 				OBJ_VISINFO_WE <= '0';
-
+				SP1_STOP <= '0';
 				SP1C <= SP1C_Y_RD;
 
 			when SP1C_Y_RD =>
-				OBJ_CACHE_ADDR_RD_SP1 <= OBJ_NEXT;
-				SP1C <= SP1C_Y_RD2;
+				if DE='0' then
+					SP1_STOP <= '1';
+				end if;
+				if HV_PIXDIV = 0 then --check one sprite/pixel, this matches the original HW behavior
+					OBJ_CACHE_ADDR_RD_SP1 <= OBJ_NEXT;
+					SP1C <= SP1C_Y_RD2;
+				end if;
 
 			when SP1C_Y_RD2 =>
 				SP1C <= SP1C_Y_RD3;
@@ -1767,7 +1774,8 @@ begin
 					 -- the following checks are inspired by the gens-ii emulator
 				      (H40 = '1' and OBJ_LINK >= 80) or 
 				      (H40 = '0' and OBJ_LINK >= 64) or
-				      OBJ_LINK = "0000000" 
+				      OBJ_LINK = "0000000" or
+					  SP1_STOP = '1'
 				then
 					SP1C <= SP1C_DONE;
 				else
@@ -2286,11 +2294,13 @@ DISP_ACTIVE <= '1' when V_ACTIVE = '1' and HV_HCNT > HBLANK_END and HV_HCNT <= H
 -- But the background generators are not timed, but free running now.
 BGEN_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = HBLANK_END - 8 else '0';
 
--- Stage 1
-SP1E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = H_INT_POS + 2 else '0';
--- Stage 2
+-- Stage 1 - runs after the vcounter incremented
+-- Carefully choosing the starting position avoids the
+-- "Your emulator suxx" in Titan I demo
+SP1E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = H_INT_POS + 6 else '0';
+-- Stage 2 - runs in the active area
 SP2E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = HBLANK_END + 10 else '0';
--- Stage 3 runs during HBLANK
+-- Stage 3 runs during HBLANK, just before the vcounter incremented
 SP3E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = H_INT_POS-2 else '0';
 DT_ACTIVE <= '1';
 

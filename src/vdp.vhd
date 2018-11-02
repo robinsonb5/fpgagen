@@ -584,7 +584,7 @@ signal SP3_DTACK_N	: std_logic;
 signal OBJ_PIX			: std_logic_vector(8 downto 0);
 signal OBJ_NO			: std_logic_vector(4 downto 0);
 
-signal OBJ_Y_OFS		: std_logic_vector(8 downto 0);
+signal OBJ_Y_OFS		: std_logic_vector(4 downto 0);
 signal OBJ_LINK			: std_logic_vector(6 downto 0);
 
 signal OBJ_HS			: std_logic_vector(1 downto 0);
@@ -1954,7 +1954,7 @@ begin
 				end if;
 
 			when SP3C_Y_RD =>
-				OBJ_Y_OFS <= "0000"&OBJ_SPINFO_Q(4 downto 0);
+				OBJ_Y_OFS <= OBJ_SPINFO_Q(4 downto 0);
 				OBJ_VS <= OBJ_SPINFO_Q(6 downto 5);
 				OBJ_HS <= OBJ_SPINFO_Q(8 downto 7);
 				OBJ_X <= OBJ_SPINFO_Q(17 downto 9);
@@ -2009,15 +2009,15 @@ begin
 				case OBJ_VS is
 				when "00" =>	-- 8 pixels
 					if OBJ_VF = '1' then
-						OBJ_Y_OFS(4 downto 0) <= "00" & not(OBJ_Y_OFS(2 downto 0));
+						OBJ_Y_OFS <= "00" & not(OBJ_Y_OFS(2 downto 0));
 					end if;					
 				when "01" =>	-- 16 pixels
 					if OBJ_VF = '1' then
-						OBJ_Y_OFS(4 downto 0) <= "0" & not(OBJ_Y_OFS(3 downto 0));
+						OBJ_Y_OFS <= "0" & not(OBJ_Y_OFS(3 downto 0));
 					end if;										
 				when "11" =>	-- 32 pixels
 					if OBJ_VF= '1' then
-						OBJ_Y_OFS(4 downto 0) <= not(OBJ_Y_OFS(4 downto 0));
+						OBJ_Y_OFS <= not(OBJ_Y_OFS(4 downto 0));
 					end if;														
 				when others =>	-- 24 pixels
 					if OBJ_VF = '1' then
@@ -2037,7 +2037,7 @@ begin
 				
 			when SP3C_CALC_BASE =>
 				OBJ_POS <= OBJ_X - "010000000";
-				OBJ_TILEBASE <= (OBJ_PAT & "0000") + (OBJ_Y_OFS & "0");
+				OBJ_TILEBASE <= (OBJ_PAT & "0000") + ("0000" & OBJ_Y_OFS & "0");
 				SP3C <= SP3C_LOOP;
 
 			-- loop over all sprite pixels on the current line

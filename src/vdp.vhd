@@ -1015,7 +1015,7 @@ BGA_VRAM_DO <= vram_q when early_ack_bga='0' and BGA_DTACK_N = '1' else BGA_VRAM
 BGB_VRAM_DO <= vram_q when early_ack_bgb='0' and BGB_DTACK_N = '1' else BGB_VRAM_DO_REG;
 SP2_VRAM_DO <= vram_q when early_ack_sp2='0' and SP2_DTACK_N = '1' else SP2_VRAM_DO_REG;
 SP3_VRAM_DO <= vram_q when early_ack_sp3='0' and SP3_DTACK_N = '1' else SP3_VRAM_DO_REG;
-DT_VRAM_DO <= vram_q when early_ack_dt='0' and SP3_DTACK_N = '1' else DT_VRAM_DO_REG;
+DT_VRAM_DO <= vram_q when early_ack_dt='0' and DT_VRAM_DTACK_N = '1' else DT_VRAM_DO_REG;
 
 
 process( RST_N, CLK,

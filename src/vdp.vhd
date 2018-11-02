@@ -132,7 +132,6 @@ signal FIFO_RD_POS	: std_logic_vector(1 downto 0);
 signal FIFO_EMPTY	: std_logic;
 signal FIFO_FULL	: std_logic;
 signal FIFO_EN		: std_logic;
-signal FIFO_CNT		: std_logic_vector(5 downto 0);
 signal FIFO_SKIP	: std_logic;
 
 signal IN_DMA		: std_logic;
@@ -152,6 +151,7 @@ signal SCOL_CLR		: std_logic;
 -- INTERRUPTS
 ----------------------------------------------------------------
 signal HINT_COUNT	: std_logic_vector(7 downto 0);
+signal HINT_EN		: std_logic;
 signal HINT_PENDING	: std_logic;
 signal HINT_PENDING_SET	: std_logic;
 signal HINT_FF		: std_logic;
@@ -585,7 +585,7 @@ signal SP3_DTACK_N	: std_logic;
 signal OBJ_PIX			: std_logic_vector(8 downto 0);
 signal OBJ_NO			: std_logic_vector(4 downto 0);
 
-signal OBJ_Y_OFS		: std_logic_vector(8 downto 0);
+signal OBJ_Y_OFS		: std_logic_vector(4 downto 0);
 signal OBJ_LINK			: std_logic_vector(6 downto 0);
 
 signal OBJ_HS			: std_logic_vector(1 downto 0);
@@ -1016,7 +1016,7 @@ BGA_VRAM_DO <= vram_q when early_ack_bga='0' and BGA_DTACK_N = '1' else BGA_VRAM
 BGB_VRAM_DO <= vram_q when early_ack_bgb='0' and BGB_DTACK_N = '1' else BGB_VRAM_DO_REG;
 SP2_VRAM_DO <= vram_q when early_ack_sp2='0' and SP2_DTACK_N = '1' else SP2_VRAM_DO_REG;
 SP3_VRAM_DO <= vram_q when early_ack_sp3='0' and SP3_DTACK_N = '1' else SP3_VRAM_DO_REG;
-DT_VRAM_DO <= vram_q when early_ack_dt='0' and SP3_DTACK_N = '1' else DT_VRAM_DO_REG;
+DT_VRAM_DO <= vram_q when early_ack_dt='0' and DT_VRAM_DTACK_N = '1' else DT_VRAM_DO_REG;
 
 
 process( RST_N, CLK,
@@ -1955,7 +1955,7 @@ begin
 				end if;
 
 			when SP3C_Y_RD =>
-				OBJ_Y_OFS <= "0000"&OBJ_SPINFO_Q(4 downto 0);
+				OBJ_Y_OFS <= OBJ_SPINFO_Q(4 downto 0);
 				OBJ_VS <= OBJ_SPINFO_Q(6 downto 5);
 				OBJ_HS <= OBJ_SPINFO_Q(8 downto 7);
 				OBJ_X <= OBJ_SPINFO_Q(17 downto 9);
@@ -2010,15 +2010,15 @@ begin
 				case OBJ_VS is
 				when "00" =>	-- 8 pixels
 					if OBJ_VF = '1' then
-						OBJ_Y_OFS(4 downto 0) <= "00" & not(OBJ_Y_OFS(2 downto 0));
+						OBJ_Y_OFS <= "00" & not(OBJ_Y_OFS(2 downto 0));
 					end if;					
 				when "01" =>	-- 16 pixels
 					if OBJ_VF = '1' then
-						OBJ_Y_OFS(4 downto 0) <= "0" & not(OBJ_Y_OFS(3 downto 0));
+						OBJ_Y_OFS <= "0" & not(OBJ_Y_OFS(3 downto 0));
 					end if;										
 				when "11" =>	-- 32 pixels
 					if OBJ_VF= '1' then
-						OBJ_Y_OFS(4 downto 0) <= not(OBJ_Y_OFS(4 downto 0));
+						OBJ_Y_OFS <= not(OBJ_Y_OFS(4 downto 0));
 					end if;														
 				when others =>	-- 24 pixels
 					if OBJ_VF = '1' then
@@ -2038,7 +2038,7 @@ begin
 				
 			when SP3C_CALC_BASE =>
 				OBJ_POS <= OBJ_X - "010000000";
-				OBJ_TILEBASE <= (OBJ_PAT & "0000") + (OBJ_Y_OFS & "0");
+				OBJ_TILEBASE <= (OBJ_PAT & "0000") + ("0000" & OBJ_Y_OFS & "0");
 				SP3C <= SP3C_LOOP;
 
 			-- loop over all sprite pixels on the current line
@@ -2208,6 +2208,7 @@ begin
 		HV_HCNT <= (others => '0');
 		HV_VCNT <= (others => '0');
 
+		HINT_EN <= '0';
 		HINT_PENDING_SET <= '0';
 		VINT_TG68_PENDING_SET <= '0';
 		VINT_T80_SET <= '0';
@@ -2217,7 +2218,6 @@ begin
 		IN_VBL <= '1';
 
 		FIFO_EN <= '0';
-		FIFO_CNT <= (others => '0');
 
 		SP1_EN <= '0';
 		SP2_EN <= '0';
@@ -2263,14 +2263,16 @@ begin
 				BGB_VSRAM1_LATCH <= VSRAM(1)(9 downto 0);
 				BGA_VSRAM0_LATCH <= VSRAM(0)(9 downto 0);
 
-				if HV_VCNT >= (V_DISP_HEIGHT - 1) or HV_VCNT < "1"&x"FF"
-					then HINT_COUNT <= HIT;
+				-- HINT_EN effect is delayed by one line
+				if HV_VCNT = "1"&x"FE" then
+					HINT_EN <= '1';
+				elsif HV_VCNT = V_DISP_HEIGHT - 2 then
+					HINT_EN <= '0';
 				end if;
 
-				if HV_VCNT = "1"&x"FE" then
-					IN_VBL <= '0';
-				elsif HV_VCNT = "1"&x"FF" or HV_VCNT < V_DISP_HEIGHT - 1
-				then
+				if HINT_EN = '0'
+					then HINT_COUNT <= HIT;
+				else
 					if HINT_COUNT = 0 then
 						HINT_PENDING_SET <= '1';
 						HINT_COUNT <= HIT;
@@ -2278,7 +2280,10 @@ begin
 						HINT_COUNT <= HINT_COUNT - 1;
 					end if;
 				end if;
-				if HV_VCNT = V_DISP_HEIGHT - 1 then
+
+				if HV_VCNT = "1"&x"FE" then
+					IN_VBL <= '0';
+				elsif HV_VCNT = V_DISP_HEIGHT - 1 then
 					IN_VBL <= '1';
 				end if;
 			end if;
@@ -2302,20 +2307,17 @@ begin
 				end if;
 			end if;
 
-			FIFO_CNT <= FIFO_CNT + 1;
-			if (H40 = '0' and FIFO_CNT = 21) or
-			   (H40 = '1' and FIFO_CNT = 23) or
-			   HV_HCNT = H_INT_POS 
-			then
-			   FIFO_CNT <= (others => '0');
-			end if;
-			if IN_VBL = '0' and DE = '1' and FIFO_CNT = 0
-			then
-				FIFO_EN <= '1';
-			end if;
 			if IN_VBL = '1' or DE = '0'
 			then
-				FIFO_EN <= FIFO_CNT(0);
+				FIFO_EN <= HV_HCNT(0);
+			end if;
+			if IN_VBL = '0' and DE = '1' then
+				if (HV_HCNT(3 downto 0) = "0000" and HV_HCNT(5 downto 4) /= "00" and HV_HCNT < H_DISP_WIDTH) or
+					(H40 = '1' and (HV_HCNT = 318 or HV_HCNT = 320 or HV_HCNT = 460)) or
+					(H40 = '0' and (HV_HCNT = 254 or HV_HCNT = 256 or HV_HCNT = 284 or HV_HCNT = 482))
+				then
+					FIFO_EN <= '1';
+				end if;
 			end if;
 
 			SP1_EN <= '1'; --SP1 Engine checks one sprite/pixel

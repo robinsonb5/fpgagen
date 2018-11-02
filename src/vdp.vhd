@@ -322,6 +322,7 @@ signal X			: std_logic_vector(8 downto 0);
 signal PIXDIV		: std_logic_vector(3 downto 0);
 
 signal DISP_ACTIVE	: std_logic;
+signal DISP_ACTIVE_LAST_COLUMN	: std_logic;
 
 -- HV COUNTERS
 signal HV_PIXDIV	: std_logic_vector(3 downto 0);
@@ -2330,6 +2331,9 @@ end process;
 PRE_V_ACTIVE <= '1' when HV_VCNT = "1"&x"FF" or HV_VCNT < V_DISP_HEIGHT - 1 else '0';
 V_ACTIVE <= '1' when HV_VCNT < V_DISP_HEIGHT else '0';
 DISP_ACTIVE <= '1' when V_ACTIVE = '1' and HV_HCNT > HBLANK_END and HV_HCNT <= HBLANK_END + H_DISP_WIDTH else '0';
+-- pixel output does not start immediately when DISP_ACTIVE becomes '1'. Thus
+-- the last pixel column needs some extra time after DISP_ACTIVE becomes '0' to display
+DISP_ACTIVE_LAST_COLUMN	<= '1' when HV_HCNT = HBLANK_END + H_DISP_WIDTH + 1 else '0';
 -- Background generation runs during active display.
 -- Original timing is 2 pixels (or cells?) before the actual pixel.
 -- But the background generators are not timed, but free running now.
@@ -2361,7 +2365,7 @@ begin
 		OBJ_COLINFO_WE_B <= '0';
 		
 	elsif rising_edge(CLK) then
-		if DISP_ACTIVE = '0' then
+		if DISP_ACTIVE = '0' and DISP_ACTIVE_LAST_COLUMN = '0' then
 			X <= (others => '0');
 			PIXDIV <= (others => '0');
 			PIXOUT <= '0';
@@ -2448,46 +2452,33 @@ begin
 				CRAM_ADDR_B <= col;
 
 			when "0101" =>
-				case PIX_MODE is
-				when PIX_SHADOW =>
-				   -- half brightness
-					FF_B <= '0' & CRAM_Q_B(8 downto 6);
-					FF_G <= '0' & CRAM_Q_B(5 downto 3);
-					FF_R <= '0' & CRAM_Q_B(2 downto 0);
+				if DISP_ACTIVE_LAST_COLUMN = '1' then
+					FF_R <= (others => '0');
+					FF_G <= (others => '0');
+					FF_B <= (others => '0');
+				else
+					case PIX_MODE is
+					when PIX_SHADOW =>
+						-- half brightness
+						FF_B <= '0' & CRAM_Q_B(8 downto 6);
+						FF_G <= '0' & CRAM_Q_B(5 downto 3);
+						FF_R <= '0' & CRAM_Q_B(2 downto 0);
 
-				when PIX_NORMAL =>
-				   -- normal brightness
-					FF_B <= CRAM_Q_B(8 downto 6) & '0';
-					FF_G <= CRAM_Q_B(5 downto 3) & '0';
-					FF_R <= CRAM_Q_B(2 downto 0) & '0';
+					when PIX_NORMAL =>
+						-- normal brightness
+						FF_B <= CRAM_Q_B(8 downto 6) & '0';
+						FF_G <= CRAM_Q_B(5 downto 3) & '0';
+						FF_R <= CRAM_Q_B(2 downto 0) & '0';
 					
-				when PIX_HIGHLIGHT =>
-					FF_B <= '0' & CRAM_Q_B(8 downto 6) + 7;
-					FF_G <= '0' & CRAM_Q_B(5 downto 3) + 7;
-					FF_R <= '0' & CRAM_Q_B(2 downto 0) + 7;
-					
-				   -- double brightness
---					if T_COLOR(11) = '1' then 
---						FF_B <= "1110";
---					else
---						FF_B <= T_COLOR(10 downto 9) & "00";
---					end if;
-						
---					if T_COLOR(7) = '1' then 
---						FF_G <= "1110";
---					else
---						FF_G <= T_COLOR(6 downto 5) & "00";
---					end if;
-					
---					if T_COLOR(3) = '1' then 
---						FF_R <= "1110";
---					else
---						FF_R <= T_COLOR(2 downto 1) & "00";
---					end if;
-
-				end case;
+					when PIX_HIGHLIGHT =>
+						-- increased brightness
+						FF_B <= '0' & CRAM_Q_B(8 downto 6) + 7;
+						FF_G <= '0' & CRAM_Q_B(5 downto 3) + 7;
+						FF_R <= '0' & CRAM_Q_B(2 downto 0) + 7;
+					end case;
+				end if;
 				OBJ_COLINFO_WE_B <= '1';
-				
+
 			when "0111" =>
 				OBJ_COLINFO_WE_B <= '0';
 			

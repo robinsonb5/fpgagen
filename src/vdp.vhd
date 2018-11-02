@@ -151,6 +151,7 @@ signal SCOL_CLR		: std_logic;
 -- INTERRUPTS
 ----------------------------------------------------------------
 signal HINT_COUNT	: std_logic_vector(7 downto 0);
+signal HINT_EN		: std_logic;
 signal HINT_PENDING	: std_logic;
 signal HINT_PENDING_SET	: std_logic;
 signal HINT_FF		: std_logic;
@@ -2207,6 +2208,7 @@ begin
 		HV_HCNT <= (others => '0');
 		HV_VCNT <= (others => '0');
 
+		HINT_EN <= '0';
 		HINT_PENDING_SET <= '0';
 		VINT_TG68_PENDING_SET <= '0';
 		VINT_T80_SET <= '0';
@@ -2261,14 +2263,16 @@ begin
 				BGB_VSRAM1_LATCH <= VSRAM(1)(9 downto 0);
 				BGA_VSRAM0_LATCH <= VSRAM(0)(9 downto 0);
 
-				if HV_VCNT >= (V_DISP_HEIGHT - 1) or HV_VCNT < "1"&x"FF"
-					then HINT_COUNT <= HIT;
+				-- HINT_EN effect is delayed by one line
+				if HV_VCNT = "1"&x"FE" then
+					HINT_EN <= '1';
+				elsif HV_VCNT = V_DISP_HEIGHT - 2 then
+					HINT_EN <= '0';
 				end if;
 
-				if HV_VCNT = "1"&x"FE" then
-					IN_VBL <= '0';
-				elsif HV_VCNT = "1"&x"FF" or HV_VCNT < V_DISP_HEIGHT - 1
-				then
+				if HINT_EN = '0'
+					then HINT_COUNT <= HIT;
+				else
 					if HINT_COUNT = 0 then
 						HINT_PENDING_SET <= '1';
 						HINT_COUNT <= HIT;
@@ -2276,7 +2280,10 @@ begin
 						HINT_COUNT <= HINT_COUNT - 1;
 					end if;
 				end if;
-				if HV_VCNT = V_DISP_HEIGHT - 1 then
+
+				if HV_VCNT = "1"&x"FE" then
+					IN_VBL <= '0';
+				elsif HV_VCNT = V_DISP_HEIGHT - 1 then
 					IN_VBL <= '1';
 				end if;
 			end if;

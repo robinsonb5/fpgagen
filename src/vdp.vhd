@@ -132,7 +132,6 @@ signal FIFO_RD_POS	: std_logic_vector(1 downto 0);
 signal FIFO_EMPTY	: std_logic;
 signal FIFO_FULL	: std_logic;
 signal FIFO_EN		: std_logic;
-signal FIFO_CNT		: std_logic_vector(5 downto 0);
 signal FIFO_SKIP	: std_logic;
 
 signal IN_DMA		: std_logic;
@@ -2217,7 +2216,6 @@ begin
 		IN_VBL <= '1';
 
 		FIFO_EN <= '0';
-		FIFO_CNT <= (others => '0');
 
 		SP1_EN <= '0';
 		SP2_EN <= '0';
@@ -2302,20 +2300,17 @@ begin
 				end if;
 			end if;
 
-			FIFO_CNT <= FIFO_CNT + 1;
-			if (H40 = '0' and FIFO_CNT = 21) or
-			   (H40 = '1' and FIFO_CNT = 23) or
-			   HV_HCNT = H_INT_POS 
-			then
-			   FIFO_CNT <= (others => '0');
-			end if;
-			if IN_VBL = '0' and DE = '1' and FIFO_CNT = 0
-			then
-				FIFO_EN <= '1';
-			end if;
 			if IN_VBL = '1' or DE = '0'
 			then
-				FIFO_EN <= FIFO_CNT(0);
+				FIFO_EN <= HV_HCNT(0);
+			end if;
+			if IN_VBL = '0' and DE = '1' then
+				if (HV_HCNT(3 downto 0) = "0000" and HV_HCNT(5 downto 4) /= "00" and HV_HCNT < H_DISP_WIDTH) or
+					(H40 = '1' and (HV_HCNT = 318 or HV_HCNT = 320 or HV_HCNT = 460)) or
+					(H40 = '0' and (HV_HCNT = 254 or HV_HCNT = 256 or HV_HCNT = 284 or HV_HCNT = 482))
+				then
+					FIFO_EN <= '1';
+				end if;
 			end if;
 
 			SP1_EN <= '1'; --SP1 Engine checks one sprite/pixel

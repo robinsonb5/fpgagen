@@ -314,8 +314,6 @@ signal T80_VDP_DTACK_N		: std_logic;
 type vdpc_t is ( VDPC_IDLE, VDPC_TG68_ACC, VDPC_T80_ACC, VDPC_DESEL );
 signal VDPC : vdpc_t;
 
-signal INTERLACE	: std_logic;
-
 -- FM AREA
 signal FM_SEL			: std_logic;
 signal FM_A 			: std_logic_vector(1 downto 0);
@@ -713,8 +711,6 @@ port map(
 	vram_u_n	=> vram_u_n,
 	vram_l_n	=> vram_l_n,
 	
-	INTERLACE	=> INTERLACE,
-
 	HINT			=> HINT,
 	VINT_TG68		=> VINT_TG68,
 	VINT_T80			=> VINT_T80,
@@ -810,8 +806,6 @@ end process;
 ----------------------------------------------------------------
 -- SWITCHES CONTROL
 ----------------------------------------------------------------
-INTERLACE <= '0';
-
 
 -- #############################################################################
 -- #############################################################################

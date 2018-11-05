@@ -68,8 +68,6 @@ entity vdp is
 		vram_u_n : out std_logic;
 		vram_l_n : out std_logic;
 		
-		INTERLACE	: in std_logic;
-
 		HINT		: out std_logic;
 		VINT_TG68	: out std_logic;
 		VINT_T80	: out std_logic;
@@ -198,11 +196,9 @@ signal M5			: std_logic;
 signal M128			: std_logic;
 signal DMA			: std_logic;
 
-signal IM			: std_logic;
-signal IM2			: std_logic;
+signal LSM			: std_logic_vector(1 downto 0);
 signal ODD			: std_logic;
 
-signal HV8			: std_logic;
 signal HV			: std_logic_vector(15 downto 0);
 signal STATUS		: std_logic_vector(15 downto 0);
 signal DBG			: std_logic_vector(15 downto 0);
@@ -314,9 +310,10 @@ signal V_ACTIVE		: std_logic;
 signal Y			: std_logic_vector(7 downto 0);
 
 signal PRE_V_ACTIVE	: std_logic;
-signal PRE_Y		: std_logic_vector(7 downto 0);
+signal PRE_Y		: std_logic_vector(8 downto 0);
 
 signal FIELD		: std_logic;
+signal FIELD_LATCH	: std_logic;
 
 signal X			: std_logic_vector(8 downto 0);
 signal PIXDIV		: std_logic_vector(3 downto 0);
@@ -328,6 +325,8 @@ signal DISP_ACTIVE_LAST_COLUMN	: std_logic;
 signal HV_PIXDIV	: std_logic_vector(3 downto 0);
 signal HV_HCNT		: std_logic_vector(8 downto 0);
 signal HV_VCNT		: std_logic_vector(8 downto 0);
+signal HV_VCNT_EXT	: std_logic_vector(8 downto 0);
+signal HV8			: std_logic;
 
 -- TIMING VALUES
 signal H_DISP_START    : std_logic_vector(8 downto 0);
@@ -491,9 +490,9 @@ signal OBJ_VISINFO_Q		: std_logic_vector(6 downto 0);
 
 signal OBJ_SPINFO_ADDR_RD	: std_logic_vector(4 downto 0);
 signal OBJ_SPINFO_ADDR_WR	: std_logic_vector(4 downto 0);
-signal OBJ_SPINFO_D			: std_logic_vector(33 downto 0);
+signal OBJ_SPINFO_D			: std_logic_vector(34 downto 0);
 signal OBJ_SPINFO_WE		: std_logic;
-signal OBJ_SPINFO_Q			: std_logic_vector(33 downto 0);
+signal OBJ_SPINFO_Q			: std_logic_vector(34 downto 0);
 
 signal OBJ_COLINFO_ADDR_A	: std_logic_vector(8 downto 0);
 signal OBJ_COLINFO_ADDR_B	: std_logic_vector(8 downto 0);
@@ -518,14 +517,14 @@ type sp1c_t is (
 	SP1C_DONE
 );
 signal SP1C	: SP1C_t;
-signal SP1_Y : std_logic_vector(7 downto 0);
+signal SP1_Y			: std_logic_vector(8 downto 0);
 signal SP1_STOP			: std_logic;
 signal SP1_EN			: std_logic;
 
 signal OBJ_TOT			: std_logic_vector(6 downto 0);
 signal OBJ_NEXT			: std_logic_vector(6 downto 0);
 signal OBJ_NB			: std_logic_vector(4 downto 0);
-signal OBJ_Y_OFS1		: std_logic_vector(8 downto 0);
+signal OBJ_Y_OFS1		: std_logic_vector(9 downto 0);
 
 signal OBJ_VS1			: std_logic_vector(1 downto 0);
 
@@ -546,9 +545,9 @@ type sp2c_t is (
 	SP2C_NEXT,
 	SP2C_DONE
 );
-signal SP2C		: SP2C_t;
-signal SP2_Y	: std_logic_vector(7 downto 0);
-signal SP2_EN	: std_logic;
+signal SP2C	: SP2C_t;
+signal SP2_Y			: std_logic_vector(8 downto 0);
+signal SP2_EN			: std_logic;
 signal SP2_VRAM_ADDR	: std_logic_vector(14 downto 0);
 signal SP2_VRAM_DO		: std_logic_vector(15 downto 0);
 signal SP2_VRAM_DO_REG	: std_logic_vector(15 downto 0);
@@ -585,7 +584,7 @@ signal SP3_DTACK_N	: std_logic;
 signal OBJ_PIX			: std_logic_vector(8 downto 0);
 signal OBJ_NO			: std_logic_vector(4 downto 0);
 
-signal OBJ_Y_OFS		: std_logic_vector(4 downto 0);
+signal OBJ_Y_OFS		: std_logic_vector(5 downto 0);
 signal OBJ_LINK			: std_logic_vector(6 downto 0);
 
 signal OBJ_HS			: std_logic_vector(1 downto 0);
@@ -773,7 +772,7 @@ port map(
 obj_spinfo : entity work.DualPortRAM
 generic map (
 	addrbits	=> 5,
-	databits	=> 34
+	databits	=> 35
 )
 port map(
 	clock		=> MEMCLK,
@@ -840,8 +839,7 @@ M3 <= REG(0)(1);
 DMA <= REG(1)(4);
 M128 <= REG(1)(7);
 
-IM <= REG(12)(1);
-IM2 <= REG(12)(2);
+LSM <= REG(12)(2 downto 1);
 
 DE <= REG(1)(6);
 M5 <= REG(1)(2);
@@ -854,7 +852,7 @@ NTAB <= REG(2)(5 downto 3);
 SATB <= REG(5)(7 downto 1)&(REG(5)(0) and not H40);
 
 -- Read-only registers
-ODD <= FIELD when IM = '1' else '0';
+ODD <= FIELD when LSM(0) = '1' else '0';
 IN_DMA <= DMA_FILL or DMA_COPY or DMA_VBUS;
 
 STATUS <= "111111" & FIFO_EMPTY & FIFO_FULL & VINT_TG68_PENDING & SOVR & SCOL & ODD & (IN_VBL or not DE) & IN_HBL & IN_DMA & PAL;
@@ -1202,7 +1200,11 @@ begin
 					BGB_Y <= (BGB_VSRAM1_LATCH + Y) and vscroll_mask;
 				else
 					if VSCR = '1' then
-						BGB_Y <= (VSRAM( CONV_INTEGER(BGB_POS(8 downto 4) & "1") )(9 downto 0) + Y) and vscroll_mask;
+						if LSM = "11" then
+							BGB_Y <= (VSRAM( CONV_INTEGER(BGB_POS(8 downto 4) & "1") )(10 downto 1) + Y) and vscroll_mask;
+						else
+							BGB_Y <= (VSRAM( CONV_INTEGER(BGB_POS(8 downto 4) & "1") )(9 downto 0) + Y) and vscroll_mask;
+						end if;
 					else
 						BGB_Y <= (BGB_VSRAM1_LATCH + Y) and vscroll_mask;
 					end if;
@@ -1245,14 +1247,23 @@ begin
 					T_BGB_PRI <= BGB_VRAM_DO(15);
 					T_BGB_PAL <= BGB_VRAM_DO(14 downto 13);
 					BGB_HF <= BGB_VRAM_DO(11);
-					if BGB_VRAM_DO(12) = '1' then	-- VF
-						BGB_TILEBASE <= BGB_VRAM_DO(10 downto 0) & not(BGB_Y(2 downto 0)) & "00";
+					if LSM = "11" then
+						if BGB_VRAM_DO(12) = '1' then	-- VF
+							BGB_TILEBASE <= BGB_VRAM_DO(9 downto 0) & not(BGB_Y(2 downto 0)) & not FIELD & "00";
+						else
+							BGB_TILEBASE <= BGB_VRAM_DO(9 downto 0) & BGB_Y(2 downto 0) & FIELD & "00";
+						end if;
 					else
-						BGB_TILEBASE <= BGB_VRAM_DO(10 downto 0) & BGB_Y(2 downto 0) & "00";
+						if BGB_VRAM_DO(12) = '1' then	-- VF
+							BGB_TILEBASE <= BGB_VRAM_DO(10 downto 0) & not(BGB_Y(2 downto 0)) & "00";
+						else
+							BGB_TILEBASE <= BGB_VRAM_DO(10 downto 0) & BGB_Y(2 downto 0) & "00";
+						end if;
 					end if;
+
 					BGBC <= BGBC_LOOP;
 				end if;
-						
+
 			when BGBC_LOOP =>
 				if BGB_X(1 downto 0) = "00" and BGB_SEL = '0' then
 					BGB_COLINFO_WE_A <= '0';
@@ -1426,7 +1437,11 @@ begin
 						BGA_Y <= (BGA_VSRAM0_LATCH + Y) and vscroll_mask;
 					else
 						if VSCR = '1' then
-							BGA_Y <= (VSRAM( CONV_INTEGER(BGA_POS(8 downto 4) & "0") )(9 downto 0) + Y) and vscroll_mask;
+							if LSM = "11" then
+								BGA_Y <= (VSRAM( CONV_INTEGER(BGA_POS(8 downto 4) & "0") )(10 downto 1) + Y) and vscroll_mask;
+							else
+								BGA_Y <= (VSRAM( CONV_INTEGER(BGA_POS(8 downto 4) & "0") )(9 downto 0) + Y) and vscroll_mask;
+							end if;
 						else
 							BGA_Y <= (BGA_VSRAM0_LATCH + Y) and vscroll_mask;
 						end if;
@@ -1481,10 +1496,18 @@ begin
 					T_BGA_PRI <= BGA_VRAM_DO(15);
 					T_BGA_PAL <= BGA_VRAM_DO(14 downto 13);
 					BGA_HF <= BGA_VRAM_DO(11);
-					if BGA_VRAM_DO(12) = '1' then	-- VF
-						BGA_TILEBASE <= BGA_VRAM_DO(10 downto 0) & not(BGA_Y(2 downto 0)) & "00";
+					if LSM = "11" then
+						if BGA_VRAM_DO(12) = '1' then	-- VF
+							BGA_TILEBASE <= BGA_VRAM_DO(9 downto 0) & not(BGA_Y(2 downto 0)) & not FIELD & "00";
+						else
+							BGA_TILEBASE <= BGA_VRAM_DO(9 downto 0) & BGA_Y(2 downto 0) & FIELD & "00";
+						end if;
 					else
-						BGA_TILEBASE <= BGA_VRAM_DO(10 downto 0) & BGA_Y(2 downto 0) & "00";
+						if BGA_VRAM_DO(12) = '1' then	-- VF
+							BGA_TILEBASE <= BGA_VRAM_DO(10 downto 0) & not(BGA_Y(2 downto 0)) & "00";
+						else
+							BGA_TILEBASE <= BGA_VRAM_DO(10 downto 0) & BGA_Y(2 downto 0) & "00";
+						end if;
 					end if;
 					BGAC <= BGAC_LOOP;
 				end if;
@@ -1689,6 +1712,10 @@ OBJ_CACHE_Y_ADDR_RD <= OBJ_CACHE_ADDR_RD_SP1 when SP1C /= SP1C_DONE else OBJ_CAC
 ------------------------------------------------------------------
 -- determine the first 16/20 visible sprites
 process( RST_N, CLK )
+-- synthesis translate_off
+file F		: text open write_mode is "sp1_dbg.out";
+variable L	: line;
+-- synthesis translate_on
 begin
 	if RST_N = '0' then
 		SP1C <= SP1C_DONE;
@@ -1726,33 +1753,56 @@ begin
 				SP1C <= SP1C_Y_RD3;
 
 			when SP1C_Y_RD3 =>
-				OBJ_Y_OFS1 <= "010000000" + ("0" & SP1_Y) - OBJ_CACHE_Y_Q(8 downto 0);
+				if LSM = "11" then
+					OBJ_Y_OFS1 <= "0100000000" + SP1_Y - OBJ_CACHE_Y_Q(9 downto 0);
+				else
+					OBJ_Y_OFS1 <= "0010000000" + SP1_Y - ('0' & OBJ_CACHE_Y_Q(8 downto 0));
+				end if;
 				OBJ_VS1 <= OBJ_CACHE_SL_Q(9 downto 8);
 				OBJ_LINK <= OBJ_CACHE_SL_Q(6 downto 0);
 				SP1C <= SP1C_Y_TST;
 
 			when SP1C_Y_TST =>
+
 				SP1C <= SP1C_NEXT;
-				case OBJ_VS1 is
-				when "00" =>	-- 8 pixels
-					if OBJ_Y_OFS1(8 downto 3) = "000000" then
+				if LSM = "11" then
+					if (OBJ_VS1 = "00" and OBJ_Y_OFS1(9 downto 4) = "00000") or -- 2*8 pix
+					   (OBJ_VS1 = "01" and OBJ_Y_OFS1(9 downto 5) = "0000") or  -- 2*16 pix
+					   (OBJ_VS1 = "11" and OBJ_Y_OFS1(9 downto 6) = "000") or   -- 2*32 pix
+					   (OBJ_VS1 = "10" and OBJ_Y_OFS1(9 downto 6) = "000" and OBJ_Y_OFS1(5 downto 4) /= "11") --2*24 pix
+					then
 						SP1C <= SP1C_SHOW;
 					end if;
-				when "01" =>	-- 16 pixels
-					if OBJ_Y_OFS1(8 downto 4) = "00000" then
+				else
+					if (OBJ_VS1 = "00" and OBJ_Y_OFS1(8 downto 3) = "000000") or -- 8 pix
+					   (OBJ_VS1 = "01" and OBJ_Y_OFS1(8 downto 4) = "00000") or  -- 16 pix
+					   (OBJ_VS1 = "11" and OBJ_Y_OFS1(8 downto 5) = "0000") or   -- 32 pix
+					   (OBJ_VS1 = "10" and OBJ_Y_OFS1(8 downto 5) = "0000" and OBJ_Y_OFS1(4 downto 3) /= "11") --24 pix
+					then
 						SP1C <= SP1C_SHOW;
 					end if;
-				when "11" =>	-- 32 pixels
-					if OBJ_Y_OFS1(8 downto 5) = "0000" then
-						SP1C <= SP1C_SHOW;
-					end if;
-				when others =>	-- 24 pixels
-					if OBJ_Y_OFS1(8 downto 5) = "0000" and OBJ_Y_OFS1(4 downto 3) /= "11" then
-						SP1C <= SP1C_SHOW;
-					end if;
-				end case;
+				end if;
 
 			when SP1C_SHOW =>
+				-- synthesis translate_off
+				write(L, string'("OBJ ID="));
+				hwrite(L, "0" & OBJ_NEXT);
+				write(L, string'(" Y = "));
+				hwrite(L, "000000" & OBJ_CACHE_Y_Q(9 downto 0));
+				write(L, string'(" VS = "));
+				hwrite(L, "000000" & OBJ_VS1);
+				write(L, string'(" LINK = "));
+				hwrite(L, "0" & OBJ_LINK);
+				write(L, string'(" SP1_Y = "));
+				hwrite(L, "0000000" & SP1_Y);
+				write(L, string'(" HV_VCNT = "));
+				hwrite(L, "0000000" & HV_VCNT);
+				write(L, string'(" OFS ="));
+				hwrite(L, "000000" & OBJ_Y_OFS1);
+				write(L, string'(" OBJ_NB ="));
+				hwrite(L, "000" & OBJ_NB);
+				writeline(F,L);
+				-- synthesis translate_on
 				OBJ_NB <= OBJ_NB + 1;
 				OBJ_VISINFO_WE <= '1';
 				OBJ_VISINFO_ADDR_WR <= OBJ_NB;
@@ -1798,7 +1848,7 @@ end process;
 ----------------------------------------------------------------
 --fetch X and size info for visible sprites
 process( RST_N, CLK )
-variable y_offset: std_logic_vector(8 downto 0);
+variable y_offset: std_logic_vector(9 downto 0);
 begin
 	if RST_N = '0' then
 		SP2_SEL <= '0';
@@ -1843,12 +1893,16 @@ begin
 			when SP2C_Y_RD3 =>
 				SP2C <= SP2C_Y_RD4;
 			when SP2C_Y_RD4 =>
-				y_offset := "010000000" + ("0" & SP2_Y) - OBJ_CACHE_Y_Q(8 downto 0);
-				--save only the last 5 bits of the offset for part 3
+				if LSM = "11" then
+					y_offset := "0100000000" + SP2_Y - OBJ_CACHE_Y_Q(9 downto 0);
+				else
+					y_offset := "0010000000" + SP2_Y - ('0' & OBJ_CACHE_Y_Q(8 downto 0));
+				end if;
+				--save only the last 5(6 in doubleres) bits of the offset for part 3
 				--Titan 2 textured cube (ab)uses this
-				OBJ_SPINFO_D(4 downto 0) <= y_offset(4 downto 0); --Y offset
-				OBJ_SPINFO_D(6 downto 5) <= OBJ_CACHE_SL_Q(9 downto 8); --VS
-				OBJ_SPINFO_D(8 downto 7) <= OBJ_CACHE_SL_Q(11 downto 10); --HS
+				OBJ_SPINFO_D(5 downto 0) <= y_offset(5 downto 0); --Y offset
+				OBJ_SPINFO_D(7 downto 6) <= OBJ_CACHE_SL_Q(9 downto 8); --VS
+				OBJ_SPINFO_D(9 downto 8) <= OBJ_CACHE_SL_Q(11 downto 10); --HS
 				SP2_VRAM_ADDR <= (SATB(6 downto 0) & "00000000") + (OBJ_VISINFO_Q(6 downto 0) & "11");
 				SP2_SEL <= '1';
 				SP2C <= SP2C_X_RD;
@@ -1856,7 +1910,7 @@ begin
 			when SP2C_X_RD =>
 				if early_ack_sp2='0' then
 					SP2_SEL <= '0';
-					OBJ_SPINFO_D(17 downto 9) <= SP2_VRAM_DO(8 downto 0); --X
+					OBJ_SPINFO_D(18 downto 10) <= SP2_VRAM_DO(8 downto 0); --X
 					SP2C <= SP2C_X_TST;
 				end if;
 
@@ -1868,11 +1922,11 @@ begin
 			when SP2C_TDEF_RD =>
 				if early_ack_sp2='0' then
 					SP2_SEL <= '0';
-					OBJ_SPINFO_D(33) <= SP2_VRAM_DO(15); --PRI
-					OBJ_SPINFO_D(32 downto 31) <= SP2_VRAM_DO(14 downto 13); --PAL
-					OBJ_SPINFO_D(30) <= SP2_VRAM_DO(12); --VF
-					OBJ_SPINFO_D(29) <= SP2_VRAM_DO(11); --HF
-					OBJ_SPINFO_D(28 downto 18) <= SP2_VRAM_DO(10 downto 0); --PAT
+					OBJ_SPINFO_D(34) <= SP2_VRAM_DO(15); --PRI
+					OBJ_SPINFO_D(33 downto 32) <= SP2_VRAM_DO(14 downto 13); --PAL
+					OBJ_SPINFO_D(31) <= SP2_VRAM_DO(12); --VF
+					OBJ_SPINFO_D(30) <= SP2_VRAM_DO(11); --HF
+					OBJ_SPINFO_D(29 downto 19) <= SP2_VRAM_DO(10 downto 0); --PAT
 					OBJ_SPINFO_ADDR_WR <= OBJ_IDX;
 					OBJ_SPINFO_WE <= '1';
 					SP2C <= SP2C_NEXT;
@@ -1917,6 +1971,10 @@ end process;
 -- SPRITE ENGINE - PART THREE
 ----------------------------------------------------------------
 process( RST_N, MEMCLK )
+-- synthesis translate_off
+file F		: text open write_mode is "sp3_dbg.out";
+variable L	: line;
+-- synthesis translate_on
 begin
 	if RST_N = '0' then
 		SP3_SEL <= '0';
@@ -1942,28 +2000,31 @@ begin
 				OBJ_MASKED <= '0';
 				OBJ_VALID_X <= OBJ_DOT_OVERFLOW;
 				OBJ_DOT_OVERFLOW <= '0';
-
 				SP3C <= SP3C_NEXT;
 
 			when SP3C_NEXT =>
+
 				OBJ_COLINFO_WE_A <= '0';
-				if OBJ_NO = OBJ_IDX
-				then
+				SP3C <= SP3C_Y_RD;
+				if OBJ_NO = OBJ_IDX	then
 					SP3C <= SP3C_DONE;
-				else
-					SP3C <= SP3C_Y_RD;
 				end if;
 
 			when SP3C_Y_RD =>
-				OBJ_Y_OFS <= OBJ_SPINFO_Q(4 downto 0);
-				OBJ_VS <= OBJ_SPINFO_Q(6 downto 5);
-				OBJ_HS <= OBJ_SPINFO_Q(8 downto 7);
-				OBJ_X <= OBJ_SPINFO_Q(17 downto 9);
-				OBJ_PAT <= OBJ_SPINFO_Q(28 downto 18);
-				OBJ_HF <= OBJ_SPINFO_Q(29);
-				OBJ_VF <= OBJ_SPINFO_Q(30);
-				OBJ_PAL <= OBJ_SPINFO_Q(32 downto 31);
-				OBJ_PRI <= OBJ_SPINFO_Q(33);
+				OBJ_VS <= OBJ_SPINFO_Q(7 downto 6);
+				OBJ_HS <= OBJ_SPINFO_Q(9 downto 8);
+				OBJ_X <= OBJ_SPINFO_Q(18 downto 10);
+				if LSM = "11" then
+					OBJ_PAT <= OBJ_SPINFO_Q(28 downto 19) & '0';
+					OBJ_Y_OFS <= OBJ_SPINFO_Q(5 downto 0);
+				else
+					OBJ_PAT <= OBJ_SPINFO_Q(29 downto 19);
+					OBJ_Y_OFS <= '0' & OBJ_SPINFO_Q(4 downto 0);
+				end if;
+				OBJ_HF <= OBJ_SPINFO_Q(30);
+				OBJ_VF <= OBJ_SPINFO_Q(31);
+				OBJ_PAL <= OBJ_SPINFO_Q(33 downto 32);
+				OBJ_PRI <= OBJ_SPINFO_Q(34);
 
 				OBJ_SPINFO_ADDR_RD <= OBJ_NO + 1;
 				OBJ_NO <= OBJ_NO + 1;
@@ -1971,6 +2032,22 @@ begin
 				SP3C <= SP3C_CALC_XY;
 
 			when SP3C_CALC_XY =>
+				-- synthesis translate_off
+				write(L, string'("OBJ NO="));
+				hwrite(L, "000" & OBJ_NO);
+				write(L, string'(" VCNT="));
+				hwrite(L, "0000000" & HV_VCNT);
+				write(L, string'(" SP2_Y="));
+				hwrite(L, "0000000" & SP2_Y);
+				write(L, string'(" Y OFS= "));
+				hwrite(L, "00" & OBJ_Y_OFS);
+				write(L, string'(" VS = "));
+				hwrite(L, "000000" & OBJ_VS);
+				write(L, string'(" HS = "));
+				hwrite(L, "000000" & OBJ_HS);
+				writeline(F,L);
+				-- synthesis translate_on
+
 				-- sprite masking algorithm as implemented by gens-ii
 				if OBJ_X = "000000000" and OBJ_VALID_X = '1' then
 					OBJ_MASKED <= '1';
@@ -2007,38 +2084,37 @@ begin
 					end if;					
 				end case;
 
-				case OBJ_VS is
-				when "00" =>	-- 8 pixels
-					if OBJ_VF = '1' then
-						OBJ_Y_OFS <= "00" & not(OBJ_Y_OFS(2 downto 0));
-					end if;					
-				when "01" =>	-- 16 pixels
-					if OBJ_VF = '1' then
-						OBJ_Y_OFS <= "0" & not(OBJ_Y_OFS(3 downto 0));
-					end if;										
-				when "11" =>	-- 32 pixels
-					if OBJ_VF= '1' then
-						OBJ_Y_OFS <= not(OBJ_Y_OFS(4 downto 0));
-					end if;														
-				when others =>	-- 24 pixels
-					if OBJ_VF = '1' then
-						OBJ_Y_OFS(2 downto 0) <= not(OBJ_Y_OFS(2 downto 0));
-						case OBJ_Y_OFS(4 downto 3) is
-						when "00" =>
-							OBJ_Y_OFS(4 downto 3) <= "10";
-						when "10" =>
-							OBJ_Y_OFS(4 downto 3) <= "00";
-						when others =>
-							OBJ_Y_OFS(4 downto 3) <= "01";
-						end case;
-					end if;
-				end case;
-				
+				if LSM = "11" and OBJ_VF = '1' then
+					case OBJ_VS is
+					when "00" =>	-- 2*8 pixels
+						OBJ_Y_OFS <= "00" & not(OBJ_Y_OFS(3 downto 0));
+					when "01" =>	-- 2*16 pixels
+						OBJ_Y_OFS <= "0" & not(OBJ_Y_OFS(4 downto 0));
+					when "11" =>	-- 2*32 pixels
+						OBJ_Y_OFS <= not(OBJ_Y_OFS(5 downto 0));
+					when others =>	-- 2*24 pixels
+						OBJ_Y_OFS <= "101111" - OBJ_Y_OFS; -- 47-obj_y_ofs
+					end case;
+				end if;
+
+				if LSM /= "11" and OBJ_VF = '1' then
+					case OBJ_VS is
+					when "00" =>	-- 8 pixels
+						OBJ_Y_OFS <= "000" & not(OBJ_Y_OFS(2 downto 0));
+					when "01" =>	-- 16 pixels
+						OBJ_Y_OFS <= "00" & not(OBJ_Y_OFS(3 downto 0));
+					when "11" =>	-- 32 pixels
+						OBJ_Y_OFS <= "0" & not(OBJ_Y_OFS(4 downto 0));
+					when others =>	-- 24 pixels
+						OBJ_Y_OFS(4 downto 0) <= "10111" - OBJ_Y_OFS(4 downto 0);
+					end case;
+				end if;
+
 				SP3C <= SP3C_CALC_BASE;
-				
+
 			when SP3C_CALC_BASE =>
 				OBJ_POS <= OBJ_X - "010000000";
-				OBJ_TILEBASE <= (OBJ_PAT & "0000") + ("0000" & OBJ_Y_OFS & "0");
+				OBJ_TILEBASE <= (OBJ_PAT & "0000") + ("000" & OBJ_Y_OFS & "0");
 				SP3C <= SP3C_LOOP;
 
 			-- loop over all sprite pixels on the current line
@@ -2048,25 +2124,47 @@ begin
 				if (OBJ_X_OFS(1 downto 0) = "00" and OBJ_HF = '0' and SP3_SEL = '0')
 				or (OBJ_X_OFS(1 downto 0) = "11" and OBJ_HF = '1' and SP3_SEL = '0')
 				then
-					case OBJ_VS is
-					when "00" =>	-- 8 pixels
-						SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "000" & OBJ_X_OFS(2));
-					when "01" =>	-- 16 pixels
-						SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "0000" & OBJ_X_OFS(2));
-					when "11" =>	-- 32 pixels
-						SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "00000" & OBJ_X_OFS(2));
-					when others =>	-- 24 pixels
-						case OBJ_X_OFS(4 downto 3) is
-						when "00" =>
-							SP3_VRAM_ADDR <= OBJ_TILEBASE + OBJ_X_OFS(2);
-						when "01" =>
-							SP3_VRAM_ADDR <= OBJ_TILEBASE + ("0011000" & OBJ_X_OFS(2));
-						when "11" =>
-							SP3_VRAM_ADDR <= OBJ_TILEBASE + ("1001000" & OBJ_X_OFS(2));
-						when others =>
-							SP3_VRAM_ADDR <= OBJ_TILEBASE + ("0110000" & OBJ_X_OFS(2));
+					if LSM = "11" then
+						case OBJ_VS is
+						when "00" =>	-- 2*8 pixels
+							SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "0000" & OBJ_X_OFS(2));
+						when "01" =>	-- 2*16 pixels
+							SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "00000" & OBJ_X_OFS(2));
+						when "11" =>	-- 2*32 pixels
+							SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "000000" & OBJ_X_OFS(2));
+						when others =>	-- 2*24 pixels
+							case OBJ_X_OFS(4 downto 3) is
+							when "00" =>
+								SP3_VRAM_ADDR <= OBJ_TILEBASE + OBJ_X_OFS(2);
+							when "01" =>
+								SP3_VRAM_ADDR <= OBJ_TILEBASE + ("00110000" & OBJ_X_OFS(2));
+							when "11" =>
+								SP3_VRAM_ADDR <= OBJ_TILEBASE + ("10010000" & OBJ_X_OFS(2));
+							when others =>
+								SP3_VRAM_ADDR <= OBJ_TILEBASE + ("01100000" & OBJ_X_OFS(2));
+							end case;
 						end case;
-					end case;
+					else
+						case OBJ_VS is
+						when "00" =>	-- 8 pixels
+							SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "000" & OBJ_X_OFS(2));
+						when "01" =>	-- 16 pixels
+							SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "0000" & OBJ_X_OFS(2));
+						when "11" =>	-- 32 pixels
+							SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "00000" & OBJ_X_OFS(2));
+						when others =>	-- 24 pixels
+							case OBJ_X_OFS(4 downto 3) is
+							when "00" =>
+								SP3_VRAM_ADDR <= OBJ_TILEBASE + OBJ_X_OFS(2);
+							when "01" =>
+								SP3_VRAM_ADDR <= OBJ_TILEBASE + ("0011000" & OBJ_X_OFS(2));
+							when "11" =>
+								SP3_VRAM_ADDR <= OBJ_TILEBASE + ("1001000" & OBJ_X_OFS(2));
+							when others =>
+								SP3_VRAM_ADDR <= OBJ_TILEBASE + ("0110000" & OBJ_X_OFS(2));
+							end case;
+						end case;
+					end if;
 					
 					SP3_SEL <= '1';
 					SP3C <= SP3C_TILE_RD;
@@ -2192,12 +2290,14 @@ V_TOTAL_HEIGHT  <= conv_std_logic_vector(PAL_LINES, 9) when PAL='1'
               else conv_std_logic_vector(NTSC_LINES, 9);
 V_INT_POS       <= conv_std_logic_vector(V_INT_V30, 9) when V30='1'
               else conv_std_logic_vector(V_INT_V28, 9);
-HV8 <= HV_VCNT(8) when INTERLACE = '1' else HV_VCNT(0);
 
 -- COUNTERS AND INTERRUPTS
 
 Y <= HV_VCNT(7 downto 0);
-PRE_Y <= HV_VCNT(7 downto 0) + 1;
+PRE_Y <= (HV_VCNT(7 downto 0) + 1) & FIELD when LSM = "11" else '0' & HV_VCNT(7 downto 0) + 1;
+
+HV_VCNT_EXT <= HV_VCNT(7 downto 0) & FIELD_LATCH when LSM = "11" else '0' & HV_VCNT(7 downto 0);
+HV8 <= HV_VCNT_EXT(8) when LSM = "11" else HV_VCNT_EXT(0);
 
 process( RST_N, CLK )
 begin
@@ -2225,7 +2325,7 @@ begin
 	elsif rising_edge(CLK) then
 
 		if M3='0' then
-			HV <= HV_VCNT(7 downto 1) & HV8 & HV_HCNT(8 downto 1);
+			HV <= HV_VCNT_EXT(7 downto 1) & HV8 & HV_HCNT(8 downto 1);
 		end if;
 
 		HINT_PENDING_SET <= '0';
@@ -2255,13 +2355,26 @@ begin
 			if HV_HCNT = H_INT_POS then
 				if HV_VCNT = V_DISP_START + V_TOTAL_HEIGHT - 1 then --VDISP_START is negative
 					--just after VSYNC
-					HV_VCNT <= V_DISP_START;
-					FIELD <= not FIELD;
+					if (LSM(0) = '1' and FIELD = '1') then
+						HV_VCNT <= V_DISP_START - 1;
+					else
+						HV_VCNT <= V_DISP_START;
+					end if;
 				else
 					HV_VCNT <= HV_VCNT + 1;
 				end if;
-				BGB_VSRAM1_LATCH <= VSRAM(1)(9 downto 0);
-				BGA_VSRAM0_LATCH <= VSRAM(0)(9 downto 0);
+				if LSM = "11" then
+					BGB_VSRAM1_LATCH <= VSRAM(1)(10 downto 1);
+					BGA_VSRAM0_LATCH <= VSRAM(0)(10 downto 1);
+				else
+					BGB_VSRAM1_LATCH <= VSRAM(1)(9 downto 0);
+					BGA_VSRAM0_LATCH <= VSRAM(0)(9 downto 0);
+				end if;
+
+				if HV_VCNT = "1"&x"FF" then
+					-- FIELD changes at VINT, but the HV_COUNTER reflects the current field from line 0-0
+					FIELD_LATCH <= FIELD;
+				end if;
 
 				-- HINT_EN effect is delayed by one line
 				if HV_VCNT = "1"&x"FE" then
@@ -2299,6 +2412,7 @@ begin
 			if HV_HCNT = 0 then
 				if HV_VCNT = V_INT_POS
 				then
+					FIELD <= not FIELD;
 					VINT_TG68_PENDING_SET <= '1';
 					VINT_T80_SET <= '1';
 				elsif HV_VCNT = V_INT_POS + 1

@@ -230,7 +230,6 @@ architecture rtl of chameleon_sdram is
 		ldqm : std_logic;
 		pending : std_logic;
 		burst : std_logic;
-		burstlength : integer range 0 to 7;
 		wr : std_logic;
 		fill : std_logic;
 	end record;
@@ -355,7 +354,6 @@ mytwc : component TwoWayCache
 		ramPort_rec(1).col<=romrd_a(addr_colbits_64bit)&"00";
 		ramPort_rec(1).wr<='0';
 		ramPort_rec(1).burst<='1';
-		ramPort_rec(1).burstlength<=3;
 		ramPort_rec(1).ldqm<='0';
 		ramPort_rec(1).udqm<='0';
 		ramPort_rec(1).ramport<=PORT_ROMRD;
@@ -386,7 +384,6 @@ mytwc : component TwoWayCache
 		ramPort_rec(3).col<=vram_a(addr_colbits);
 		ramPort_rec(3).wr<=vram_we;
 		ramPort_rec(3).burst<='1';
-		ramPort_rec(3).burstlength<=7;
 		ramPort_rec(3).ldqm<=vram_l_n;
 		ramPort_rec(3).udqm<=vram_u_n;
 		ramPort_rec(3).ramport<=PORT_VRAM;
@@ -565,7 +562,7 @@ end process;
 					ramTimer <= 10;
 					ramState <= RAM_IDLE; -- ram is ready for commands after set-mode
 
-					sd_addr_reg <= resize("001000100011", sd_addr'length); -- CAS2, Burstlength 8 (16 bytes, 128 bits), no burst on writes
+					sd_addr_reg <= resize("001000100010", sd_addr'length); -- CAS2, Burstlength 4 (8 bytes, 64 bits), no burst on writes
 
 					if casLatency = 3 then
 						sd_addr_reg(6 downto 4) <= "011";
@@ -686,7 +683,7 @@ end process;
 					sd_ba_1_reg <= currentBank(1);
 				when RAM_READ_BURST =>
 						ramPort_rec(3).fill<='1';	-- FIXME - make the port number runtime selectable
-						ramTimer<=7;
+						ramTimer<=3;
 						ramState<=RAM_IDLE;			
 				when RAM_READ_2 =>
 					if currentBurst='1' then

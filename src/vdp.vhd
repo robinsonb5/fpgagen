@@ -2512,7 +2512,9 @@ begin
 				end if;
 
 			when "0011" =>
-				if SHI = '1' and (OBJ_COLINFO_Q_B(6) = '1' or (BGA_COLINFO_Q_B(6) = '0' and BGB_COLINFO_Q_B(6) = '0')) then
+				if SHI = '1' and (OBJ_COLINFO_Q_B(6) = '1' or
+					((BGA_COLINFO_Q_B(6) = '0' or BGA_COLINFO_Q_B(3 downto 0) = "0000") and
+					 (BGB_COLINFO_Q_B(6) = '0' or BGB_COLINFO_Q_B(3 downto 0) = "0000"))) then
 					--sprite is visible
 					if OBJ_COLINFO_Q_B(5 downto 0) = "111110" then
 						--if sprite is palette 3/color 14 increase intensity

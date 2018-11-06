@@ -84,7 +84,9 @@ entity vdp is
 		G		: out std_logic_vector(3 downto 0);
 		B		: out std_logic_vector(3 downto 0);
 		HS		: out std_logic;
-		VS		: out std_logic
+		VS		: out std_logic;
+
+		VRAM_SPEED: in std_logic := '1' -- 0 - full speed, 1 - FIFO throttle emulation
 	);
 end vdp;
 
@@ -2770,7 +2772,7 @@ begin
 				if FIFO_EN = '1' then
 					FIFO_SKIP <= '0';
 				end if;
-				if FIFO_EN = '1' and FIFO_SKIP = '0' then
+				if VRAM_SPEED = '0' or (FIFO_EN = '1' and FIFO_SKIP = '0') then
 					if FIFO_RD_POS /= FIFO_WR_POS then
 						DTC <= DTC_FIFO_RD;
 					elsif DT_RD_SEL = '1' and DT_RD_DTACK_N = '1' then

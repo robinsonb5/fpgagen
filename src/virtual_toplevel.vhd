@@ -94,6 +94,7 @@ entity Virtual_Toplevel is
 														  -- 6 - PAL
 														  -- 7 - Swap y
 														  -- 8 - 3 Buttons only
+														  -- 9 - VRAM speed emu
 	);
 end entity;
 
@@ -302,6 +303,7 @@ signal VDP_DI				: std_logic_vector(15 downto 0);
 signal VDP_DO				: std_logic_vector(15 downto 0);
 signal VDP_DTACK_N			: std_logic;
 signal VDP_RST_N			: std_logic;
+signal VDP_VRAM_SPEED		: std_logic;
 
 signal TG68_VDP_SEL		: std_logic;
 signal TG68_VDP_D			: std_logic_vector(15 downto 0);
@@ -451,6 +453,8 @@ JOY_2(11 downto 4) <= joyb(11 downto 4) when JOY_SWAP = '0' else joya(11 downto 
 
 model <= SW(5);
 PAL <= SW(6);
+
+VDP_VRAM_SPEED <= SW(9);
 
 -- DIP Switches
 SW <= ext_sw;
@@ -727,7 +731,9 @@ port map(
 	G					=> VDP_GREEN,
 	B					=> VDP_BLUE,
 	HS					=> VDP_HS_N,
-	VS					=> VDP_VS_N
+	VS					=> VDP_VS_N,
+
+	VRAM_SPEED			=> VDP_VRAM_SPEED
 );
 
 -- PSG

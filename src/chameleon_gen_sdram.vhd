@@ -85,6 +85,15 @@ entity chameleon_sdram is
 		ram68k_u_n : in std_logic;
 		ram68k_l_n : in std_logic;
 
+		sram_req : in std_logic;
+		sram_ack : out std_logic;
+		sram_we : in std_logic;
+		sram_a : in unsigned((colAddrBits+rowAddrBits+2) downto 1);
+		sram_d : in unsigned(15 downto 0);
+		sram_q : out unsigned(15 downto 0);
+		sram_u_n : in std_logic;
+		sram_l_n : in std_logic;
+
 		vram_req : in std_logic;
 		vram_ack : out std_logic;
 		vram_we : in std_logic;
@@ -141,7 +150,8 @@ architecture rtl of chameleon_sdram is
 		PORT_ROMRD,
 		PORT_ROMWR,
 		PORT_RAM68K,
-		PORT_VRAM
+		PORT_VRAM,
+		PORT_SRAM
 	);
 	
 	subtype row_t is unsigned((rowAddrBits-1) downto 0);
@@ -175,12 +185,14 @@ architecture rtl of chameleon_sdram is
 	signal romrd_ackReg : std_logic := '0';
 	signal ram68k_ackReg : std_logic := '0';
 	signal vram_ackReg : std_logic := '0';
+	signal sram_ackReg : std_logic := '0';
 	
 --GE
 	signal romwr_qReg : unsigned(15 downto 0);	
 	signal romrd_qReg : unsigned(63 downto 0);
 	signal ram68k_qReg : unsigned(15 downto 0);	
 	signal vram_qReg : unsigned(15 downto 0);	
+	signal sram_qReg : unsigned(15 downto 0);
 	
 	signal initDoneReg : std_logic := '0';
 	
@@ -210,7 +222,7 @@ architecture rtl of chameleon_sdram is
 	signal currentBurst : std_logic;
 
 	signal preselectBank : std_logic;
-	signal preselectBankPause : integer range 0 to 3;
+	signal preselectBankPause : integer range 0 to 4;
 	
 	signal nextRamBank : unsigned(1 downto 0);
 	signal nextRamRow : row_t;
@@ -233,10 +245,10 @@ architecture rtl of chameleon_sdram is
 		wr : std_logic;
 		fill : std_logic;
 	end record;
-	type ramPort_records is array(3 downto 0) of ramPort_record;
+	type ramPort_records is array(4 downto 0) of ramPort_record;
 	signal ramPort_rec : ramPort_records;
 	
-	signal ramPort_pri : integer range 0 to 3;
+	signal ramPort_pri : integer range 0 to 4;
 	signal ramPort_req : std_logic;
 
 
@@ -244,7 +256,7 @@ architecture rtl of chameleon_sdram is
 		row : row_t;
 		rowopen : std_logic;
 	end record;
-	type bank_records is array(3 downto 0) of bank_record;
+	type bank_records is array(4 downto 0) of bank_record;
 	signal banks : bank_records;
 
 	subtype addr_bankbits is Natural range colAddrBits+2 downto colAddrBits+1;
@@ -388,6 +400,19 @@ mytwc : component TwoWayCache
 		ramPort_rec(3).udqm<=vram_u_n;
 		ramPort_rec(3).ramport<=PORT_VRAM;
 		cache_fill<=ramPort_rec(3).fill;
+
+
+		-- SRAM port
+
+		ramPort_rec(4).pending<='1' when (sram_req /= sram_ackReg) and (currentPort /= PORT_SRAM) else '0';
+		ramPort_rec(4).bank<=sram_a(addr_bankbits);
+		ramPort_rec(4).row<=sram_a(addr_rowbits);
+		ramPort_rec(4).col<=sram_a(addr_colbits);
+		ramPort_rec(4).wr<=sram_we;
+		ramPort_rec(4).burst<='0';
+		ramPort_rec(4).ldqm<=sram_l_n;
+		ramPort_rec(4).udqm<=sram_u_n;
+		ramPort_rec(4).ramport<=PORT_SRAM;
 		
 process(clk)
 begin	
@@ -401,7 +426,7 @@ begin
 		-- Priority encode
 		ramPort_pri<=0;
 		ramPort_req<='0';
-		for i in 0 to 3 loop
+		for i in 0 to 4 loop
 			if ramPort_rec(i).pending='1' then
 				ramPort_pri<=i;
 				ramPort_req<='1';
@@ -594,6 +619,8 @@ end process;
 									currentWrData(15 downto 0) <= ram68k_d;
 								when PORT_VRAM =>
 									currentWrData(15 downto 0) <= vram_d;
+								when PORT_SRAM =>
+									currentWrData(15 downto 0) <= sram_d;
 								when others =>
 									null;
 							end case;
@@ -635,7 +662,7 @@ end process;
 							refreshActive <= '1';
 							refreshSubtract <= '1';
 							ramSTate <= RAM_AUTOREFRESH;
-							for i in 0 to 3 loop
+							for i in 0 to 4 loop
 								if banks(i).rowopen='1' then
 									-- There are still rows active, so we precharge them first							
 									ramState <= RAM_PRECHARGE_ALL;
@@ -701,6 +728,8 @@ end process;
 							ram68k_qReg <= ram_data_reg;
 						when PORT_VRAM => --GE
 							vram_qReg <= ram_data_reg;
+						when PORT_SRAM => --GE
+							sram_qReg <= ram_data_reg;
 						when others =>
 							null;
 					end case;
@@ -766,7 +795,7 @@ end process;
 					sd_addr_reg(10) <= '1'; -- All banks
 					sd_we_n_reg <= '0';
 					sd_ras_n_reg <= '0';
-					for i in 0 to 3 loop
+					for i in 0 to 4 loop
 						banks(i).rowopen<='0';
 					end loop;
 				when RAM_AUTOREFRESH =>
@@ -839,6 +868,18 @@ end process;
 	end process;
 	ram68k_ack <= ram68k_ackReg;
 	ram68k_q <= ram68k_qReg; --GE
+
+	process(clk)
+	begin
+		if rising_edge(clk) then
+			if currentPort = PORT_SRAM
+			and ramDone = '1' then
+				sram_ackReg <= not sram_ackReg;
+			end if;
+		end if;
+	end process;
+	sram_ack <= sram_ackReg;
+	sram_q <= sram_qReg;
 
 	process(clk)
 	begin

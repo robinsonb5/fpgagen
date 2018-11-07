@@ -1161,6 +1161,15 @@ begin
 					BGBC <= BGBC_INIT;
 				end if;
 			when BGBC_INIT =>
+				if HSIZE = "10" then
+					-- illegal mode, 32x1
+					hscroll_mask := "0011111111";
+					vscroll_mask := "0000000111";
+				else
+					hscroll_mask := (HSIZE & "11111111");
+					vscroll_mask := (VSIZE & "11111111");
+				end if;
+
 				case HSCR is -- Horizontal scroll mode
 				when "00" =>
 					BGB_VRAM_ADDR <= HSCB & "000000001";
@@ -1177,12 +1186,6 @@ begin
 
 			when BGBC_HS_RD =>
 				if early_ack_bgb = '0' then
-					if HSIZE = "10" then
-						-- illegal mode, 32x1
-						hscroll_mask := "0011111111";
-					else
-						hscroll_mask := (HSIZE & "11111111");
-					end if;
 					V_BGB_XSTART := "0000000000" - BGB_VRAM_DO(9 downto 0);
 					BGB_SEL <= '0';
 					BGB_X <= ( V_BGB_XSTART(9 downto 3) & "000" ) and hscroll_mask;
@@ -1191,36 +1194,22 @@ begin
 				end if;
 
 			when BGBC_CALC_Y =>
-				if HSIZE = "10" then
-					-- illegal mode, 32x1
-					vscroll_mask := "0000000111";
-				else
-					vscroll_mask := (VSIZE & "11111111");
-				end if;
 				BGB_COLINFO_WE_A <= '0';
-				if BGB_POS(9) = '1' then
+				if BGB_POS(9) = '1' or VSCR = '0' then
 					BGB_Y <= (BGB_VSRAM1_LATCH + Y) and vscroll_mask;
+				elsif LSM = "11" then
+					BGB_Y <= (VSRAM( CONV_INTEGER(BGB_POS(8 downto 4) & "1") )(10 downto 1) + Y) and vscroll_mask;
 				else
-					if VSCR = '1' then
-						if LSM = "11" then
-							BGB_Y <= (VSRAM( CONV_INTEGER(BGB_POS(8 downto 4) & "1") )(10 downto 1) + Y) and vscroll_mask;
-						else
-							BGB_Y <= (VSRAM( CONV_INTEGER(BGB_POS(8 downto 4) & "1") )(9 downto 0) + Y) and vscroll_mask;
-						end if;
-					else
-						BGB_Y <= (BGB_VSRAM1_LATCH + Y) and vscroll_mask;
-					end if;
+					BGB_Y <= (VSRAM( CONV_INTEGER(BGB_POS(8 downto 4) & "1") )(9 downto 0) + Y) and vscroll_mask;
 				end if;
 				BGBC <= BGBC_CALC_BASE;
 
 			when BGBC_CALC_BASE =>
 				case HSIZE is
-				when "00" => -- HS 32 cells
+				when "00"|"10" => -- HS 32 cells
 					V_BGB_BASE := (NTBB & "0000000000000") + (BGB_X(9 downto 3) & "0") + (BGB_Y(9 downto 3) & "00000" & "0");
 				when "01" => -- HS 64 cells
 					V_BGB_BASE := (NTBB & "0000000000000") + (BGB_X(9 downto 3) & "0") + (BGB_Y(9 downto 3) & "000000" & "0");
-				when "10" => -- illegal 32x1 cells
-					V_BGB_BASE := (NTBB & "0000000000000") + (BGB_X(9 downto 3) & "0") + BGB_Y(9 downto 3);
 				when "11" => -- HS 128 cells
 					V_BGB_BASE := (NTBB & "0000000000000") + (BGB_X(9 downto 3) & "0") + (BGB_Y(9 downto 3) & "0000000" & "0");
 				when others => null;
@@ -1315,8 +1304,8 @@ begin
 							end if;						
 						end case;					
 					end if;
-					BGB_X <= (BGB_X + 1) and (HSIZE & "11111111");
-					if (H40 = '1' and BGB_POS = 319) or (H40 = '0' and BGB_POS = 255) then
+					BGB_X <= (BGB_X + 1) and hscroll_mask;
+					if BGB_POS = H_DISP_WIDTH - 1 then
 						BGBC <= BGBC_DONE;
 					else
 						BGB_POS <= BGB_POS + 1;
@@ -1382,6 +1371,15 @@ begin
 					BGAC <= BGAC_INIT;
 				end if;
 			when BGAC_INIT =>
+				if HSIZE = "10" then
+					-- illegal mode, 32x1
+					hscroll_mask := "0011111111";
+					vscroll_mask := "0000000111";
+				else
+					hscroll_mask := (HSIZE & "11111111");
+					vscroll_mask := (VSIZE & "11111111");
+				end if;
+
 				if Y(2 downto 0) = "000" then
 					if Y(7 downto 3) < WVP then
 						WIN_V <= not WDOWN;
@@ -1411,12 +1409,6 @@ begin
 
 			when BGAC_HS_RD =>
 				if early_ack_bga='0' then
-					if HSIZE = "10" then
-						-- illegal mode, 32x1
-						hscroll_mask := "0011111111";
-					else
-						hscroll_mask := (HSIZE & "11111111");
-					end if;
 					V_BGA_XSTART := "0000000000" - BGA_VRAM_DO(9 downto 0);
 					BGA_SEL <= '0';
 					BGA_X <= ( V_BGA_XSTART(9 downto 3) & "000" ) and hscroll_mask;
@@ -1429,24 +1421,12 @@ begin
 				if WIN_H = '1' or WIN_V = '1' then
 					BGA_Y <= "00" & Y;					
 				else
-					if HSIZE = "10" then
-						-- illegal mode, 32x1
-						vscroll_mask := "0000000111";
-					else
-						vscroll_mask := (VSIZE & "11111111");
-					end if;
-					if BGA_POS(9) = '1' then
+					if BGA_POS(9) = '1' or VSCR = '0' then
 						BGA_Y <= (BGA_VSRAM0_LATCH + Y) and vscroll_mask;
+					elsif LSM = "11" then
+						BGA_Y <= (VSRAM( CONV_INTEGER(BGA_POS(8 downto 4) & "0") )(10 downto 1) + Y) and vscroll_mask;
 					else
-						if VSCR = '1' then
-							if LSM = "11" then
-								BGA_Y <= (VSRAM( CONV_INTEGER(BGA_POS(8 downto 4) & "0") )(10 downto 1) + Y) and vscroll_mask;
-							else
-								BGA_Y <= (VSRAM( CONV_INTEGER(BGA_POS(8 downto 4) & "0") )(9 downto 0) + Y) and vscroll_mask;
-							end if;
-						else
-							BGA_Y <= (BGA_VSRAM0_LATCH + Y) and vscroll_mask;
-						end if;
+						BGA_Y <= (VSRAM( CONV_INTEGER(BGA_POS(8 downto 4) & "0") )(9 downto 0) + Y) and vscroll_mask;
 					end if;
 				end if;
 				BGAC <= BGAC_CALC_BASE;
@@ -1462,18 +1442,16 @@ begin
 			   else
 					V_BGA_XBASE := (NTAB & "0000000000000") + (BGA_X(9 downto 3) & "0");
 					case HSIZE is
-					when "00" => -- HS 32 cells
+					when "00"|"10" => -- HS 32 cells
 						V_BGA_BASE := V_BGA_XBASE + (BGA_Y(9 downto 3) & "00000" & "0");
 					when "01" => -- HS 64 cells
 						V_BGA_BASE := V_BGA_XBASE + (BGA_Y(9 downto 3) & "000000" & "0");
-					when "10" => -- illegal 32x1 cells
-						V_BGA_BASE := V_BGA_XBASE + BGA_Y(9 downto 3);
 					when "11" => -- HS 128 cells
 						V_BGA_BASE := V_BGA_XBASE + (BGA_Y(9 downto 3) & "0000000" & "0");
 					when others => null;
 					end case;
 				end if;
-				
+
 				BGA_VRAM_ADDR <= V_BGA_BASE(15 downto 1);
 				BGA_SEL <= '1';
 				BGAC <= BGAC_BASE_RD;
@@ -1619,8 +1597,8 @@ begin
 							end case;					
 						end if;
 					end if;
-					BGA_X <= (BGA_X + 1) and (HSIZE & "11111111");
-					if (H40 = '1' and BGA_POS = 319) or (H40 = '0' and BGA_POS = 255) then
+					BGA_X <= (BGA_X + 1) and hscroll_mask;
+					if BGA_POS = H_DISP_WIDTH - 1 then
 						BGAC <= BGAC_DONE;
 					else
 						BGA_POS <= BGA_POS + 1;

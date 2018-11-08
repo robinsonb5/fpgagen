@@ -2323,11 +2323,7 @@ begin
 			if HV_HCNT = H_INT_POS then
 				if HV_VCNT = V_DISP_START + V_TOTAL_HEIGHT - 1 then --VDISP_START is negative
 					--just after VSYNC
-					if (LSM(0) = '1' and FIELD = '1') then
-						HV_VCNT <= V_DISP_START - 1;
-					else
-						HV_VCNT <= V_DISP_START;
-					end if;
+					HV_VCNT <= V_DISP_START;
 				else
 					HV_VCNT <= HV_VCNT + 1;
 				end if;

@@ -2347,7 +2347,7 @@ begin
 				-- HINT_EN effect is delayed by one line
 				if HV_VCNT = "1"&x"FE" then
 					HINT_EN <= '1';
-				elsif HV_VCNT = V_DISP_HEIGHT - 2 then
+				elsif HV_VCNT = V_DISP_HEIGHT - 1 then
 					HINT_EN <= '0';
 				end if;
 

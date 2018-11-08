@@ -331,6 +331,7 @@ set_global_assignment -name ENABLE_BOOT_SEL_PIN OFF
 set_global_assignment -name CYCLONEIII_CONFIGURATION_SCHEME "PASSIVE SERIAL"
 set_global_assignment -name FORCE_CONFIGURATION_VCCIO ON
 set_global_assignment -name PROJECT_OUTPUT_DIRECTORY ../../syn/mist
+set_global_assignment -name PHYSICAL_SYNTHESIS_EFFORT NORMAL
 set_global_assignment -name QIP_FILE ../../src/T80/T80.qip
 set_global_assignment -name VHDL_FILE ../../../Board/mist/MIST_Toplevel.vhd
 set_global_assignment -name SYSTEMVERILOG_FILE ../../Board/mist/rgb2ypbpr.sv
@@ -351,9 +352,7 @@ set_global_assignment -name VHDL_FILE ../../src/vdp.vhd
 set_global_assignment -name VHDL_FILE ../../src/sdram_controller.vhd
 set_global_assignment -name VHDL_FILE ../../src/os_rom.vhd
 set_global_assignment -name VHDL_FILE ../../src/gen_io.vhd
-set_global_assignment -name VHDL_FILE ../../src/gen_fm.vhd
 set_global_assignment -name VHDL_FILE ../../src/chameleon_gen_sdram.vhd
-set_global_assignment -name VHDL_FILE ../../src/zram.vhd
 set_global_assignment -name QIP_FILE ../../Board/mist/pll.qip
 set_global_assignment -name SIGNALTAP_FILE stp2.stp
 set_global_assignment -name VERILOG_FILE ../../src/TwoWayCache.v

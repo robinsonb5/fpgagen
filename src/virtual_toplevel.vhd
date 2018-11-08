@@ -551,12 +551,21 @@ sdc : entity work.sdram_controller generic map (
 -- -----------------------------------------------------------------------
 -- Z80 RAM
 -- -----------------------------------------------------------------------
-zr : entity work.zram port map (
-	address	=> zram_a,
+zram : entity work.DualPortRAM
+generic map (
+	addrbits => 13,
+	databits => 8
+)
+port map(
+	address_a	=> zram_a,
+	address_b	=> (others => '0'),
 	clock		=> MCLK,
-	data		=> zram_d,
-	wren		=> zram_we,
-	q			=> zram_q
+	data_a		=> zram_d,
+	data_b		=> (others => '0'),
+	wren_a		=> zram_we,
+	wren_b		=> '0',
+	q_a			=> zram_q,
+	q_b			=> open
 );
 
 -- -----------------------------------------------------------------------

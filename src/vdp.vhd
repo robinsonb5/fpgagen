@@ -459,6 +459,8 @@ signal WIN_H		: std_logic;
 ----------------------------------------------------------------
 -- SPRITE ENGINE
 ----------------------------------------------------------------
+signal OBJ_MAX_FRAME			: std_logic_vector(6 downto 0);
+signal OBJ_MAX_LINE			: std_logic_vector(6 downto 0);
 
 signal OBJ_CACHE_Y_L_D		: std_logic_vector(7 downto 0);
 signal OBJ_CACHE_Y_L_WE		: std_logic;
@@ -883,7 +885,7 @@ begin
 		SOVR_CLR <= '0';
 		SCOL_CLR <= '0';
 
-                DBG <= (others => '0');
+		DBG <= (others => '0');
 
 	elsif rising_edge(CLK) then
 		SOVR_CLR <= '0';
@@ -1642,6 +1644,10 @@ end process;
 ----------------------------------------------------------------
 -- SPRITE ENGINE
 ----------------------------------------------------------------
+OBJ_MAX_FRAME <= conv_std_logic_vector(OBJ_MAX_FRAME_H40, 7) when H40 = '1' else
+					  conv_std_logic_vector(OBJ_MAX_FRAME_H32, 7);
+OBJ_MAX_LINE  <= conv_std_logic_vector(OBJ_MAX_LINE_H40, 7) when H40 = '1' else
+					  conv_std_logic_vector(OBJ_MAX_LINE_H32, 7);
 
 -- Write-through cache for Y, Link and size fields
 process( RST_N, CLK )
@@ -1664,8 +1670,7 @@ begin
 		cache_addr := DT_VRAM_ADDR(16 downto 3) - (SATB & "000000");
 		DT_VRAM_SEL_D <= DT_VRAM_SEL;
 		if DT_VRAM_SEL_D = '0' and DT_VRAM_SEL = '1' and DT_VRAM_RNW = '0' and
-		   DT_VRAM_ADDR(2) = '0' and
-		   ((H40 = '1' and cache_addr < 80) or (H40 = '0' and cache_addr < 64))
+		   DT_VRAM_ADDR(2) = '0' and cache_addr < OBJ_MAX_FRAME
 		then
 			if DT_VRAM_ADDR(1) = '0' then
 				OBJ_CACHE_Y_L_WE <= not DT_VRAM_LDS_N;
@@ -1795,17 +1800,15 @@ begin
 				OBJ_NEXT <= OBJ_LINK;
 
 				-- limit number of sprites per line to 20 / 16
-				if (H40 = '1' and OBJ_NB = 20) or (H40 = '0' and OBJ_NB = 16) then
+				if OBJ_NB = OBJ_MAX_LINE then
 					SP1C <= SP1C_DONE;
 					SP1_SOVR_SET <= '1';
 				-- check a total of 80 sprites in H40 mode and 64 sprites in H32 mode
-				elsif (H40 = '1' and OBJ_TOT = 79) or 
-				      (H40 = '0' and OBJ_TOT = 63) or
+				elsif OBJ_TOT = OBJ_MAX_FRAME - 1  or 
 					 -- the following checks are inspired by the gens-ii emulator
-				      (H40 = '1' and OBJ_LINK >= 80) or 
-				      (H40 = '0' and OBJ_LINK >= 64) or
-				      OBJ_LINK = "0000000" or
-					  SP1_STOP = '1'
+						OBJ_LINK >= OBJ_MAX_FRAME or
+						OBJ_LINK = "0000000" or
+						SP1_STOP = '1'
 				then
 					SP1C <= SP1C_DONE;
 				else
@@ -1846,8 +1849,7 @@ begin
 				-- Treat VISINFO as a shift register, so start reading
 				-- from the first unused location.
 				-- This way visible sprites processed late.
-				if (H40 = '0' and OBJ_NB = 16) or
-				   (H40 = '1' and OBJ_NB = 20)
+				if OBJ_NB = OBJ_MAX_LINE
 				then
 					OBJ_IDX <= (others => '0');
 					OBJ_VISINFO_ADDR_RD <= (others => '0');
@@ -1915,12 +1917,10 @@ begin
 			when SP2C_NEXT =>
 				OBJ_SPINFO_WE <= '0';
 				SP2C <= SP2C_Y_RD;
-				if (H40 = '0' and OBJ_IDX = 15) or
-				   (H40 = '1' and OBJ_IDX = 19)
+				if OBJ_IDX = OBJ_MAX_LINE - 1
 				then
-					if OBJ_NB = 0 or
-					(H40 = '0' and OBJ_NB = 16) or
-					(H40 = '1' and OBJ_NB = 20) then
+					if OBJ_NB = 0 or OBJ_NB = OBJ_MAX_LINE
+					then
 						OBJ_IDX <= OBJ_NB;
 						SP2C <= SP2C_DONE;
 					else
@@ -2163,7 +2163,7 @@ begin
 				end if;
 
 				-- limit total sprite pixels per line
-				if (H40 = '1' and OBJ_PIX = 320) or (H40 = '0' and OBJ_PIX = 256) then
+				if OBJ_PIX = H_DISP_WIDTH then
 					OBJ_DOT_OVERFLOW <= '1';
 					SP3C <= SP3C_DONE;
 					SP3_SOVR_SET <= '1';

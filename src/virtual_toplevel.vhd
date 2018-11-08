@@ -94,6 +94,7 @@ entity Virtual_Toplevel is
 														  -- 6 - PAL
 														  -- 7 - Swap y
 														  -- 8 - 3 Buttons only
+														  -- 9 - VRAM speed emu
 	);
 end entity;
 
@@ -130,6 +131,16 @@ signal ram68k_q : std_logic_vector(15 downto 0);
 signal ram68k_l_n : std_logic;
 signal ram68k_u_n : std_logic;
 
+-- SRAM
+signal sram_req : std_logic := '0';
+signal sram_ack : std_logic;
+signal sram_we : std_logic := '0';
+signal sram_a : std_logic_vector(15 downto 1);
+signal sram_d : std_logic_vector(15 downto 0);
+signal sram_q : std_logic_vector(15 downto 0);
+signal sram_l_n : std_logic;
+signal sram_u_n : std_logic;
+
 -- VRAM
 signal vram_req : std_logic;
 signal vram_ack : std_logic;
@@ -147,6 +158,9 @@ type sdrc_t is ( SDRC_IDLE,
 	SDRC_T80);
 signal SDRC : sdrc_t;
 
+type sramrc_t is ( SRAMRC_IDLE,	SRAMRC_TG68);
+signal SRAMRC : sramrc_t;
+signal SRAM_EN : std_logic;
 -- Z80 RAM
 
 signal zram_a : std_logic_vector(12 downto 0);
@@ -247,6 +261,11 @@ signal DMA_SDRAM_SEL		: std_logic;
 signal DMA_SDRAM_D			: std_logic_vector(15 downto 0);
 signal DMA_SDRAM_DTACK_N	: std_logic;
 
+-- SRAM CONTROL
+signal TG68_SRAM_SEL		: std_logic;
+signal TG68_SRAM_D			: std_logic_vector(15 downto 0);
+signal TG68_SRAM_DTACK_N	: std_logic;
+
 signal SSF2_MAP             : std_logic_vector(8*6-1 downto 0);
 signal ROM_PAGE             : std_logic_vector(2 downto 0);
 signal ROM_PAGE_A           : std_logic_vector(4 downto 0); -- 16 MB only (original mapper: max. 32)
@@ -302,6 +321,7 @@ signal VDP_DI				: std_logic_vector(15 downto 0);
 signal VDP_DO				: std_logic_vector(15 downto 0);
 signal VDP_DTACK_N			: std_logic;
 signal VDP_RST_N			: std_logic;
+signal VDP_VRAM_SPEED		: std_logic;
 
 signal TG68_VDP_SEL		: std_logic;
 signal TG68_VDP_D			: std_logic_vector(15 downto 0);
@@ -313,8 +333,6 @@ signal T80_VDP_DTACK_N		: std_logic;
 
 type vdpc_t is ( VDPC_IDLE, VDPC_TG68_ACC, VDPC_T80_ACC, VDPC_DESEL );
 signal VDPC : vdpc_t;
-
-signal INTERLACE	: std_logic;
 
 -- FM AREA
 signal FM_SEL			: std_logic;
@@ -454,6 +472,8 @@ JOY_2(11 downto 4) <= joyb(11 downto 4) when JOY_SWAP = '0' else joya(11 downto 
 model <= SW(5);
 PAL <= SW(6);
 
+VDP_VRAM_SPEED <= SW(9);
+
 -- DIP Switches
 SW <= ext_sw;
 
@@ -507,6 +527,15 @@ sdc : entity work.sdram_controller generic map (
 	ram68k_u_n	=> ram68k_u_n,
 	ram68k_l_n	=> ram68k_l_n,
 
+	sram_req	=> sram_req,
+	sram_ack	=> sram_ack,
+	sram_we	=> sram_we,
+	sram_a		=> sram_a,
+	sram_d		=> sram_d,
+	sram_q		=> sram_q,
+	sram_u_n	=> sram_u_n,
+	sram_l_n	=> sram_l_n,
+
 	vram_req	=> vram_req,
 	vram_ack => vram_ack,
 	vram_we	=> vram_we,
@@ -515,19 +544,28 @@ sdc : entity work.sdram_controller generic map (
 	vram_q	=> vram_q,
 	vram_u_n => vram_u_n,
 	vram_l_n => vram_l_n,
-	
+
 	initDone 	=> SDR_INIT_DONE
 );
 
 -- -----------------------------------------------------------------------
 -- Z80 RAM
 -- -----------------------------------------------------------------------
-zr : entity work.zram port map (
-	address	=> zram_a,
+zram : entity work.DualPortRAM
+generic map (
+	addrbits => 13,
+	databits => 8
+)
+port map(
+	address_a	=> zram_a,
+	address_b	=> (others => '0'),
 	clock		=> MCLK,
-	data		=> zram_d,
-	wren		=> zram_we,
-	q			=> zram_q
+	data_a		=> zram_d,
+	data_b		=> (others => '0'),
+	wren_a		=> zram_we,
+	wren_b		=> '0',
+	q_a			=> zram_q,
+	q_b			=> open
 );
 
 -- -----------------------------------------------------------------------
@@ -713,8 +751,6 @@ port map(
 	vram_u_n	=> vram_u_n,
 	vram_l_n	=> vram_l_n,
 	
-	INTERLACE	=> INTERLACE,
-
 	HINT			=> HINT,
 	VINT_TG68		=> VINT_TG68,
 	VINT_T80			=> VINT_T80,
@@ -731,7 +767,9 @@ port map(
 	G					=> VDP_GREEN,
 	B					=> VDP_BLUE,
 	HS					=> VDP_HS_N,
-	VS					=> VDP_VS_N
+	VS					=> VDP_VS_N,
+
+	VRAM_SPEED			=> VDP_VRAM_SPEED
 );
 
 -- PSG
@@ -810,8 +848,6 @@ end process;
 ----------------------------------------------------------------
 -- SWITCHES CONTROL
 ----------------------------------------------------------------
-INTERLACE <= '0';
-
 
 -- #############################################################################
 -- #############################################################################
@@ -873,6 +909,7 @@ TG68_RES_N <= MRST_N and ext_bootdone;
 TG68_DTACK_N <= '1' when bootState /= BOOT_DONE
 	else TG68_FLASH_DTACK_N when TG68_FLASH_SEL = '1'
 	else TG68_SDRAM_DTACK_N when TG68_SDRAM_SEL = '1' 
+	else TG68_SRAM_DTACK_N when TG68_SRAM_SEL = '1'
 	else TG68_CTRL_DTACK_N when TG68_CTRL_SEL = '1' 
 	else TG68_OS_DTACK_N when TG68_OS_SEL = '1' 
 	else TG68_IO_DTACK_N when TG68_IO_SEL = '1' 
@@ -881,6 +918,7 @@ TG68_DTACK_N <= '1' when bootState /= BOOT_DONE
 	else '0';
 TG68_DI(15 downto 8) <= TG68_FLASH_D(15 downto 8) when TG68_FLASH_SEL = '1' and TG68_UDS_N = '0'
 	else TG68_SDRAM_D(15 downto 8) when TG68_SDRAM_SEL = '1' and TG68_UDS_N = '0'
+	else TG68_SRAM_D(15 downto 8) when TG68_SRAM_SEL = '1' and TG68_UDS_N = '0'
 	else TG68_ZRAM_D(15 downto 8) when TG68_ZRAM_SEL = '1' and TG68_UDS_N = '0'
 	else TG68_CTRL_D(15 downto 8) when TG68_CTRL_SEL = '1' and TG68_UDS_N = '0'
 	else TG68_OS_D(15 downto 8) when TG68_OS_SEL = '1' and TG68_UDS_N = '0'
@@ -891,6 +929,7 @@ TG68_DI(15 downto 8) <= TG68_FLASH_D(15 downto 8) when TG68_FLASH_SEL = '1' and 
 	else NO_DATA(15 downto 8);
 TG68_DI(7 downto 0) <= TG68_FLASH_D(7 downto 0) when TG68_FLASH_SEL = '1' and TG68_LDS_N = '0'
 	else TG68_SDRAM_D(7 downto 0) when TG68_SDRAM_SEL = '1' and TG68_LDS_N = '0'
+	else TG68_SRAM_D(7 downto 0) when TG68_SRAM_SEL = '1' and TG68_LDS_N = '0'
 	else TG68_ZRAM_D(7 downto 0) when TG68_ZRAM_SEL = '1' and TG68_LDS_N = '0'
 	else TG68_CTRL_D(7 downto 0) when TG68_CTRL_SEL = '1' and TG68_LDS_N = '0'
 	else TG68_OS_D(7 downto 0) when TG68_OS_SEL = '1' and TG68_LDS_N = '0'
@@ -1452,7 +1491,8 @@ process( MRST_N, MCLK, TG68_SEL, TG68_RNW,
 begin
 	if TG68_A(23 downto 22) = "00" 
 		and TG68_SEL = '1' 
-		and TG68_RNW = '1' 
+		and TG68_RNW = '1'
+		and TG68_SRAM_SEL = '0'
 		and CART_EN = '1'
 	then
 		TG68_FLASH_SEL <= '1';
@@ -1776,6 +1816,49 @@ begin
 
 end process;
 
+-- SRAM at 0x200000
+TG68_SRAM_SEL <= '1' when SRAM_EN = '1' and TG68_SEL = '1' and TG68_A(23 downto 16) = x"20" else '0';
+
+-- SRAM CONTROL
+process( MRST_N, MCLK )
+begin
+
+	if MRST_N = '0' then
+		TG68_SRAM_DTACK_N <= '1';
+		sram_req <= '0';
+		SRAMRC <= SRAMRC_IDLE;
+
+	elsif rising_edge(MCLK) then
+		if TG68_SRAM_SEL = '0' then
+			TG68_SRAM_DTACK_N <= '1';
+		end if;
+
+		case SRAMRC is
+		when SRAMRC_IDLE =>
+			if VCLKCNT = "001" then
+				if TG68_SRAM_SEL = '1' and TG68_SRAM_DTACK_N = '1' then
+					sram_req <= not sram_req;
+					sram_a <= TG68_A(15 downto 1);
+					sram_d <= TG68_DO;
+					sram_we <= not TG68_RNW;
+					sram_u_n <= TG68_UDS_N;
+					sram_l_n <= TG68_LDS_N;
+					SRAMRC <= SRAMRC_TG68;
+				end if;
+			end if;
+
+		when SRAMRC_TG68 =>
+			if sram_req = sram_ack then
+				TG68_SRAM_D <= sram_q;
+				TG68_SRAM_DTACK_N <= '0';
+				SRAMRC <= SRAMRC_IDLE;
+			end if;
+		when others => null;
+		end case;
+
+	end if;
+
+end process;
 
 TG68_ZRAM_SEL <= '1' when TG68_A(23 downto 16) = x"A0" and TG68_A(14) = '0' and TG68_SEL = '1' else '0';
 T80_ZRAM_SEL <= '1' when T80_A(15 downto 14) = "00" and T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0') else '0';
@@ -1843,7 +1926,8 @@ begin
 			romwr_req <= '0';
 			romwr_a <= to_unsigned(0, 23);
 			bootState<=BOOT_READ_1;
-			
+			SRAM_EN <= '0';
+
 		else
 			case bootState is 
 				when BOOT_READ_1 =>
@@ -1854,6 +1938,10 @@ begin
 					end if;
 					if ext_bootdone = '1' then
 						ext_data_req <= '0';
+						-- enable SRAM for carts < 2 MB
+						if romwr_a(23 downto 21) = "000" then
+							SRAM_EN <= '1';
+						end if;
 						bootState <= BOOT_DONE;
 					end if;
 				when BOOT_WRITE_1 =>

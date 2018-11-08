@@ -40,8 +40,6 @@ component vdp
                 vram_u_n : out std_logic;
                 vram_l_n : out std_logic;
 
-                INTERLACE       : in std_logic;
-
                 HINT            : out std_logic;
                 INTACK          : in std_logic;
 
@@ -110,8 +108,6 @@ begin
       vram_q => vram_q,
       vram_we => vram_we,
       vram_d => vram_d,
-
-      INTERLACE => '0',
 
       INTACK => '0',
 

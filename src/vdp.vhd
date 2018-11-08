@@ -2037,33 +2037,20 @@ begin
 				if OBJ_X /= "000000000" then
 					OBJ_VALID_X <= '1';
 				end if;
-			
-				case OBJ_HS is
-				when "00" =>	-- 8 pixels
-					if OBJ_HF = '0' then
-						OBJ_X_OFS <= "00000";
-					else
+
+				OBJ_X_OFS <= "00000";
+				if OBJ_HF = '1' then
+					case OBJ_HS is
+					when "00" =>	-- 8 pixels
 						OBJ_X_OFS <= "00111";
-					end if;					
-				when "01" =>	-- 16 pixels
-					if OBJ_HF = '0' then
-						OBJ_X_OFS <= "00000";
-					else
+					when "01" =>	-- 16 pixels
 						OBJ_X_OFS <= "01111";
-					end if;					
-				when "11" =>	-- 32 pixels
-					if OBJ_HF = '0' then
-						OBJ_X_OFS <= "00000";
-					else
+					when "11" =>	-- 32 pixels
 						OBJ_X_OFS <= "11111";
-					end if;					
-				when others =>	-- 24 pixels
-					if OBJ_HF = '0' then
-						OBJ_X_OFS <= "00000";
-					else
+					when others =>	-- 24 pixels
 						OBJ_X_OFS <= "10111";
-					end if;					
-				end case;
+					end case;
+				end if;
 
 				if LSM = "11" and OBJ_VF = '1' then
 					case OBJ_VS is

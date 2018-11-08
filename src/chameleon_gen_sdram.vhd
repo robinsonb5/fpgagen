@@ -256,7 +256,7 @@ architecture rtl of chameleon_sdram is
 		row : row_t;
 		rowopen : std_logic;
 	end record;
-	type bank_records is array(4 downto 0) of bank_record;
+	type bank_records is array(3 downto 0) of bank_record;
 	signal banks : bank_records;
 
 	subtype addr_bankbits is Natural range colAddrBits+2 downto colAddrBits+1;
@@ -662,7 +662,7 @@ end process;
 							refreshActive <= '1';
 							refreshSubtract <= '1';
 							ramSTate <= RAM_AUTOREFRESH;
-							for i in 0 to 4 loop
+							for i in 0 to 3 loop
 								if banks(i).rowopen='1' then
 									-- There are still rows active, so we precharge them first							
 									ramState <= RAM_PRECHARGE_ALL;
@@ -795,7 +795,7 @@ end process;
 					sd_addr_reg(10) <= '1'; -- All banks
 					sd_we_n_reg <= '0';
 					sd_ras_n_reg <= '0';
-					for i in 0 to 4 loop
+					for i in 0 to 3 loop
 						banks(i).rowopen<='0';
 					end loop;
 				when RAM_AUTOREFRESH =>

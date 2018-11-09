@@ -95,6 +95,7 @@ entity Virtual_Toplevel is
 														  -- 7 - Swap y
 														  -- 8 - 3 Buttons only
 														  -- 9 - VRAM speed emu
+														  -- 10 - EEPROM emu (fake)
 	);
 end entity;
 
@@ -161,6 +162,7 @@ signal SDRC : sdrc_t;
 type sramrc_t is ( SRAMRC_IDLE,	SRAMRC_TG68);
 signal SRAMRC : sramrc_t;
 signal SRAM_EN : std_logic;
+signal EEPROM_EN : std_logic;
 -- Z80 RAM
 
 signal zram_a : std_logic_vector(12 downto 0);
@@ -405,7 +407,6 @@ signal JOY_2        : std_logic_vector(11 downto 0);
 signal JOY_3BUT		: std_logic;
 
 signal SDR_INIT_DONE	: std_logic;
-signal PRE_RESET_N	: std_logic;
 
 type bootStates is (BOOT_READ_1, BOOT_WRITE_1, BOOT_WRITE_2, BOOT_DONE);
 signal bootState : bootStates := BOOT_DONE;
@@ -439,8 +440,7 @@ begin
 process(MRST_N,MCLK)
 begin
 	if rising_edge(MCLK) then
-		PRE_RESET_N <= reset and SDR_INIT_DONE and ext_reset_n;
-		MRST_N <= PRE_RESET_N;
+		MRST_N <= SDR_INIT_DONE and reset and ext_bootdone and ext_reset_n;
 		if bootState = BOOT_DONE then
 			VDP_RST_N <= '1';
 		else
@@ -473,6 +473,7 @@ model <= SW(5);
 PAL <= SW(6);
 
 VDP_VRAM_SPEED <= SW(9);
+EEPROM_EN <= SW(10);
 
 -- DIP Switches
 SW <= ext_sw;
@@ -904,7 +905,7 @@ VBUS_DATA <= DMA_FLASH_D when DMA_FLASH_SEL = '1'
 	else x"FFFF";
 
 -- 68K INPUTS
-TG68_RES_N <= MRST_N and ext_bootdone;
+TG68_RES_N <= MRST_N;
 
 TG68_DTACK_N <= '1' when bootState /= BOOT_DONE
 	else TG68_FLASH_DTACK_N when TG68_FLASH_SEL = '1'
@@ -1711,8 +1712,11 @@ begin
 
 end process;
 
--- SRAM at 0x200000
-TG68_SRAM_SEL <= '1' when SRAM_EN = '1' and TG68_SEL = '1' and TG68_A(23 downto 16) = x"20" else '0';
+-- SRAM at 0x200000 - 20FFFF
+-- EEPROM at 0x20000
+TG68_SRAM_SEL <= '1' when SRAM_EN = '1' and TG68_SEL = '1' and TG68_A(23 downto 16) = x"20"
+			else '1' when EEPROM_EN = '1' and TG68_SEL = '1' and TG68_A(23 downto 4) = x"20000" and TG68_A(3 downto 1) = "000"
+			else '0';
 
 -- SRAM CONTROL
 process( MRST_N, MCLK )
@@ -1814,15 +1818,18 @@ FL_DQ <= ext_data;
 process( SDR_CLK )
 begin
 	if rising_edge( SDR_CLK ) then
-		if PRE_RESET_N = '0' then
-				
+		if ext_reset_n = '0' then
+
 			ext_data_req <= '0';
-			
+
 			romwr_req <= '0';
 			romwr_a <= to_unsigned(0, 23);
 			bootState<=BOOT_READ_1;
 			SRAM_EN <= '0';
-
+		elsif reset = '0' then
+			ext_data_req <= '0';
+			romwr_req <= '0';
+			bootState <= BOOT_DONE;
 		else
 			case bootState is 
 				when BOOT_READ_1 =>

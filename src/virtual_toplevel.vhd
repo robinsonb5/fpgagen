@@ -95,6 +95,7 @@ entity Virtual_Toplevel is
 														  -- 7 - Swap y
 														  -- 8 - 3 Buttons only
 														  -- 9 - VRAM speed emu
+														  -- 10 - EEPROM emu (fake)
 	);
 end entity;
 
@@ -161,6 +162,7 @@ signal SDRC : sdrc_t;
 type sramrc_t is ( SRAMRC_IDLE,	SRAMRC_TG68);
 signal SRAMRC : sramrc_t;
 signal SRAM_EN : std_logic;
+signal EEPROM_EN : std_logic;
 -- Z80 RAM
 
 signal zram_a : std_logic_vector(12 downto 0);
@@ -405,7 +407,6 @@ signal JOY_2        : std_logic_vector(11 downto 0);
 signal JOY_3BUT		: std_logic;
 
 signal SDR_INIT_DONE	: std_logic;
-signal PRE_RESET_N	: std_logic;
 
 type bootStates is (BOOT_READ_1, BOOT_WRITE_1, BOOT_WRITE_2, BOOT_DONE);
 signal bootState : bootStates := BOOT_DONE;
@@ -439,8 +440,7 @@ begin
 process(MRST_N,MCLK)
 begin
 	if rising_edge(MCLK) then
-		PRE_RESET_N <= reset and SDR_INIT_DONE and ext_reset_n;
-		MRST_N <= PRE_RESET_N;
+		MRST_N <= SDR_INIT_DONE and reset and ext_bootdone and ext_reset_n;
 		if bootState = BOOT_DONE then
 			VDP_RST_N <= '1';
 		else
@@ -473,6 +473,7 @@ model <= SW(5);
 PAL <= SW(6);
 
 VDP_VRAM_SPEED <= SW(9);
+EEPROM_EN <= SW(10);
 
 -- DIP Switches
 SW <= ext_sw;
@@ -904,7 +905,7 @@ VBUS_DATA <= DMA_FLASH_D when DMA_FLASH_SEL = '1'
 	else x"FFFF";
 
 -- 68K INPUTS
-TG68_RES_N <= MRST_N and ext_bootdone;
+TG68_RES_N <= MRST_N;
 
 TG68_DTACK_N <= '1' when bootState /= BOOT_DONE
 	else TG68_FLASH_DTACK_N when TG68_FLASH_SEL = '1'
@@ -986,26 +987,14 @@ OS_OEn <= '0';
 TG68_OS_SEL <= '1' when TG68_A(23 downto 22) = "00" and TG68_RD = '1' and CART_EN = '0' else '0';
 
 -- CONTROL AREA
-process( MRST_N, MCLK, TG68_SEL, TG68_RNW,
-	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
-	BAR, T80_A, T80_MREQ_N, T80_RD_N, T80_WR_N)
-begin
-	if (TG68_A(23 downto 12) = x"A11" or TG68_A(23 downto 12) = x"A14")
-		and TG68_SEL = '1' 
-	then	
-		TG68_CTRL_SEL <= '1';
-	else
-		TG68_CTRL_SEL <= '0';
-	end if;
+TG68_CTRL_SEL <= '1' when (TG68_A(23 downto 12) = x"A11" or TG68_A(23 downto 12) = x"A14") and
+	TG68_SEL = '1' else '0';
+T80_CTRL_SEL <= '1' when T80_A(15) = '1' and 
+	(BAR(23 downto 15) & T80_A(14 downto 12) = x"A11" or BAR(23 downto 15) & T80_A(14 downto 12) = x"A14") and
+	T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0') else '0';
 
-	if T80_A(15) = '1' and (BAR(23 downto 15) & T80_A(14 downto 12) = x"A11" or BAR(23 downto 15) & T80_A(14 downto 12) = x"A14")
-		and T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0')
-	then
-		T80_CTRL_SEL <= '1';		
-	else
-		T80_CTRL_SEL <= '0';
-	end if;
-	
+process( MRST_N, MCLK )
+begin
 	if MRST_N = '0' then
 		TG68_CTRL_DTACK_N <= '1';	
 		T80_CTRL_DTACK_N <= '1';	
@@ -1086,26 +1075,12 @@ begin
 end process;
 
 -- I/O AREA
-process( MRST_N, MCLK, TG68_SEL, TG68_RNW,
-	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
-	BAR, T80_A, T80_MREQ_N, T80_RD_N, T80_WR_N )
-begin
-	if TG68_A(23 downto 5) = x"A100" & "000"
-		and TG68_SEL = '1' 
-	then	
-		TG68_IO_SEL <= '1';		
-	else
-		TG68_IO_SEL <= '0';
-	end if;
+TG68_IO_SEL <= '1' when TG68_A(23 downto 5) = x"A100" & "000" and TG68_SEL = '1' else '0';
+T80_IO_SEL <= '1' when T80_A(15) = '1' and BAR & T80_A(14 downto 5) = x"A100" & "000" and
+	T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0') else '0';
 
-	if T80_A(15) = '1' and BAR & T80_A(14 downto 5) = x"A100" & "000"
-		and T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0')
-	then
-		T80_IO_SEL <= '1';		
-	else
-		T80_IO_SEL <= '0';
-	end if;
-	
+process( MRST_N, MCLK )
+begin
 	if MRST_N = '0' then
 		TG68_IO_DTACK_N <= '1';	
 		T80_IO_DTACK_N <= '1';	
@@ -1114,7 +1089,6 @@ begin
 		IO_RNW <= '1';
 		IO_UDS_N <= '1';
 		IO_LDS_N <= '1';
-		IO_A <= (others => 'Z');
 
 		IOC <= IOC_IDLE;
 		
@@ -1195,34 +1169,17 @@ end process;
 -- 7F = 01111111 000
 -- FF = 11111111 000
 -- VDP AREA
-process( MRST_N, MCLK, TG68_SEL, TG68_RNW,
-	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
-	BAR, T80_A, T80_MREQ_N, T80_RD_N, T80_WR_N )
-begin
-	if TG68_A(23 downto 21) = "110" and TG68_A(18 downto 16) = "000"
-		and TG68_SEL = '1' 
-	then	
-		TG68_VDP_SEL <= '1';		
-	elsif TG68_A(23 downto 16) = x"A0" and TG68_A(14 downto 5) = "1111111" & "000" -- Z80 Address space
-		and TG68_SEL = '1' 
-	then
-		TG68_VDP_SEL <= '1';
-	else
-		TG68_VDP_SEL <= '0';
-	end if;
+TG68_VDP_SEL <= '1' when TG68_SEL = '1' and
+	((TG68_A(23 downto 21) = "110" and TG68_A(18 downto 16) = "000") or
+	 (TG68_A(23 downto 16) = x"A0" and TG68_A(14 downto 5) = "1111111" & "000")) -- Z80 Address space
+	else '0';
+T80_VDP_SEL <= '1' when T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0') and
+	(T80_A(15 downto 5) = x"7F" & "000" or
+	(T80_A(15) = '1' and BAR(23 downto 21) = "110" and BAR(18 downto 16) = "000"))	-- 68000 Address space
+	else '0';
 
-	if T80_A(15 downto 5) = x"7F" & "000"
-		and T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0')
-	then
-		T80_VDP_SEL <= '1';			
-	elsif T80_A(15) = '1' and BAR(23 downto 21) = "110" and BAR(18 downto 16) = "000" -- 68000 Address space
-		and T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0')
-	then
-		T80_VDP_SEL <= '1';		
-	else
-		T80_VDP_SEL <= '0';
-	end if;
-	
+process( MRST_N, MCLK )
+begin
 	if MRST_N = '0' then
 		TG68_VDP_DTACK_N <= '1';	
 		T80_VDP_DTACK_N <= '1';	
@@ -1231,7 +1188,6 @@ begin
 		VDP_RNW <= '1';
 		VDP_UDS_N <= '1';
 		VDP_LDS_N <= '1';
-		VDP_A <= (others => 'Z');
 
 		VDPC <= VDPC_IDLE;
 
@@ -1367,27 +1323,13 @@ PSG_DI <= T80_DO when T80_PSG_SEL = '1' else TG68_DO(15 downto 8) when TG68_A(0)
 -- E0 = 11100000
 -- FE = 11111110
 -- BANK ADDRESS REGISTER AND UNUSED AREA IN Z80 ADDRESS SPACE
-process( MRST_N, MCLK, TG68_SEL, TG68_RNW,
-	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
-	BAR, T80_A, T80_MREQ_N, T80_RD_N, T80_WR_N )
+TG68_BAR_SEL <= '1' when (TG68_A(23 downto 16) = x"A0" and TG68_A(14 downto 13) = "11" and TG68_A(12 downto 8) /= "11111")
+		and TG68_SEL = '1' else '0';
+T80_BAR_SEL <= '1' when (T80_A(15 downto 13) = "011" and T80_A(12 downto 8) /= "11111")
+		and T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0') else '0';
+
+process( MRST_N, MCLK )
 begin
-
-	if (TG68_A(23 downto 16) = x"A0" and TG68_A(14 downto 13) = "11" and TG68_A(12 downto 8) /= "11111")
-		and TG68_SEL = '1' 
-	then	
-		TG68_BAR_SEL <= '1';		
-	else
-		TG68_BAR_SEL <= '0';
-	end if;
-
-	if (T80_A(15 downto 13) = "011" and T80_A(12 downto 8) /= "11111")
-		and T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0')
-	then
-		T80_BAR_SEL <= '1';
-	else
-		T80_BAR_SEL <= '0';
-	end if;
-	
 	if MRST_N = '0' then
 		TG68_BAR_DTACK_N <= '1';	
 		T80_BAR_DTACK_N <= '1';
@@ -1484,38 +1426,14 @@ ROM_PAGE_A <= SSF2_MAP(4 downto 0) when ROM_PAGE = "000" else
               SSF2_MAP(46 downto 42);
 
 -- FLASH (SDRAM) CONTROL
-process( MRST_N, MCLK, TG68_SEL, TG68_RNW,
-	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
-	BAR, T80_A, T80_MREQ_N, T80_RD_N, T80_WR_N,
-	VBUS_SEL, VBUS_ADDR, CART_EN )
+TG68_FLASH_SEL <= '1' when TG68_A(23 downto 22) = "00" and TG68_SEL = '1' and
+	TG68_RNW = '1' and TG68_SRAM_SEL = '0' and CART_EN = '1' else '0';
+T80_FLASH_SEL <= '1' when T80_A(15) = '1' and BAR(23 downto 22) = "00" and
+	T80_MREQ_N = '0' and T80_RD_N = '0' else '0';
+DMA_FLASH_SEL <= '1' when VBUS_ADDR(23 downto 22) = "00" and VBUS_SEL = '1' else '0';
+
+process( MRST_N, MCLK )
 begin
-	if TG68_A(23 downto 22) = "00" 
-		and TG68_SEL = '1' 
-		and TG68_RNW = '1'
-		and TG68_SRAM_SEL = '0'
-		and CART_EN = '1'
-	then
-		TG68_FLASH_SEL <= '1';
-	else
-		TG68_FLASH_SEL <= '0';
-	end if;
-
-	if T80_A(15) = '1' and BAR(23 downto 22) = "00"
-		and T80_MREQ_N = '0' and T80_RD_N = '0' 
-	then
-		T80_FLASH_SEL <= '1';
-	else
-		T80_FLASH_SEL <= '0';
-	end if;	
-
-	if VBUS_ADDR(23 downto 22) = "00" 
-		and VBUS_SEL = '1'
-	then
-		DMA_FLASH_SEL <= '1';
-	else
-		DMA_FLASH_SEL <= '0';
-	end if;
-
 	if MRST_N = '0' then
 		FC <= FC_IDLE;
 		
@@ -1706,35 +1624,13 @@ begin
 end process;
 
 -- SDRAM (68K RAM) CONTROL
-process( MRST_N, MCLK, TG68_SEL, TG68_RNW,
-	TG68_A, TG68_DO, TG68_UDS_N, TG68_LDS_N,
-	BAR, T80_A, T80_MREQ_N, T80_RD_N, T80_WR_N,
-	VBUS_SEL, VBUS_ADDR)
+TG68_SDRAM_SEL <= '1' when TG68_A(23 downto 21) = "111" and TG68_SEL = '1' else '0';
+T80_SDRAM_SEL <= '1' when T80_A(15) = '1' and BAR(23 downto 21) = "111" and
+	T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0') else '0';
+DMA_SDRAM_SEL <= '1' when VBUS_ADDR(23 downto 21) = "111" and VBUS_SEL = '1' else '0';
+
+process( MRST_N, MCLK )
 begin
-	if TG68_A(23 downto 21) = "111" -- 68000 RAM
-		and TG68_SEL = '1' 
-	then	
-		TG68_SDRAM_SEL <= '1';
-	else
-		TG68_SDRAM_SEL <= '0';
-	end if;
-
-	if T80_A(15) = '1' and BAR(23 downto 21) = "111" -- 68000 RAM
-		and T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0')
-	then
-		T80_SDRAM_SEL <= '1';
-	else
-		T80_SDRAM_SEL <= '0';
-	end if;
-
-	if VBUS_ADDR(23 downto 21) = "111" -- 68000 RAM
-		and VBUS_SEL = '1' 
-	then
-		DMA_SDRAM_SEL <= '1';
-	else
-		DMA_SDRAM_SEL <= '0';
-	end if;
-
 	if MRST_N = '0' then
 		TG68_SDRAM_DTACK_N <= '1';
 		T80_SDRAM_DTACK_N <= '1';
@@ -1816,8 +1712,11 @@ begin
 
 end process;
 
--- SRAM at 0x200000
-TG68_SRAM_SEL <= '1' when SRAM_EN = '1' and TG68_SEL = '1' and TG68_A(23 downto 16) = x"20" else '0';
+-- SRAM at 0x200000 - 20FFFF
+-- EEPROM at 0x20000
+TG68_SRAM_SEL <= '1' when SRAM_EN = '1' and TG68_SEL = '1' and TG68_A(23 downto 16) = x"20"
+			else '1' when EEPROM_EN = '1' and TG68_SEL = '1' and TG68_A(23 downto 4) = x"20000" and TG68_A(3 downto 1) = "000"
+			else '0';
 
 -- SRAM CONTROL
 process( MRST_N, MCLK )
@@ -1919,15 +1818,18 @@ FL_DQ <= ext_data;
 process( SDR_CLK )
 begin
 	if rising_edge( SDR_CLK ) then
-		if PRE_RESET_N = '0' then
-				
+		if ext_reset_n = '0' then
+
 			ext_data_req <= '0';
-			
+
 			romwr_req <= '0';
 			romwr_a <= to_unsigned(0, 23);
 			bootState<=BOOT_READ_1;
 			SRAM_EN <= '0';
-
+		elsif reset = '0' then
+			ext_data_req <= '0';
+			romwr_req <= '0';
+			bootState <= BOOT_DONE;
 		else
 			case bootState is 
 				when BOOT_READ_1 =>

@@ -21,7 +21,6 @@ void video_c(char clk, char r[4], char g[4], char b[4], char hs, char vs) {
   static char last_clk = 0;
   static int ignore = 100;
   static int vskip = 1;
-  static int frame = 1;
   static int cap_frames = 2;  // should be auto-detected from e.g. vsync length
   static int vdetect = 0;
 
@@ -81,10 +80,8 @@ void video_c(char clk, char r[4], char g[4], char b[4], char hs, char vs) {
     if(vdetect) {
       // begin of a new image: open file
       if(!raw) {
-	char fname[16];
-	printf("Saving frame %d\n", frame);
-	sprintf(fname, "video%d.rgb", frame++);
-	raw = fopen(fname, "wb");
+	printf("Saving first frame\n");
+	raw = fopen("video1.rgb", "wb");
       } else {
 	fclose(raw);
 	raw = NULL;
@@ -92,6 +89,9 @@ void video_c(char clk, char r[4], char g[4], char b[4], char hs, char vs) {
 
 	if(!--cap_frames)
 	  exit(0);
+
+	printf("Saving second frame\n");
+	raw = fopen("video2.rgb", "wb");
       }
       vdetect = 0;
     }

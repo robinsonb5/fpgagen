@@ -340,6 +340,7 @@ signal HSYNC_START     : std_logic_vector(8 downto 0);
 signal HSYNC_END       : std_logic_vector(8 downto 0);
 signal HBLANK_START    : std_logic_vector(8 downto 0);
 signal HBLANK_END      : std_logic_vector(8 downto 0);
+signal HSCROLL_READ    : std_logic_vector(8 downto 0);
 signal V_DISP_START    : std_logic_vector(8 downto 0);
 signal V_DISP_HEIGHT   : std_logic_vector(8 downto 0);
 signal VSYNC_START     : std_logic_vector(8 downto 0);
@@ -2245,6 +2246,9 @@ HBLANK_START    <= conv_std_logic_vector(HBLANK_START_H40, 9) when H40='1'
               else conv_std_logic_vector(HBLANK_START_H32, 9);
 HBLANK_END      <= conv_std_logic_vector(HBLANK_END_H40, 9) when H40='1'
               else conv_std_logic_vector(HBLANK_END_H32, 9);
+HSCROLL_READ    <= conv_std_logic_vector(HSCROLL_READ_H40, 9) when H40='1'
+              else conv_std_logic_vector(HSCROLL_READ_H32, 9);
+
 VSYNC_START     <= conv_std_logic_vector(VSYNC_START_PAL_V30, 9) when V30='1' and PAL='1'
               else conv_std_logic_vector(VSYNC_START_PAL_V28, 9) when V30='0' and PAL='1'
               else conv_std_logic_vector(VSYNC_START_NTSC_V30, 9) when V30='1' and PAL='0'
@@ -2415,9 +2419,8 @@ DISP_ACTIVE <= '1' when V_ACTIVE = '1' and HV_HCNT > HBLANK_END and HV_HCNT <= H
 -- the last pixel column needs some extra time after DISP_ACTIVE becomes '0' to display
 DISP_ACTIVE_LAST_COLUMN	<= '1' when HV_HCNT = HBLANK_END + H_DISP_WIDTH + 1 else '0';
 -- Background generation runs during active display.
--- Original timing is 2 pixels (or cells?) before the actual pixel.
--- But the background generators are not timed, but free running now.
-BGEN_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = HBLANK_END - 8 else '0';
+-- It starts with reading the horizontal scroll values from the VRAM
+BGEN_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = HSCROLL_READ else '0';
 
 -- Stage 1 - runs after the vcounter incremented
 -- Carefully choosing the starting position avoids the

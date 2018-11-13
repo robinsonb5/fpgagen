@@ -1048,14 +1048,14 @@ begin
 
 		-- Priority encoder for next port...
 		VMC_NEXT<=VMC_IDLE;
-		if BGB_SEL = '1' and BGB_DTACK_N = '1' and early_ack_bgb='1' then
+		if SP3_SEL = '1' and SP3_DTACK_N = '1' and early_ack_sp3='1' then
+			VMC_NEXT <= VMC_SP3;
+		elsif BGB_SEL = '1' and BGB_DTACK_N = '1' and early_ack_bgb='1' then
 			VMC_NEXT <= VMC_BGB;
 		elsif BGA_SEL = '1' and BGA_DTACK_N = '1' and early_ack_bga='1' then
 			VMC_NEXT <= VMC_BGA;
 		elsif SP2_SEL = '1' and SP2_DTACK_N = '1' and early_ack_sp2='1' then
 			VMC_NEXT <= VMC_SP2;
-		elsif SP3_SEL = '1' and SP3_DTACK_N = '1' and early_ack_sp3='1' then
-			VMC_NEXT <= VMC_SP3;
 		elsif DT_VRAM_SEL = '1' and DT_VRAM_DTACK_N = '1' and early_ack_dt='1' then
 			VMC_NEXT <= VMC_DT;
 		end if;

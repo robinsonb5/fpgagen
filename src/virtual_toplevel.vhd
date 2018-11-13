@@ -789,7 +789,7 @@ port map(
 
 fm : jt12
 port map(
-	rst		=> not MRST_N,
+	rst		=> not T80_RESET_N,
 	clk		=> MCLK,
 	cen		=> FCLK_EN,
 	limiter_en	=> '1',

@@ -340,6 +340,7 @@ signal HSYNC_START     : std_logic_vector(8 downto 0);
 signal HSYNC_END       : std_logic_vector(8 downto 0);
 signal HBLANK_START    : std_logic_vector(8 downto 0);
 signal HBLANK_END      : std_logic_vector(8 downto 0);
+signal HSCROLL_READ    : std_logic_vector(8 downto 0);
 signal V_DISP_START    : std_logic_vector(8 downto 0);
 signal V_DISP_HEIGHT   : std_logic_vector(8 downto 0);
 signal VSYNC_START     : std_logic_vector(8 downto 0);
@@ -1047,14 +1048,14 @@ begin
 
 		-- Priority encoder for next port...
 		VMC_NEXT<=VMC_IDLE;
-		if BGB_SEL = '1' and BGB_DTACK_N = '1' and early_ack_bgb='1' then
+		if SP3_SEL = '1' and SP3_DTACK_N = '1' and early_ack_sp3='1' then
+			VMC_NEXT <= VMC_SP3;
+		elsif BGB_SEL = '1' and BGB_DTACK_N = '1' and early_ack_bgb='1' then
 			VMC_NEXT <= VMC_BGB;
 		elsif BGA_SEL = '1' and BGA_DTACK_N = '1' and early_ack_bga='1' then
 			VMC_NEXT <= VMC_BGA;
 		elsif SP2_SEL = '1' and SP2_DTACK_N = '1' and early_ack_sp2='1' then
 			VMC_NEXT <= VMC_SP2;
-		elsif SP3_SEL = '1' and SP3_DTACK_N = '1' and early_ack_sp3='1' then
-			VMC_NEXT <= VMC_SP3;
 		elsif DT_VRAM_SEL = '1' and DT_VRAM_DTACK_N = '1' and early_ack_dt='1' then
 			VMC_NEXT <= VMC_DT;
 		end if;
@@ -2245,6 +2246,9 @@ HBLANK_START    <= conv_std_logic_vector(HBLANK_START_H40, 9) when H40='1'
               else conv_std_logic_vector(HBLANK_START_H32, 9);
 HBLANK_END      <= conv_std_logic_vector(HBLANK_END_H40, 9) when H40='1'
               else conv_std_logic_vector(HBLANK_END_H32, 9);
+HSCROLL_READ    <= conv_std_logic_vector(HSCROLL_READ_H40, 9) when H40='1'
+              else conv_std_logic_vector(HSCROLL_READ_H32, 9);
+
 VSYNC_START     <= conv_std_logic_vector(VSYNC_START_PAL_V30, 9) when V30='1' and PAL='1'
               else conv_std_logic_vector(VSYNC_START_PAL_V28, 9) when V30='0' and PAL='1'
               else conv_std_logic_vector(VSYNC_START_NTSC_V30, 9) when V30='1' and PAL='0'
@@ -2262,7 +2266,7 @@ V_INT_POS       <= conv_std_logic_vector(V_INT_V30, 9) when V30='1'
 -- COUNTERS AND INTERRUPTS
 
 Y <= HV_VCNT(7 downto 0);
-PRE_Y <= (HV_VCNT(7 downto 0) + 1) & FIELD when LSM = "11" else '0' & HV_VCNT(7 downto 0) + 1;
+PRE_Y <= (HV_VCNT(7 downto 0) + 1) & FIELD when LSM = "11" else '0' & (HV_VCNT(7 downto 0) + 1);
 
 HV_VCNT_EXT <= HV_VCNT(7 downto 0) & FIELD_LATCH when LSM = "11" else '0' & HV_VCNT(7 downto 0);
 HV8 <= HV_VCNT_EXT(8) when LSM = "11" else HV_VCNT_EXT(0);
@@ -2415,9 +2419,8 @@ DISP_ACTIVE <= '1' when V_ACTIVE = '1' and HV_HCNT > HBLANK_END and HV_HCNT <= H
 -- the last pixel column needs some extra time after DISP_ACTIVE becomes '0' to display
 DISP_ACTIVE_LAST_COLUMN	<= '1' when HV_HCNT = HBLANK_END + H_DISP_WIDTH + 1 else '0';
 -- Background generation runs during active display.
--- Original timing is 2 pixels (or cells?) before the actual pixel.
--- But the background generators are not timed, but free running now.
-BGEN_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = HBLANK_END - 8 else '0';
+-- It starts with reading the horizontal scroll values from the VRAM
+BGEN_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = HSCROLL_READ else '0';
 
 -- Stage 1 - runs after the vcounter incremented
 -- Carefully choosing the starting position avoids the
@@ -3014,13 +3017,13 @@ begin
 				end if;
 			
 			when DMA_FILL_LOOP =>
+				REG(20) <= DMA_LENGTH(15 downto 8);
+				REG(19) <= DMA_LENGTH(15 downto 8);
+				REG(22) <= DMA_SOURCE(15 downto 8);
+				REG(21) <= DMA_SOURCE(7 downto 0);
 				if DMA_LENGTH = 0 then
 					DMA_FILL_PRE <= '0';
 					DMA_FILL <= '0';
-					REG(20) <= x"00";
-					REG(19) <= x"00";
-					REG(22) <= DMA_SOURCE(15 downto 8);
-					REG(21) <= DMA_SOURCE(7 downto 0);
 					DMAC <= DMA_IDLE;
 -- synthesis translate_off										
 					write(L, string'("VDP DMA FILL END"));					
@@ -3119,12 +3122,12 @@ begin
 				end if;
 			
 			when DMA_COPY_LOOP =>
+				REG(20) <= DMA_LENGTH(15 downto 8);
+				REG(19) <= DMA_LENGTH(15 downto 8);
+				REG(22) <= DMA_SOURCE(15 downto 8);
+				REG(21) <= DMA_SOURCE(7 downto 0);
 				if DMA_LENGTH = 0 then
 					DMA_COPY <= '0';
-					REG(20) <= x"00";
-					REG(19) <= x"00";
-					REG(22) <= DMA_SOURCE(15 downto 8);
-					REG(21) <= DMA_SOURCE(7 downto 0);
 					DMAC <= DMA_IDLE;
 -- synthesis translate_off										
 					write(L, string'("VDP DMA COPY END"));					
@@ -3184,12 +3187,12 @@ begin
 			when DMA_VBUS_LOOP =>
 				if DT_FF_DTACK_N = '0' then
 					DT_VBUS_SEL <= '0';
+					REG(20) <= DMA_LENGTH(15 downto 8);
+					REG(19) <= DMA_LENGTH(15 downto 8);
+					REG(22) <= DMA_SOURCE(15 downto 8);
+					REG(21) <= DMA_SOURCE(7 downto 0);
 					if DMA_LENGTH = 0 then
 						DMA_VBUS <= '0';
-						REG(20) <= x"00";
-						REG(19) <= x"00";
-						REG(22) <= DMA_SOURCE(15 downto 8);
-						REG(21) <= DMA_SOURCE(7 downto 0);
 						DMAC <= DMA_IDLE;
 -- synthesis translate_off										
 						write(L, string'("VDP DMA VBUS END"));

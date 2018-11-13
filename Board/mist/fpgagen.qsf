@@ -64,22 +64,10 @@ set_location_assignment PIN_121 -to VGA_B[2]
 set_location_assignment PIN_125 -to VGA_B[3]
 set_location_assignment PIN_119 -to VGA_HS
 set_location_assignment PIN_136 -to VGA_VS
-set_global_assignment -name TIMEQUEST_MULTICORNER_ANALYSIS OFF
-set_global_assignment -name TIMEQUEST_DO_CCPP_REMOVAL ON
 set_global_assignment -name ADV_NETLIST_OPT_SYNTH_WYSIWYG_REMAP ON
 set_global_assignment -name AUTO_SHIFT_REGISTER_RECOGNITION ALWAYS
 set_global_assignment -name EDA_TIME_SCALE "1 ps" -section_id eda_simulation
 set_global_assignment -name STRATIX_DEVICE_IO_STANDARD "3.3-V LVTTL"
-set_global_assignment -name ASSIGNMENT_GROUP_MEMBER DRAM_BA_0 -section_id DRAM_Other
-set_global_assignment -name ASSIGNMENT_GROUP_MEMBER DRAM_BA_1 -section_id DRAM_Other
-set_global_assignment -name ASSIGNMENT_GROUP_MEMBER DRAM_CAS_N -section_id DRAM_Other
-set_global_assignment -name ASSIGNMENT_GROUP_MEMBER DRAM_CKE -section_id DRAM_Other
-set_global_assignment -name ASSIGNMENT_GROUP_MEMBER DRAM_CLK -section_id DRAM_Other
-set_global_assignment -name ASSIGNMENT_GROUP_MEMBER DRAM_CS_N -section_id DRAM_Other
-set_global_assignment -name ASSIGNMENT_GROUP_MEMBER DRAM_LDQM -section_id DRAM_Other
-set_global_assignment -name ASSIGNMENT_GROUP_MEMBER DRAM_RAS_N -section_id DRAM_Other
-set_global_assignment -name ASSIGNMENT_GROUP_MEMBER DRAM_UDQM -section_id DRAM_Other
-set_global_assignment -name ASSIGNMENT_GROUP_MEMBER DRAM_WE_N -section_id DRAM_Other
 set_global_assignment -name POWER_PRESET_COOLING_SOLUTION "NO HEAT SINK WITH STILL AIR"
 set_global_assignment -name POWER_BOARD_THERMAL_MODEL "NONE (CONSERVATIVE)"
 set_global_assignment -name USE_CONFIGURATION_DEVICE OFF
@@ -322,7 +310,7 @@ set_global_assignment -name FITTER_EFFORT "STANDARD FIT"
 set_global_assignment -name ROUTER_TIMING_OPTIMIZATION_LEVEL MAXIMUM
 set_global_assignment -name ROUTER_CLOCKING_TOPOLOGY_ANALYSIS ON
 set_global_assignment -name OPTIMIZE_POWER_DURING_SYNTHESIS OFF
-set_global_assignment -name SEED 2
+set_global_assignment -name SEED 1
 set_instance_assignment -name FAST_INPUT_REGISTER ON -to SDRAM_DQ[*]
 set_location_assignment PLL_1 -to "pll:U00|altpll:altpll_component|pll_altpll:auto_generated"
 set_global_assignment -name ENABLE_CONFIGURATION_PINS OFF
@@ -360,4 +348,6 @@ set_global_assignment -name VHDL_FILE ../../src/DualPortRAM.vhd
 set_global_assignment -name QIP_FILE ../../jt12/hdl/jt12.qip
 set_global_assignment -name SDC_FILE ../../Board/mist/constraints.sdc
 set_global_assignment -name CDF_FILE Chain1.cdf
+set_global_assignment -name TIMEQUEST_DO_REPORT_TIMING OFF
+set_global_assignment -name TIMEQUEST_DO_CCPP_REMOVAL ON
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top

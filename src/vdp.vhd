@@ -2266,7 +2266,7 @@ V_INT_POS       <= conv_std_logic_vector(V_INT_V30, 9) when V30='1'
 -- COUNTERS AND INTERRUPTS
 
 Y <= HV_VCNT(7 downto 0);
-PRE_Y <= (HV_VCNT(7 downto 0) + 1) & FIELD when LSM = "11" else '0' & HV_VCNT(7 downto 0) + 1;
+PRE_Y <= (HV_VCNT(7 downto 0) + 1) & FIELD when LSM = "11" else '0' & (HV_VCNT(7 downto 0) + 1);
 
 HV_VCNT_EXT <= HV_VCNT(7 downto 0) & FIELD_LATCH when LSM = "11" else '0' & HV_VCNT(7 downto 0);
 HV8 <= HV_VCNT_EXT(8) when LSM = "11" else HV_VCNT_EXT(0);

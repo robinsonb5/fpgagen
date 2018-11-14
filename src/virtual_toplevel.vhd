@@ -193,22 +193,19 @@ signal TG68_RES_N	: std_logic;
 signal TG68_DI		: std_logic_vector(15 downto 0);
 signal TG68_IPL_N	: std_logic_vector(2 downto 0);
 signal TG68_DTACK_N	: std_logic;
-signal TG68_A		: std_logic_vector(31 downto 0);
+signal TG68_A		: std_logic_vector(23 downto 0);
 signal TG68_DO		: std_logic_vector(15 downto 0);
 signal TG68_SEL		: std_logic;
 signal TG68_UDS_N	: std_logic;
 signal TG68_LDS_N	: std_logic;
 signal TG68_RNW		: std_logic;
 signal TG68_INTACK	: std_logic;
-signal TG68_STATE	: std_logic_vector(1 downto 0);
-signal TG68_FC	        : std_logic_vector(2 downto 0);
 
-signal TG68_ENA: std_logic;
-signal TG68_BUS_WAIT: std_logic_vector(1 downto 0);
-signal TG68_CYCLE: std_logic;
-signal TG68_WR: std_logic;
-signal TG68_RD: std_logic;
-signal TG68_IO: std_logic;
+signal FX68_PHI1	: std_logic;
+signal FX68_PHI2	: std_logic;
+signal FX68_FC		: std_logic_vector(2 downto 0);
+signal FX68_AS_N	: std_logic;
+signal FX68_VPA_N	: std_logic;
 
 -- Z80
 signal T80_RESET_N	: std_logic;
@@ -232,7 +229,6 @@ signal FCLK_EN		: std_logic;
 
 -- CLOCK GENERATION
 signal VCLKCNT		: std_logic_vector(2 downto 0);
--- signal VCLKCNT		: unsigned(2 downto 0);
 signal ZCLK_ENA   : std_logic;
 signal ZCLK_nENA   : std_logic;
 signal ZCLKCNT		: std_logic_vector(3 downto 0);
@@ -429,6 +425,40 @@ signal PAL_IO: std_logic;
 -- DEBUG
 signal HEXVALUE			: std_logic_vector(15 downto 0);
 
+COMPONENT fx68k
+	PORT
+	(
+		clk			: in std_logic;
+		extReset	: in std_logic;	-- External sync reset on emulated system
+		pwrUp		: in std_logic; -- Asserted together with reset on emulated system coldstart
+		enPhi1		: in std_logic;
+		enPhi2		: in std_logic;	-- Clock enables. Next cycle is PHI1 or PHI2
+
+		eRWn		: out std_logic;
+		ASn			: out std_logic;
+		LDSn		: out std_logic;
+		UDSn		: out std_logic;
+		E			: out std_logic;
+		VMAn		: out std_logic;
+		FC0			: out std_logic;
+		FC1			: out std_logic;
+		FC2			: out std_logic;
+		BGn			: out std_logic;
+		oRESETn		: out std_logic;
+		oHALTEDn	: out std_logic;
+		DTACKn		: in std_logic;
+		VPAn		: in std_logic;
+		BERRn		: in std_logic;
+		BRn			: in std_logic;
+		BGACKn		: in std_logic;
+		IPL0n		: in std_logic;
+		IPL1n		: in std_logic;
+		IPL2n		: in std_logic;
+		iEdb		: in std_logic_vector(15 downto 0);
+		oEdb		: out std_logic_vector(15 downto 0);
+		eab			: out std_logic_vector(23 downto 1)
+	);
+END COMPONENT;
 
 begin
 
@@ -579,73 +609,42 @@ port map(
 -- -----------------------------------------------------------------------
 -- -----------------------------------------------------------------------
 
--- a full cpu cycle consists of 4 TG68_CYCLE cycles
--- VCLK = 50 MHz / 7 = 7.14 MHz
-process(MRST_N, MCLK)
-begin
-	if MRST_N = '0' then
-		TG68_BUS_WAIT <= "00";
-		TG68_SEL <= '0';
-	elsif rising_edge( MCLK ) then
-		if TG68_CYCLE = '1' then
-			if TG68_BUS_WAIT = "00" then
-				-- start tg68 bus cycle for at least 4 clock cycles
-				if TG68_IO = '1' then
-					TG68_SEL <= '1';
-					TG68_BUS_WAIT <= "11";
-				end if;
-			elsif TG68_BUS_WAIT = "01" then
-				-- terminate bus cycle only on dtack
-				if TG68_DTACK_N = '0' then
-					TG68_BUS_WAIT <= "00";
-					TG68_SEL <= '0';
-				end if;
-			else
-				-- decrease bus cycle counter
-				TG68_BUS_WAIT <= TG68_BUS_WAIT - 1;
-			end if;
-		end if;
-	end if;
-end process;
-
-TG68_WR <= '1' when TG68_STATE = "11" else '0';      -- data wr
-TG68_RD <= '1' when TG68_STATE = "00" or TG68_STATE = "10" else '0';   -- inst or data rd
-TG68_IO <= '1' when TG68_WR = '1' or TG68_RD = '1' else '0';
--- Clock enable signal for tg68k.
--- The CPU is enabled ar 1.78 MHz whenever it's accessing the bus (TH68_IO = 1).
--- This matches the fact that the real 68000 spends four clock cycles per bus cycle.
--- When doing internal processing (TG68_IO = 0, e.g. mul, div or shift) it 
--- is enabled at full ~7.6MHz to behave similar to a real 68000.
-TG68_ENA <= '1' when TG68_CYCLE = '1' and (TG68_IO = '0' or (TG68_BUS_WAIT = "01" and TG68_DTACK_N = '0')) and VBUS_SEL = '0' else '0';
-TG68_INTACK <= '1' when TG68_SEL = '1' and TG68_FC = "111" else '0';
+TG68_SEL <= '1' when FX68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') else '0';
+TG68_A(0) <= '0'; --temporary, reference to A(0) must be removed everywhere
 
 -- 68K
-tg68 : entity work.TG68KdotC_Kernel
-generic map(
-   SR_Read => 0,           --0=>user,   1=>privileged,      2=>switchable with CPU(0)
-   VBR_Stackframe => 0,    --0=>no,     1=>yes/extended,    2=>switchable with CPU(0)
-   extAddr_Mode => 0,      --0=>no,     1=>yes,             2=>switchable with CPU(1)
-   MUL_Mode => 0,          --0=>16Bit,  1=>32Bit,           2=>switchable with CPU(1),  3=>no MUL,  
-   DIV_Mode => 0,          --0=>16Bit,  1=>32Bit,           2=>switchable with CPU(1),  3=>no DIV, 
-   BitField => 0,          --0=>no,     1=>yes,             2=>switchable with CPU(1)
-   TASbug	=> 1
-)
-port map(
-        clk		=> MCLK,
-	nReset		=> TG68_RES_N,
-	clkena_in	=> TG68_ENA,
- 	data_in		=> TG68_DI,
- 	IPL		=> TG68_IPL_N,
-	IPL_autovector  => '1',
-	berr            => '0',
- 	addr		=> TG68_A,
-	data_write	=> TG68_DO,
-	nUDS		=> TG68_UDS_N,
-	nLDS		=> TG68_LDS_N,
-	nWr		=> TG68_RNW,
-	busstate        => TG68_STATE,
-	FC              => TG68_FC
-);
+fx68k_inst: fx68k
+	port map (
+		clk			=> MCLK,
+		extReset	=> not TG68_RES_N,
+		pwrUp		=> not TG68_RES_N,
+		enPhi1		=> FX68_PHI1,
+		enPhi2		=> FX68_PHI2,
+
+		eRWn		=> TG68_RNW,
+		ASn			=> FX68_AS_N,
+		LDSn		=> TG68_LDS_N,
+		UDSn		=> TG68_UDS_N,
+		E			=> open,
+		VMAn		=> open,
+		FC0			=> FX68_FC(0),
+		FC1			=> FX68_FC(1),
+		FC2			=> FX68_FC(2),
+		BGn			=> open,
+		oRESETn		=> open,
+		oHALTEDn	=> open,
+		DTACKn		=> TG68_DTACK_N,
+		VPAn		=> FX68_VPA_N,
+		BERRn		=> '1',
+		BRn			=> '1',
+		BGACKn		=> '1',
+		IPL0n		=> TG68_IPL_N(0),
+		IPL1n		=> TG68_IPL_N(1),
+		IPL2n		=> TG68_IPL_N(2),
+		iEdb		=> TG68_DI,
+		oEdb		=> TG68_DO,
+		eab			=> TG68_A(23 downto 1)
+	);
 
 -- Z80
 t80 : entity work.t80pa
@@ -828,13 +827,17 @@ DAC_RDATA <= std_logic_vector(signed(FM_MUX_RIGHT(8) & FM_MUX_RIGHT&"000000") + 
 
 T80_INT_N <= not VINT_T80;
 --TG68_IPL_N <= "001" when VINT_TG68 = '1' else "011" when HINT = '1' else "111";
+FX68_VPA_N <= '0' when TG68_INTACK = '1' else '1';
+TG68_INTACK <= '1' when FX68_FC = "111" else '0';
+
 process( MCLK )
 begin
 	if rising_edge(MCLK) then
 		-- some delay between the VDP and CPU interrupt lines
 		-- makes Fatal Rewind happy
 		-- probably it should belong to the CPU
-		if TG68_CYCLE = '1' and TG68_BUS_WAIT = "00" then
+--		if TG68_CYCLE = '1' and TG68_BUS_WAIT = "00" then
+		if FX68_PHI1 = '1' and FX68_AS_N = '1' then
 			if VINT_TG68 = '1' then
 				TG68_IPL_N <= "001";
 			elsif HINT = '1' then
@@ -860,7 +863,6 @@ begin
 	if MRST_N = '0' then
 		VCLKCNT <= "001"; -- important for SDRAM controller (EDIT: not needed anymore)
 		ZCLKCNT <= (others => '0');
-		TG68_CYCLE <= '0';
 	elsif rising_edge(MCLK) then
 		ZCLKCNT <= ZCLKCNT + 1;
 		if ZCLKCNT = "1110" then
@@ -884,16 +886,24 @@ begin
 			VCLKCNT <= "000";
 		end if;
 		if VCLKCNT = "011" then
-			TG68_CYCLE <= '1';
-		else
-			TG68_CYCLE <= '0';
-		end if;
-		if VCLKCNT = "011" then
 			FCLK_EN <= '1';
 		else
 			FCLK_EN <= '0';
 		end if;
-	end if;
+
+		if VCLKCNT = "011" then
+			FX68_PHI1 <= '1';
+		else
+			FX68_PHI1 <= '0';
+		end if;
+
+		if VCLKCNT = "001" then
+			FX68_PHI2 <= '1';
+		else
+			FX68_PHI2 <= '0';
+		end if;
+
+     end if;
 end process;
 
 -- DMA VBUS
@@ -984,7 +994,7 @@ T80_DI <= T80_SDRAM_D when T80_SDRAM_SEL = '1'
 -- OPERATING SYSTEM ROM
 TG68_OS_DTACK_N <= '0';
 OS_OEn <= '0';
-TG68_OS_SEL <= '1' when TG68_A(23 downto 22) = "00" and TG68_RD = '1' and CART_EN = '0' else '0';
+TG68_OS_SEL <= '1' when TG68_A(23 downto 22) = "00" and FX68_AS_N = '0' and TG68_RNW = '1' and CART_EN = '0' else '0';
 
 -- CONTROL AREA
 TG68_CTRL_SEL <= '1' when (TG68_A(23 downto 12) = x"A11" or TG68_A(23 downto 12) = x"A14") and
@@ -1310,7 +1320,7 @@ T80_FM_D <= FM_DO;
 -- 68k: C00011
 
 T80_PSG_SEL <= '1' when T80_A(15 downto 3) = x"7F1"&'0' and T80_MREQ_N = '0' and T80_WR_N = '0' else '0';
-TG68_PSG_SEL <= '1' when TG68_A(31 downto 3) = x"C0001"&'0' and TG68_SEL = '1' and TG68_RNW='0' else '0';
+TG68_PSG_SEL <= '1' when TG68_A(23 downto 3) = x"C0001"&'0' and TG68_SEL = '1' and TG68_RNW='0' else '0';
 PSG_SEL <= T80_PSG_SEL or TG68_PSG_SEL;
 PSG_DI <= T80_DO when T80_PSG_SEL = '1' else TG68_DO(15 downto 8) when TG68_A(0)='0' else TG68_DO(7 downto 0);
 
@@ -1458,7 +1468,7 @@ begin
 
 		case FC is
 		when FC_IDLE =>			
-			if VCLKCNT = "001" then
+			--if VCLKCNT = "001" then
 
 				if TG68_FLASH_SEL = '1' and TG68_FLASH_DTACK_N = '1' then
 					-- FF_FL_ADDR <= TG68_A(21 downto 0);
@@ -1543,7 +1553,7 @@ begin
 						FC <= FC_DMA_RD;
 					end if;
 				end if;
-			end if;
+			--end if;
 
 		when FC_TG68_RD =>
 			if romrd_req = romrd_ack then
@@ -1653,7 +1663,7 @@ begin
 
 		case SDRC is
 		when SDRC_IDLE =>
-			if VCLKCNT = "001" then
+			--if VCLKCNT = "001" then
 				if TG68_SDRAM_SEL = '1' and TG68_SDRAM_DTACK_N = '1' then
 					ram68k_req <= not ram68k_req;
 					ram68k_a <= TG68_A(15 downto 1);
@@ -1678,7 +1688,7 @@ begin
 					ram68k_l_n <= '0';					
 					SDRC <= SDRC_DMA;
 				end if;
-			end if;
+			--end if;
 
 		when SDRC_TG68 =>
 			if ram68k_req = ram68k_ack then
@@ -1734,7 +1744,7 @@ begin
 
 		case SRAMRC is
 		when SRAMRC_IDLE =>
-			if VCLKCNT = "001" then
+			--if VCLKCNT = "001" then
 				if TG68_SRAM_SEL = '1' and TG68_SRAM_DTACK_N = '1' then
 					sram_req <= not sram_req;
 					sram_a <= TG68_A(15 downto 1);
@@ -1744,7 +1754,7 @@ begin
 					sram_l_n <= TG68_LDS_N;
 					SRAMRC <= SRAMRC_TG68;
 				end if;
-			end if;
+			--end if;
 
 		when SRAMRC_TG68 =>
 			if sram_req = sram_ack then

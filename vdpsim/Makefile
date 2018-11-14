@@ -28,17 +28,28 @@ work-obj93.cf: $(SRCS)
 run: vdp_tb Makefile
 	ghdl -r $< --ieee-asserts=disable --stop-time=100ms 
 
-view: video1.png
-	display video1.png &
-	display video2.png
+view: video.png
+	display video.png
 
-video1.png: vdp_tb Makefile
+# view interlaced
+iview: videoi.png
+	display videoi.png
+
+video.png: vdp_tb Makefile
 	ghdl -r $< --ieee-asserts=disable
+	rm -f video.png
+	avconv -vcodec rawvideo -f rawvideo -pix_fmt rgb565 -s 855x262 -i video.rgb -f image2 -vcodec png video.png
+	convert video.png -scale 855x524! video.png
+
+videoi.png: vdp_tb Makefile
+#       grab two frames and combine them into one de-interlaced 
+	INTERLACE=1 ghdl -r $< --ieee-asserts=disable
 	rm -f video?.png
 	avconv -vcodec rawvideo -f rawvideo -pix_fmt rgb565 -s 855x262 -i video1.rgb -f image2 -vcodec png video1.png
 	convert video1.png -scale 855x524! video1.png
 	avconv -vcodec rawvideo -f rawvideo -pix_fmt rgb565 -s 855x262 -i video2.rgb -f image2 -vcodec png video2.png
 	convert video2.png -scale 855x524! video2.png
+	convert video2.png \( video1.png -alpha on -channel A -fx 'j%2' \) -composite videoi.png
 
 vdp_tb: $(OBJS)
 	ghdl -e $(FLAGS) -Wl,vram_c.o -Wl,video_c.o -Wl,cpu_c.o $@

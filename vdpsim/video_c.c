@@ -21,9 +21,14 @@ void video_c(char clk, char r[4], char g[4], char b[4], char hs, char vs) {
   static char last_clk = 0;
   static int ignore = 100;
   static int vskip = 1;
-  static int cap_frames = 2;  // should be auto-detected from e.g. vsync length
+  static int cap_frames = -1;
   static int vdetect = 0;
+  static int frame_pre_time = -1;
+  static int clk_cnt = 0;
 
+  if(cap_frames < 0)
+    cap_frames = getenv("INTERLACE")?2:1;
+  
   // only work on rising clock edge
   if(clk == last_clk) return;
   last_clk = clk;
@@ -34,6 +39,7 @@ void video_c(char clk, char r[4], char g[4], char b[4], char hs, char vs) {
   if(--subcnt) return;
 
   subcnt = 4;
+  clk_cnt++;
   
   // ignore first few events
   if(ignore) {
@@ -74,14 +80,27 @@ void video_c(char clk, char r[4], char g[4], char b[4], char hs, char vs) {
   
   if((chs != last_hs) && chs) {
     printf("HS@%d %d\n", vcnt, hcnt);
+
+    // check time since last vsync
+    if(frame_pre_time >= 0) {
+      printf("Interlace offset: %d (%d/%.2f lines)\n",
+	     clk_cnt-frame_pre_time, hcnt, (float)(clk_cnt-frame_pre_time)/(float)hcnt);
+      frame_pre_time = -1;
+    }
+
     hcnt = 0;
     vcnt++;
-
+    
     if(vdetect) {
       // begin of a new image: open file
       if(!raw) {
-	printf("Saving first frame\n");
-	raw = fopen("video1.rgb", "wb");
+	if(getenv("INTERLACE")) {
+	  printf("Saving first frame\n");
+	  raw = fopen("video1.rgb", "wb");	  
+	} else {
+	  printf("Saving frame\n");
+	  raw = fopen("video.rgb", "wb");	  
+	}
       } else {
 	fclose(raw);
 	raw = NULL;
@@ -100,6 +119,7 @@ void video_c(char clk, char r[4], char g[4], char b[4], char hs, char vs) {
   
   if((cvs != last_vs) && cvs) {
     printf("VS@%d/%d\n", vcnt, hcnt);
+    if(vcnt > 0) frame_pre_time = clk_cnt;
     vcnt = 0;
 
     if(vskip) {

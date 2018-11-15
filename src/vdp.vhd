@@ -343,6 +343,8 @@ signal HBLANK_END      : std_logic_vector(8 downto 0);
 signal HSCROLL_READ    : std_logic_vector(8 downto 0);
 signal V_DISP_START    : std_logic_vector(8 downto 0);
 signal V_DISP_HEIGHT   : std_logic_vector(8 downto 0);
+signal VSYNC_HSTART_O  : std_logic_vector(8 downto 0);
+signal VSYNC_HSTART_E  : std_logic_vector(8 downto 0);
 signal VSYNC_START     : std_logic_vector(8 downto 0);
 signal V_TOTAL_HEIGHT  : std_logic_vector(8 downto 0);
 signal V_INT_POS       : std_logic_vector(8 downto 0);
@@ -2248,7 +2250,10 @@ HBLANK_END      <= conv_std_logic_vector(HBLANK_END_H40, 9) when H40='1'
               else conv_std_logic_vector(HBLANK_END_H32, 9);
 HSCROLL_READ    <= conv_std_logic_vector(HSCROLL_READ_H40, 9) when H40='1'
               else conv_std_logic_vector(HSCROLL_READ_H32, 9);
-
+VSYNC_HSTART_O  <= conv_std_logic_vector(VSYNC_HSTART_O_H40, 9) when H40='1'
+              else conv_std_logic_vector(VSYNC_HSTART_O_H32, 9);
+VSYNC_HSTART_E  <= conv_std_logic_vector(VSYNC_HSTART_E_H40, 9) when H40='1'
+              else conv_std_logic_vector(VSYNC_HSTART_E_H32, 9);
 VSYNC_START     <= conv_std_logic_vector(VSYNC_START_PAL_V30, 9) when V30='1' and PAL='1'
               else conv_std_logic_vector(VSYNC_START_PAL_V28, 9) when V30='0' and PAL='1'
               else conv_std_logic_vector(VSYNC_START_NTSC_V30, 9) when V30='1' and PAL='0'
@@ -2587,20 +2592,27 @@ end process;
 ----------------------------------------------------------------
 -- VIDEO OUTPUT
 ----------------------------------------------------------------
--- VERTICAL SYNC
+-- SYNC
 process( RST_N, CLK )
 begin
 	if RST_N = '0' then
 		FF_VS <= '1';
 		FF_HS <= '1';
 	elsif rising_edge(CLK) then
+	
+		-- horizontal sync
 		if HV_HCNT = HSYNC_START then
 			FF_HS <= '0';
+		elsif HV_HCNT = HSYNC_END then
+			FF_HS <= '1';
+		end if;
+
+		-- vertical sync is half a line delayed in interlace mode every second frame
+		if (((LSM(0) = '0'  or FIELD = '1') and HV_HCNT = VSYNC_HSTART_O) or 
+			  (LSM(0) = '1' and FIELD = '0'  and HV_HCNT = VSYNC_HSTART_E)) then
 			if HV_VCNT = VSYNC_START then
 				FF_VS <= '0';
 			end if;
-		elsif HV_HCNT = HSYNC_END then
-			FF_HS <= '1';
 			if HV_VCNT = VSYNC_START + VS_LINES - 1 then
 				FF_VS <= '1';
 			end if;

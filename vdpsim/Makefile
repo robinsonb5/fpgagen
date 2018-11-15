@@ -49,7 +49,7 @@ videoi.png: vdp_tb Makefile
 	convert video1.png -scale 855x524! video1.png
 	avconv -vcodec rawvideo -f rawvideo -pix_fmt rgb565 -s 855x262 -i video2.rgb -f image2 -vcodec png video2.png
 	convert video2.png -scale 855x524! video2.png
-	convert video2.png \( video1.png -alpha on -channel A -fx 'j%2' \) -composite videoi.png
+	convert video1.png \( video2.png -alpha on -channel A -fx 'j%2' \) -composite videoi.png
 
 vdp_tb: $(OBJS)
 	ghdl -e $(FLAGS) -Wl,vram_c.o -Wl,video_c.o -Wl,cpu_c.o $@

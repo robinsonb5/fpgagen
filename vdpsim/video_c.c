@@ -63,7 +63,7 @@ void video_c(char clk, char r[4], char g[4], char b[4], char hs, char vs) {
   static int hcnt = 0;
   static int vcnt = 0;
 
-  int pix = ((cr << 12)&0xf000) | ((cg << 7)&0x0780) | ((cb << 1)&0x3e);
+  int pix = ((cr << 12)&0xf000) | ((cg << 7)&0x0780) | ((cb << 1)&0x1e);
 
   if(raw) {
     // colorize hs and vs
@@ -71,9 +71,11 @@ void video_c(char clk, char r[4], char g[4], char b[4], char hs, char vs) {
     if(!cvs) pix = 0x0780;
 
     
-    // write pixel
-    fputc(pix & 0xff, raw);
-    fputc((pix >> 8)&0xff, raw);
+    if(ftell(raw) < 448020) {
+      // write pixel
+      fputc(pix & 0xff, raw);
+      fputc((pix >> 8)&0xff, raw);
+    }
   }
   
   hcnt++;
@@ -102,6 +104,18 @@ void video_c(char clk, char r[4], char g[4], char b[4], char hs, char vs) {
 	  raw = fopen("video.rgb", "wb");	  
 	}
       } else {
+	// due to interlacing there may not be a full frame
+	int miss = 448020 - ftell(raw);
+	int pix = 0x001e;
+	if(miss > 0) {
+	  printf("expanding short image\n");
+	  while(miss > 0) {
+	    fputc(pix & 0xff, raw);
+	    fputc((pix >> 8)&0xff, raw);
+	    miss -= 2;
+	  }
+	}
+	
 	fclose(raw);
 	raw = NULL;
 	printf("DONE\n");

@@ -2433,7 +2433,7 @@ BGEN_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = HSCROLL_READ else '0';
 -- Stage 1 - runs after the vcounter incremented
 -- Carefully choosing the starting position avoids the
 -- "Your emulator suxx" in Titan I demo
-SP1E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = H_INT_POS + 6 else '0';
+SP1E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = H_INT_POS + 1 else '0';
 -- Stage 2 - runs in the active area
 SP2E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = HBLANK_END else '0';
 -- Stage 3 runs during HBLANK, just before the vcounter incremented

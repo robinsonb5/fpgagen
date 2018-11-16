@@ -313,8 +313,6 @@ signal IOC : ioc_t;
 signal VDP_SEL				: std_logic;
 signal VDP_A 				: std_logic_vector(4 downto 0);
 signal VDP_RNW				: std_logic;
-signal VDP_UDS_N			: std_logic;
-signal VDP_LDS_N			: std_logic;
 signal VDP_DI				: std_logic_vector(15 downto 0);
 signal VDP_DO				: std_logic_vector(15 downto 0);
 signal VDP_DTACK_N			: std_logic;
@@ -736,8 +734,6 @@ port map(
 	SEL		=> VDP_SEL,
 	A			=> VDP_A,
 	RNW		=> VDP_RNW,
-	UDS_N		=> VDP_UDS_N,
-	LDS_N		=> VDP_LDS_N,
 	DI			=> VDP_DI,
 	DO			=> VDP_DO,
 	DTACK_N		=> VDP_DTACK_N,
@@ -1179,7 +1175,7 @@ end process;
 -- 7F = 01111111 000
 -- FF = 11111111 000
 -- VDP AREA
-TG68_VDP_SEL <= '1' when TG68_SEL = '1' and
+TG68_VDP_SEL <= '1' when FX68_AS_N = '0' and
 	((TG68_A(23 downto 21) = "110" and TG68_A(18 downto 16) = "000") or
 	 (TG68_A(23 downto 16) = x"A0" and TG68_A(14 downto 5) = "1111111" & "000")) -- Z80 Address space
 	else '0';
@@ -1196,8 +1192,6 @@ begin
 		
 		VDP_SEL <= '0';
 		VDP_RNW <= '1';
-		VDP_UDS_N <= '1';
-		VDP_LDS_N <= '1';
 
 		VDPC <= VDPC_IDLE;
 
@@ -1229,8 +1223,6 @@ begin
 					VDP_SEL <= '1';
 					VDP_A <= TG68_A(4 downto 0);
 					VDP_RNW <= TG68_RNW;
-					VDP_UDS_N <= TG68_UDS_N;
-					VDP_LDS_N <= TG68_LDS_N;
 					VDP_DI <= TG68_DO;
 					VDPC <= VDPC_TG68_ACC;
 				end if;				
@@ -1249,13 +1241,6 @@ begin
 					VDP_SEL <= '1';
 					VDP_A <= T80_A(4 downto 0);
 					VDP_RNW <= T80_WR_N;
-					if T80_A(0) = '0' then
-						VDP_UDS_N <= '0';
-						VDP_LDS_N <= '1';
-					else
-						VDP_UDS_N <= '1';
-						VDP_LDS_N <= '0';				
-					end if;
 					VDP_DI <= T80_DO & T80_DO;
 					VDPC <= VDPC_T80_ACC;			
 				end if;
@@ -1284,9 +1269,7 @@ begin
 		when VDPC_DESEL =>
 			if VDP_DTACK_N = '1' then
 				VDP_RNW <= '1';
-				VDP_UDS_N <= '1';
-				VDP_LDS_N <= '1';
-				VDP_A <= (others => 'Z');
+				VDP_A <= (others => '0');
 
 				VDPC <= VDPC_IDLE;
 			end if;

@@ -193,7 +193,7 @@ signal TG68_RES_N	: std_logic;
 signal TG68_DI		: std_logic_vector(15 downto 0);
 signal TG68_IPL_N	: std_logic_vector(2 downto 0);
 signal TG68_DTACK_N	: std_logic;
-signal TG68_A		: std_logic_vector(23 downto 0);
+signal TG68_A		: std_logic_vector(23 downto 1);
 signal TG68_DO		: std_logic_vector(15 downto 0);
 signal TG68_SEL		: std_logic;
 signal TG68_UDS_N	: std_logic;
@@ -608,7 +608,6 @@ port map(
 -- -----------------------------------------------------------------------
 
 TG68_SEL <= '1' when FX68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') else '0';
-TG68_A(0) <= '0'; --temporary, reference to A(0) must be removed everywhere
 
 -- 68K
 fx68k_inst: fx68k
@@ -947,27 +946,11 @@ TG68_DI(7 downto 0) <= TG68_FLASH_D(7 downto 0) when TG68_FLASH_SEL = '1' and TG
 	else NO_DATA(7 downto 0);
 
 -- Z80 INPUTS
-process(MRST_N, MCLK, ZRESET_N, ZBUSREQ)
-begin
-	if MRST_N = '0' then
-		T80_RESET_N <= '0';
-	elsif rising_edge(MCLK) then
-		if T80_RESET_N = '0' then
-			if ZBUSREQ = '0' and ZRESET_N = '1' then
-				T80_RESET_N <= '1';
-			end if;
-			ZBUSACK_N <= not ZBUSREQ;
-		else
-			if ZRESET_N = '0' then
-				T80_RESET_N <= '0';
-			end if;
-			ZBUSACK_N <= T80_BUSAK_N;
-		end if;
-	end if;
-end process;
 
 T80_NMI_N <= '1';
 T80_BUSRQ_N <= not ZBUSREQ;
+T80_RESET_N <= ZRESET_N and MRST_N;
+ZBUSACK_N <= T80_BUSAK_N;
 
 T80_WAIT_N <= '0' when bootState /= BOOT_DONE
 	else not T80_SDRAM_DTACK_N when T80_SDRAM_SEL = '1'
@@ -1110,7 +1093,7 @@ begin
 		when IOC_IDLE =>
 			if TG68_IO_SEL = '1' and TG68_IO_DTACK_N = '1' then
 				IO_SEL <= '1';
-				IO_A <= TG68_A(4 downto 0);
+				IO_A <= TG68_A(4 downto 1) & '0';
 				IO_RNW <= TG68_RNW;
 				IO_UDS_N <= TG68_UDS_N;
 				IO_LDS_N <= TG68_LDS_N;
@@ -1221,7 +1204,7 @@ begin
 				else
 					-- VDP
 					VDP_SEL <= '1';
-					VDP_A <= TG68_A(4 downto 0);
+					VDP_A <= TG68_A(4 downto 1) & '0';
 					VDP_RNW <= TG68_RNW;
 					VDP_DI <= TG68_DO;
 					VDPC <= VDPC_TG68_ACC;
@@ -1293,8 +1276,8 @@ TG68_FM_SEL <= '1' when  TG68_A(23 downto 16) = x"A0" and TG68_A(14 downto 13) =
 T80_FM_SEL <= '1' when T80_A(15 downto 13) = "010" and T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0') else '0';
 FM_SEL <= T80_FM_SEL or TG68_FM_SEL;
 FM_RNW <= T80_WR_N when T80_FM_SEL = '1' else TG68_RNW when TG68_FM_SEL = '1' else '1';
-FM_A <= T80_A(1 downto 0) when T80_FM_SEL = '1' else TG68_A(1 downto 0);
-FM_DI <= T80_DO when T80_FM_SEL = '1' else TG68_DO(15 downto 8) when TG68_A(0)='0' else TG68_DO(7 downto 0);
+FM_A <= T80_A(1 downto 0) when T80_FM_SEL = '1' else TG68_A(1) & not TG68_LDS_N;
+FM_DI <= T80_DO when T80_FM_SEL = '1' else TG68_DO(15 downto 8) when TG68_UDS_N = '0' else TG68_DO(7 downto 0);
 TG68_FM_D <= FM_DO & FM_DO;
 T80_FM_D <= FM_DO;
 
@@ -1305,7 +1288,7 @@ T80_FM_D <= FM_DO;
 T80_PSG_SEL <= '1' when T80_A(15 downto 3) = x"7F1"&'0' and T80_MREQ_N = '0' and T80_WR_N = '0' else '0';
 TG68_PSG_SEL <= '1' when TG68_A(23 downto 3) = x"C0001"&'0' and TG68_SEL = '1' and TG68_RNW='0' else '0';
 PSG_SEL <= T80_PSG_SEL or TG68_PSG_SEL;
-PSG_DI <= T80_DO when T80_PSG_SEL = '1' else TG68_DO(15 downto 8) when TG68_A(0)='0' else TG68_DO(7 downto 0);
+PSG_DI <= T80_DO when T80_PSG_SEL = '1' else TG68_DO(15 downto 8) when TG68_UDS_N = '0' else TG68_DO(7 downto 0);
 
 -- Z80:
 -- 60 = 01100000

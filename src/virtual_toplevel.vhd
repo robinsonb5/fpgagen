@@ -967,9 +967,12 @@ FX68_DI(7 downto 0) <= FX68_FLASH_D(7 downto 0) when FX68_FLASH_SEL = '1' and FX
 -- Z80 INPUTS
 
 T80_NMI_N <= '1';
-T80_BUSRQ_N <= not ZBUSREQ;
-T80_RESET_N <= ZRESET_N and MRST_N;
-ZBUSACK_N <= T80_BUSAK_N;
+process( MCLK )
+begin
+	T80_BUSRQ_N <= not ZBUSREQ;
+	T80_RESET_N <= ZRESET_N and MRST_N;
+	ZBUSACK_N <= T80_BUSAK_N;
+end process;
 
 T80_WAIT_N <= '0' when bootState /= BOOT_DONE
 	else not T80_SDRAM_DTACK_N when T80_SDRAM_SEL = '1'

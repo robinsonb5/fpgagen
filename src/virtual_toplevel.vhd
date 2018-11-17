@@ -199,13 +199,16 @@ signal TG68_SEL		: std_logic;
 signal TG68_UDS_N	: std_logic;
 signal TG68_LDS_N	: std_logic;
 signal TG68_RNW		: std_logic;
+signal TG68_RNW_D	: std_logic;
 signal TG68_INTACK	: std_logic;
 
 signal FX68_PHI1	: std_logic;
 signal FX68_PHI2	: std_logic;
 signal FX68_FC		: std_logic_vector(2 downto 0);
 signal FX68_AS_N	: std_logic;
+signal FX68_AS_N_D	: std_logic;
 signal FX68_VPA_N	: std_logic;
+signal FX68_IO_READY : std_logic;
 
 -- Z80
 signal T80_RESET_N	: std_logic;
@@ -607,8 +610,6 @@ port map(
 -- -----------------------------------------------------------------------
 -- -----------------------------------------------------------------------
 
-TG68_SEL <= '1' when FX68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') else '0';
-
 -- 68K
 fx68k_inst: fx68k
 	port map (
@@ -815,6 +816,24 @@ DAC_RDATA <= std_logic_vector(signed(FM_MUX_RIGHT(8) & FM_MUX_RIGHT&"000000") + 
 -- UNUSED SIGNALS
 -- VBUS_DMA_ACK <= '0';
 -- VRAM_DTACK_N <= '0';
+process( MCLK )
+begin
+	if MRST_N = '0' then
+		FX68_IO_READY <= '1';
+	elsif rising_edge(MCLK) then
+		FX68_AS_N_D <= FX68_AS_N;
+		TG68_RNW_D <= TG68_RNW;
+
+		if FX68_AS_N_D = '1' and FX68_AS_N = '0' then
+			FX68_IO_READY <= '1';
+		end if;
+		if TG68_RNW_D = '1' and TG68_RNW = '0' and FX68_AS_N_D = '0' then
+			FX68_IO_READY <= '0'; -- break read-modify-write cycle (TAS instruction)
+		end if;
+	end if;
+end process;
+
+TG68_SEL <= '1' when FX68_IO_READY = '1' and FX68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') else '0';
 
 ----------------------------------------------------------------
 -- INTERRUPTS CONTROL

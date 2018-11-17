@@ -53,8 +53,6 @@ entity vdp is
 		SEL			: in std_logic;
 		A			: in std_logic_vector(4 downto 0);
 		RNW			: in std_logic;
-		UDS_N		: in std_logic;
-		LDS_N		: in std_logic;
 		DI			: in std_logic_vector(15 downto 0);
 		DO			: out std_logic_vector(15 downto 0);
 		DTACK_N		: out std_logic;
@@ -2316,8 +2314,8 @@ begin
 
 		HV_PIXDIV <= HV_PIXDIV + 1;
 		if (RS0 = '1' and H40 = '1' and 
-			((HV_PIXDIV = 8-1 and (HV_HCNT >= H_DISP_START + 30 or HV_HCNT < H_DISP_START)) or
-			(HV_PIXDIV = 10-1 and HV_HCNT >= H_DISP_START and HV_HCNT < H_DISP_START + 30))) or --normal H40 - 30*10+390*8=3420 cycles
+			((HV_PIXDIV = 8-1 and (HV_HCNT >= H_INT_POS + 30 or HV_HCNT < H_INT_POS)) or
+			(HV_PIXDIV = 10-1 and HV_HCNT >= H_INT_POS and HV_HCNT < H_INT_POS + 30))) or --normal H40 - 30*10+390*8=3420 cycles
 		   (RS0 = '0' and H40 = '1' and HV_PIXDIV = 8-1) or --fast H40
 		   (RS0 = '0' and H40 = '0' and HV_PIXDIV = 10-1) or --normal H32
 		   (RS0 = '1' and H40 = '0' and HV_PIXDIV = 8-1) then --fast H32
@@ -2396,12 +2394,17 @@ begin
 
 			if IN_VBL = '1' or DE = '0'
 			then
-				FIFO_EN <= HV_HCNT(0);
+				-- skip refresh slots
+				if (IN_VBL = '1' and HV_HCNT /= 486 and HV_HCNT /= 38 and HV_HCNT /= 102 and HV_HCNT /= 166 and HV_HCNT /= 230) or
+				   (IN_VBL = '0' and HV_HCNT /= 58 and HV_HCNT /= 122 and HV_HCNT /= 186 and HV_HCNT /= 250)
+				then
+					FIFO_EN <= not HV_HCNT(0);
+				end if;
 			end if;
 			if IN_VBL = '0' and DE = '1' then
-				if (HV_HCNT(3 downto 0) = "0000" and HV_HCNT(5 downto 4) /= "00" and HV_HCNT < H_DISP_WIDTH) or
-					(H40 = '1' and (HV_HCNT = 318 or HV_HCNT = 320 or HV_HCNT = 460)) or
-					(H40 = '0' and (HV_HCNT = 254 or HV_HCNT = 256 or HV_HCNT = 284 or HV_HCNT = 482))
+				if (HV_HCNT(3 downto 0) = "0100" and HV_HCNT(5 downto 4) /= "11" and HV_HCNT < H_DISP_WIDTH) or
+					(H40 = '1' and (HV_HCNT = 322 or HV_HCNT = 324 or HV_HCNT = 464)) or
+					(H40 = '0' and (HV_HCNT = 290 or HV_HCNT = 486 or HV_HCNT = 258 or HV_HCNT = 260))
 				then
 					FIFO_EN <= '1';
 				end if;
@@ -2430,7 +2433,7 @@ BGEN_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = HSCROLL_READ else '0';
 -- Stage 1 - runs after the vcounter incremented
 -- Carefully choosing the starting position avoids the
 -- "Your emulator suxx" in Titan I demo
-SP1E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = H_INT_POS + 6 else '0';
+SP1E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = H_INT_POS + 1 else '0';
 -- Stage 2 - runs in the active area
 SP2E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = HBLANK_END else '0';
 -- Stage 3 runs during HBLANK, just before the vcounter incremented

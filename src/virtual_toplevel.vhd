@@ -116,7 +116,7 @@ signal romrd_q : std_logic_vector(63 downto 0);
 signal romrd_a_cached : std_logic_vector(23 downto 3);
 signal romrd_q_cached : std_logic_vector(63 downto 0);
 type fc_t is ( FC_IDLE, 
-	FC_TG68_RD,
+	FC_FX68_RD,
 	FC_DMA_RD,
 	FC_T80_RD
 );
@@ -154,12 +154,12 @@ signal vram_u_n : std_logic;
 
 
 type sdrc_t is ( SDRC_IDLE,
-	SDRC_TG68,
+	SDRC_FX68,
 	SDRC_DMA, 
 	SDRC_T80);
 signal SDRC : sdrc_t;
 
-type sramrc_t is ( SRAMRC_IDLE,	SRAMRC_TG68);
+type sramrc_t is ( SRAMRC_IDLE,	SRAMRC_FX68);
 signal SRAMRC : sramrc_t;
 signal SRAM_EN : std_logic;
 signal EEPROM_EN : std_logic;
@@ -170,9 +170,9 @@ signal zram_d : std_logic_vector(7 downto 0);
 signal zram_q : std_logic_vector(7 downto 0);
 signal zram_we : std_logic;
 
-signal TG68_ZRAM_SEL		: std_logic;
-signal TG68_ZRAM_D			: std_logic_vector(15 downto 0);
-signal TG68_ZRAM_DTACK_N	: std_logic;
+signal FX68_ZRAM_SEL		: std_logic;
+signal FX68_ZRAM_D			: std_logic_vector(15 downto 0);
+signal FX68_ZRAM_DTACK_N	: std_logic;
 
 signal T80_ZRAM_SEL		: std_logic;
 signal T80_ZRAM_D			: std_logic_vector(7 downto 0);
@@ -189,18 +189,18 @@ signal NO_DATA		: std_logic_vector(15 downto 0) := x"4E71";	-- SYNTHESIS gp/m68k
 signal MRST_N		: std_logic;
 
 -- 68K
-signal TG68_RES_N	: std_logic;
-signal TG68_DI		: std_logic_vector(15 downto 0);
-signal TG68_IPL_N	: std_logic_vector(2 downto 0);
-signal TG68_DTACK_N	: std_logic;
-signal TG68_A		: std_logic_vector(23 downto 1);
-signal TG68_DO		: std_logic_vector(15 downto 0);
-signal TG68_SEL		: std_logic;
-signal TG68_UDS_N	: std_logic;
-signal TG68_LDS_N	: std_logic;
-signal TG68_RNW		: std_logic;
-signal TG68_RNW_D	: std_logic;
-signal TG68_INTACK	: std_logic;
+signal FX68_RES_N	: std_logic;
+signal FX68_DI		: std_logic_vector(15 downto 0);
+signal FX68_IPL_N	: std_logic_vector(2 downto 0);
+signal FX68_DTACK_N	: std_logic;
+signal FX68_A		: std_logic_vector(23 downto 1);
+signal FX68_DO		: std_logic_vector(15 downto 0);
+signal FX68_SEL		: std_logic;
+signal FX68_UDS_N	: std_logic;
+signal FX68_LDS_N	: std_logic;
+signal FX68_RNW		: std_logic;
+signal FX68_RNW_D	: std_logic;
+signal FX68_INTACK	: std_logic;
 
 signal FX68_PHI1	: std_logic;
 signal FX68_PHI2	: std_logic;
@@ -237,9 +237,9 @@ signal ZCLK_nENA   : std_logic;
 signal ZCLKCNT		: std_logic_vector(3 downto 0);
 
 -- FLASH CONTROL
-signal TG68_FLASH_SEL		: std_logic;
-signal TG68_FLASH_D			: std_logic_vector(15 downto 0);
-signal TG68_FLASH_DTACK_N	: std_logic;
+signal FX68_FLASH_SEL		: std_logic;
+signal FX68_FLASH_D			: std_logic_vector(15 downto 0);
+signal FX68_FLASH_DTACK_N	: std_logic;
 
 signal T80_FLASH_SEL		: std_logic;
 signal T80_FLASH_D			: std_logic_vector(7 downto 0);
@@ -250,9 +250,9 @@ signal DMA_FLASH_D			: std_logic_vector(15 downto 0);
 signal DMA_FLASH_DTACK_N	: std_logic;
 
 -- SDRAM CONTROL
-signal TG68_SDRAM_SEL		: std_logic;
-signal TG68_SDRAM_D			: std_logic_vector(15 downto 0);
-signal TG68_SDRAM_DTACK_N	: std_logic;
+signal FX68_SDRAM_SEL		: std_logic;
+signal FX68_SDRAM_D			: std_logic_vector(15 downto 0);
+signal FX68_SDRAM_DTACK_N	: std_logic;
 
 signal T80_SDRAM_SEL		: std_logic;
 signal T80_SDRAM_D			: std_logic_vector(7 downto 0);
@@ -263,18 +263,18 @@ signal DMA_SDRAM_D			: std_logic_vector(15 downto 0);
 signal DMA_SDRAM_DTACK_N	: std_logic;
 
 -- SRAM CONTROL
-signal TG68_SRAM_SEL		: std_logic;
-signal TG68_SRAM_D			: std_logic_vector(15 downto 0);
-signal TG68_SRAM_DTACK_N	: std_logic;
+signal FX68_SRAM_SEL		: std_logic;
+signal FX68_SRAM_D			: std_logic_vector(15 downto 0);
+signal FX68_SRAM_DTACK_N	: std_logic;
 
 signal SSF2_MAP             : std_logic_vector(8*6-1 downto 0);
 signal ROM_PAGE             : std_logic_vector(2 downto 0);
 signal ROM_PAGE_A           : std_logic_vector(4 downto 0); -- 16 MB only (original mapper: max. 32)
 
 -- OPERATING SYSTEM ROM
-signal TG68_OS_SEL			: std_logic;
-signal TG68_OS_D			: std_logic_vector(15 downto 0);
-signal TG68_OS_DTACK_N		: std_logic;
+signal FX68_OS_SEL			: std_logic;
+signal FX68_OS_D			: std_logic_vector(15 downto 0);
+signal FX68_OS_DTACK_N		: std_logic;
 signal OS_OEn				: std_logic;
 
 -- CONTROL AREA
@@ -283,9 +283,9 @@ signal ZRESET_N				: std_logic;
 signal ZBUSACK_N				: std_logic;
 signal CART_EN				: std_logic;
 
-signal TG68_CTRL_SEL		: std_logic;
-signal TG68_CTRL_D			: std_logic_vector(15 downto 0);
-signal TG68_CTRL_DTACK_N		: std_logic;
+signal FX68_CTRL_SEL		: std_logic;
+signal FX68_CTRL_D			: std_logic_vector(15 downto 0);
+signal FX68_CTRL_DTACK_N		: std_logic;
 
 signal T80_CTRL_SEL		: std_logic;
 signal T80_CTRL_D			: std_logic_vector(7 downto 0);
@@ -301,15 +301,15 @@ signal IO_DI				: std_logic_vector(15 downto 0);
 signal IO_DO				: std_logic_vector(15 downto 0);
 signal IO_DTACK_N			: std_logic;
 
-signal TG68_IO_SEL		: std_logic;
-signal TG68_IO_D			: std_logic_vector(15 downto 0);
-signal TG68_IO_DTACK_N		: std_logic;
+signal FX68_IO_SEL		: std_logic;
+signal FX68_IO_D			: std_logic_vector(15 downto 0);
+signal FX68_IO_DTACK_N		: std_logic;
 
 signal T80_IO_SEL		: std_logic;
 signal T80_IO_D			: std_logic_vector(7 downto 0);
 signal T80_IO_DTACK_N		: std_logic;
 
-type ioc_t is ( IOC_IDLE, IOC_TG68_ACC, IOC_T80_ACC, IOC_DESEL );
+type ioc_t is ( IOC_IDLE, IOC_FX68_ACC, IOC_T80_ACC, IOC_DESEL );
 signal IOC : ioc_t;
 
 -- VDP AREA
@@ -322,15 +322,15 @@ signal VDP_DTACK_N			: std_logic;
 signal VDP_RST_N			: std_logic;
 signal VDP_VRAM_SPEED		: std_logic;
 
-signal TG68_VDP_SEL		: std_logic;
-signal TG68_VDP_D			: std_logic_vector(15 downto 0);
-signal TG68_VDP_DTACK_N		: std_logic;
+signal FX68_VDP_SEL		: std_logic;
+signal FX68_VDP_D			: std_logic_vector(15 downto 0);
+signal FX68_VDP_DTACK_N		: std_logic;
 
 signal T80_VDP_SEL		: std_logic;
 signal T80_VDP_D			: std_logic_vector(7 downto 0);
 signal T80_VDP_DTACK_N		: std_logic;
 
-type vdpc_t is ( VDPC_IDLE, VDPC_TG68_ACC, VDPC_T80_ACC, VDPC_DESEL );
+type vdpc_t is ( VDPC_IDLE, VDPC_FX68_ACC, VDPC_T80_ACC, VDPC_DESEL );
 signal VDPC : vdpc_t;
 
 -- FM AREA
@@ -353,30 +353,30 @@ signal FM_ENABLE		: std_logic;
 -- PSG
 signal PSG_SEL			: std_logic;
 signal T80_PSG_SEL		: std_logic;
-signal TG68_PSG_SEL		: std_logic;
+signal FX68_PSG_SEL		: std_logic;
 signal PSG_DI			: std_logic_vector(7 downto 0);
 signal PSG_SND			: std_logic_vector(5 downto 0);
 signal PSG_MUX_SND		: std_logic_vector(5 downto 0);
 signal PSG_ENABLE		: std_logic;
 
-signal TG68_FM_SEL		: std_logic;
-signal TG68_FM_D			: std_logic_vector(15 downto 0);
+signal FX68_FM_SEL		: std_logic;
+signal FX68_FM_D			: std_logic_vector(15 downto 0);
 
 signal T80_FM_SEL		: std_logic;
 signal T80_FM_D			: std_logic_vector(7 downto 0);
 
 -- BANK ADDRESS REGISTER
 signal BAR 					: std_logic_vector(23 downto 15);
-signal TG68_BAR_SEL			: std_logic;
-signal TG68_BAR_D			: std_logic_vector(15 downto 0);
-signal TG68_BAR_DTACK_N		: std_logic;
+signal FX68_BAR_SEL			: std_logic;
+signal FX68_BAR_D			: std_logic_vector(15 downto 0);
+signal FX68_BAR_DTACK_N		: std_logic;
 signal T80_BAR_SEL			: std_logic;
 signal T80_BAR_D			: std_logic_vector(7 downto 0);
 signal T80_BAR_DTACK_N		: std_logic;
 
 -- INTERRUPTS
 signal HINT		: std_logic;
-signal VINT_TG68	: std_logic;
+signal VINT_FX68	: std_logic;
 signal VINT_T80		: std_logic;
 
 -- VDP VBUS DMA
@@ -614,15 +614,15 @@ port map(
 fx68k_inst: fx68k
 	port map (
 		clk			=> MCLK,
-		extReset	=> not TG68_RES_N,
-		pwrUp		=> not TG68_RES_N,
+		extReset	=> not FX68_RES_N,
+		pwrUp		=> not FX68_RES_N,
 		enPhi1		=> FX68_PHI1,
 		enPhi2		=> FX68_PHI2,
 
-		eRWn		=> TG68_RNW,
+		eRWn		=> FX68_RNW,
 		ASn			=> FX68_AS_N,
-		LDSn		=> TG68_LDS_N,
-		UDSn		=> TG68_UDS_N,
+		LDSn		=> FX68_LDS_N,
+		UDSn		=> FX68_UDS_N,
 		E			=> open,
 		VMAn		=> open,
 		FC0			=> FX68_FC(0),
@@ -631,17 +631,17 @@ fx68k_inst: fx68k
 		BGn			=> open,
 		oRESETn		=> open,
 		oHALTEDn	=> open,
-		DTACKn		=> TG68_DTACK_N,
+		DTACKn		=> FX68_DTACK_N,
 		VPAn		=> FX68_VPA_N,
 		BERRn		=> '1',
 		BRn			=> '1',
 		BGACKn		=> '1',
-		IPL0n		=> TG68_IPL_N(0),
-		IPL1n		=> TG68_IPL_N(1),
-		IPL2n		=> TG68_IPL_N(2),
-		iEdb		=> TG68_DI,
-		oEdb		=> TG68_DO,
-		eab			=> TG68_A(23 downto 1)
+		IPL0n		=> FX68_IPL_N(0),
+		IPL1n		=> FX68_IPL_N(1),
+		IPL2n		=> FX68_IPL_N(2),
+		iEdb		=> FX68_DI,
+		oEdb		=> FX68_DO,
+		eab			=> FX68_A(23 downto 1)
 	);
 
 -- Z80
@@ -671,9 +671,9 @@ port map(
 -- OS ROM
 os : entity work.os_rom
 port map(
-	A			=> TG68_A(8 downto 1),
+	A			=> FX68_A(8 downto 1),
 	OEn		=> OS_OEn,
-	D			=> TG68_OS_D
+	D			=> FX68_OS_D
 );
 
 -- I/O
@@ -748,9 +748,9 @@ port map(
 	vram_l_n	=> vram_l_n,
 	
 	HINT			=> HINT,
-	VINT_TG68		=> VINT_TG68,
+	VINT_TG68		=> VINT_FX68,
 	VINT_T80			=> VINT_T80,
-	INTACK			=> TG68_INTACK,
+	INTACK			=> FX68_INTACK,
 		
 	VBUS_ADDR		=> VBUS_ADDR,
 	VBUS_DATA		=> VBUS_DATA,
@@ -822,27 +822,27 @@ begin
 		FX68_IO_READY <= '1';
 	elsif rising_edge(MCLK) then
 		FX68_AS_N_D <= FX68_AS_N;
-		TG68_RNW_D <= TG68_RNW;
+		FX68_RNW_D <= FX68_RNW;
 
 		if FX68_AS_N_D = '1' and FX68_AS_N = '0' then
 			FX68_IO_READY <= '1';
 		end if;
-		if TG68_RNW_D = '1' and TG68_RNW = '0' and FX68_AS_N_D = '0' then
+		if FX68_RNW_D = '1' and FX68_RNW = '0' and FX68_AS_N_D = '0' then
 			FX68_IO_READY <= '0'; -- break read-modify-write cycle (TAS instruction)
 		end if;
 	end if;
 end process;
 
-TG68_SEL <= '1' when FX68_IO_READY = '1' and FX68_AS_N = '0' and (TG68_UDS_N = '0' or TG68_LDS_N = '0') else '0';
+FX68_SEL <= '1' when FX68_IO_READY = '1' and FX68_AS_N = '0' and (FX68_UDS_N = '0' or FX68_LDS_N = '0') else '0';
 
 ----------------------------------------------------------------
 -- INTERRUPTS CONTROL
 ----------------------------------------------------------------
 
 T80_INT_N <= not VINT_T80;
---TG68_IPL_N <= "001" when VINT_TG68 = '1' else "011" when HINT = '1' else "111";
-FX68_VPA_N <= '0' when TG68_INTACK = '1' else '1';
-TG68_INTACK <= '1' when FX68_FC = "111" else '0';
+--FX68_IPL_N <= "001" when VINT_FX68 = '1' else "011" when HINT = '1' else "111";
+FX68_VPA_N <= '0' when FX68_INTACK = '1' else '1';
+FX68_INTACK <= '1' when FX68_FC = "111" else '0';
 
 process( MCLK )
 begin
@@ -850,14 +850,14 @@ begin
 		-- some delay between the VDP and CPU interrupt lines
 		-- makes Fatal Rewind happy
 		-- probably it should belong to the CPU
---		if TG68_CYCLE = '1' and TG68_BUS_WAIT = "00" then
+--		if FX68_CYCLE = '1' and FX68_BUS_WAIT = "00" then
 		if FX68_PHI1 = '1' and FX68_AS_N = '1' then
-			if VINT_TG68 = '1' then
-				TG68_IPL_N <= "001";
+			if VINT_FX68 = '1' then
+				FX68_IPL_N <= "001";
 			elsif HINT = '1' then
-				TG68_IPL_N <= "011";
+				FX68_IPL_N <= "011";
 			else
-				TG68_IPL_N <= "111";
+				FX68_IPL_N <= "111";
 			end if;
 		end if;
 	end if;
@@ -929,39 +929,39 @@ VBUS_DATA <= DMA_FLASH_D when DMA_FLASH_SEL = '1'
 	else x"FFFF";
 
 -- 68K INPUTS
-TG68_RES_N <= MRST_N;
+FX68_RES_N <= MRST_N;
 
-TG68_DTACK_N <= '1' when bootState /= BOOT_DONE
-	else TG68_FLASH_DTACK_N when TG68_FLASH_SEL = '1'
-	else TG68_SDRAM_DTACK_N when TG68_SDRAM_SEL = '1' 
-	else TG68_SRAM_DTACK_N when TG68_SRAM_SEL = '1'
-	else TG68_CTRL_DTACK_N when TG68_CTRL_SEL = '1' 
-	else TG68_OS_DTACK_N when TG68_OS_SEL = '1' 
-	else TG68_IO_DTACK_N when TG68_IO_SEL = '1' 
-	else TG68_BAR_DTACK_N when TG68_BAR_SEL = '1' 
-	else TG68_VDP_DTACK_N when TG68_VDP_SEL = '1' 
+FX68_DTACK_N <= '1' when bootState /= BOOT_DONE
+	else FX68_FLASH_DTACK_N when FX68_FLASH_SEL = '1'
+	else FX68_SDRAM_DTACK_N when FX68_SDRAM_SEL = '1' 
+	else FX68_SRAM_DTACK_N when FX68_SRAM_SEL = '1'
+	else FX68_CTRL_DTACK_N when FX68_CTRL_SEL = '1' 
+	else FX68_OS_DTACK_N when FX68_OS_SEL = '1' 
+	else FX68_IO_DTACK_N when FX68_IO_SEL = '1' 
+	else FX68_BAR_DTACK_N when FX68_BAR_SEL = '1' 
+	else FX68_VDP_DTACK_N when FX68_VDP_SEL = '1' 
 	else '0';
-TG68_DI(15 downto 8) <= TG68_FLASH_D(15 downto 8) when TG68_FLASH_SEL = '1' and TG68_UDS_N = '0'
-	else TG68_SDRAM_D(15 downto 8) when TG68_SDRAM_SEL = '1' and TG68_UDS_N = '0'
-	else TG68_SRAM_D(15 downto 8) when TG68_SRAM_SEL = '1' and TG68_UDS_N = '0'
-	else TG68_ZRAM_D(15 downto 8) when TG68_ZRAM_SEL = '1' and TG68_UDS_N = '0'
-	else TG68_CTRL_D(15 downto 8) when TG68_CTRL_SEL = '1' and TG68_UDS_N = '0'
-	else TG68_OS_D(15 downto 8) when TG68_OS_SEL = '1' and TG68_UDS_N = '0'
-	else TG68_IO_D(15 downto 8) when TG68_IO_SEL = '1' and TG68_UDS_N = '0'
-	else TG68_BAR_D(15 downto 8) when TG68_BAR_SEL = '1' and TG68_UDS_N = '0'
-	else TG68_VDP_D(15 downto 8) when TG68_VDP_SEL = '1' and TG68_UDS_N = '0'
-	else TG68_FM_D(15 downto 8) when TG68_FM_SEL = '1' and TG68_UDS_N = '0'
+FX68_DI(15 downto 8) <= FX68_FLASH_D(15 downto 8) when FX68_FLASH_SEL = '1' and FX68_UDS_N = '0'
+	else FX68_SDRAM_D(15 downto 8) when FX68_SDRAM_SEL = '1' and FX68_UDS_N = '0'
+	else FX68_SRAM_D(15 downto 8) when FX68_SRAM_SEL = '1' and FX68_UDS_N = '0'
+	else FX68_ZRAM_D(15 downto 8) when FX68_ZRAM_SEL = '1' and FX68_UDS_N = '0'
+	else FX68_CTRL_D(15 downto 8) when FX68_CTRL_SEL = '1' and FX68_UDS_N = '0'
+	else FX68_OS_D(15 downto 8) when FX68_OS_SEL = '1' and FX68_UDS_N = '0'
+	else FX68_IO_D(15 downto 8) when FX68_IO_SEL = '1' and FX68_UDS_N = '0'
+	else FX68_BAR_D(15 downto 8) when FX68_BAR_SEL = '1' and FX68_UDS_N = '0'
+	else FX68_VDP_D(15 downto 8) when FX68_VDP_SEL = '1' and FX68_UDS_N = '0'
+	else FX68_FM_D(15 downto 8) when FX68_FM_SEL = '1' and FX68_UDS_N = '0'
 	else NO_DATA(15 downto 8);
-TG68_DI(7 downto 0) <= TG68_FLASH_D(7 downto 0) when TG68_FLASH_SEL = '1' and TG68_LDS_N = '0'
-	else TG68_SDRAM_D(7 downto 0) when TG68_SDRAM_SEL = '1' and TG68_LDS_N = '0'
-	else TG68_SRAM_D(7 downto 0) when TG68_SRAM_SEL = '1' and TG68_LDS_N = '0'
-	else TG68_ZRAM_D(7 downto 0) when TG68_ZRAM_SEL = '1' and TG68_LDS_N = '0'
-	else TG68_CTRL_D(7 downto 0) when TG68_CTRL_SEL = '1' and TG68_LDS_N = '0'
-	else TG68_OS_D(7 downto 0) when TG68_OS_SEL = '1' and TG68_LDS_N = '0'
-	else TG68_IO_D(7 downto 0) when TG68_IO_SEL = '1' and TG68_LDS_N = '0'
-	else TG68_BAR_D(7 downto 0) when TG68_BAR_SEL = '1' and TG68_LDS_N = '0'
-	else TG68_VDP_D(7 downto 0) when TG68_VDP_SEL = '1' and TG68_LDS_N = '0'
-	else TG68_FM_D(7 downto 0) when TG68_FM_SEL = '1' and TG68_LDS_N = '0'
+FX68_DI(7 downto 0) <= FX68_FLASH_D(7 downto 0) when FX68_FLASH_SEL = '1' and FX68_LDS_N = '0'
+	else FX68_SDRAM_D(7 downto 0) when FX68_SDRAM_SEL = '1' and FX68_LDS_N = '0'
+	else FX68_SRAM_D(7 downto 0) when FX68_SRAM_SEL = '1' and FX68_LDS_N = '0'
+	else FX68_ZRAM_D(7 downto 0) when FX68_ZRAM_SEL = '1' and FX68_LDS_N = '0'
+	else FX68_CTRL_D(7 downto 0) when FX68_CTRL_SEL = '1' and FX68_LDS_N = '0'
+	else FX68_OS_D(7 downto 0) when FX68_OS_SEL = '1' and FX68_LDS_N = '0'
+	else FX68_IO_D(7 downto 0) when FX68_IO_SEL = '1' and FX68_LDS_N = '0'
+	else FX68_BAR_D(7 downto 0) when FX68_BAR_SEL = '1' and FX68_LDS_N = '0'
+	else FX68_VDP_D(7 downto 0) when FX68_VDP_SEL = '1' and FX68_LDS_N = '0'
+	else FX68_FM_D(7 downto 0) when FX68_FM_SEL = '1' and FX68_LDS_N = '0'
 	else NO_DATA(7 downto 0);
 
 -- Z80 INPUTS
@@ -990,13 +990,13 @@ T80_DI <= T80_SDRAM_D when T80_SDRAM_SEL = '1'
 	else x"FF";
 
 -- OPERATING SYSTEM ROM
-TG68_OS_DTACK_N <= '0';
+FX68_OS_DTACK_N <= '0';
 OS_OEn <= '0';
-TG68_OS_SEL <= '1' when TG68_A(23 downto 22) = "00" and FX68_AS_N = '0' and TG68_RNW = '1' and CART_EN = '0' else '0';
+FX68_OS_SEL <= '1' when FX68_A(23 downto 22) = "00" and FX68_AS_N = '0' and FX68_RNW = '1' and CART_EN = '0' else '0';
 
 -- CONTROL AREA
-TG68_CTRL_SEL <= '1' when (TG68_A(23 downto 12) = x"A11" or TG68_A(23 downto 12) = x"A14") and
-	TG68_SEL = '1' else '0';
+FX68_CTRL_SEL <= '1' when (FX68_A(23 downto 12) = x"A11" or FX68_A(23 downto 12) = x"A14") and
+	FX68_SEL = '1' else '0';
 T80_CTRL_SEL <= '1' when T80_A(15) = '1' and 
 	(BAR(23 downto 15) & T80_A(14 downto 12) = x"A11" or BAR(23 downto 15) & T80_A(14 downto 12) = x"A14") and
 	T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0') else '0';
@@ -1004,7 +1004,7 @@ T80_CTRL_SEL <= '1' when T80_A(15) = '1' and
 process( MRST_N, MCLK )
 begin
 	if MRST_N = '0' then
-		TG68_CTRL_DTACK_N <= '1';	
+		FX68_CTRL_DTACK_N <= '1';	
 		T80_CTRL_DTACK_N <= '1';	
 		
 		ZBUSREQ <= '0';
@@ -1012,40 +1012,40 @@ begin
 		CART_EN <= '0';
 		
 	elsif rising_edge(MCLK) then
-		if TG68_CTRL_SEL = '0' then 
-			TG68_CTRL_DTACK_N <= '1';
+		if FX68_CTRL_SEL = '0' then 
+			FX68_CTRL_DTACK_N <= '1';
 		end if;
 		if T80_CTRL_SEL = '0' then 
 			T80_CTRL_DTACK_N <= '1';
 		end if;
 		
-		if TG68_CTRL_SEL = '1' and TG68_CTRL_DTACK_N = '1' then
-			TG68_CTRL_DTACK_N <= '0';
-			if TG68_RNW = '0' then
+		if FX68_CTRL_SEL = '1' and FX68_CTRL_DTACK_N = '1' then
+			FX68_CTRL_DTACK_N <= '0';
+			if FX68_RNW = '0' then
 				-- Write
-				if TG68_A(15 downto 8) = x"11" then
+				if FX68_A(15 downto 8) = x"11" then
 					-- ZBUSREQ
-					if TG68_UDS_N = '0' then
-						ZBUSREQ <= TG68_DO(8);
+					if FX68_UDS_N = '0' then
+						ZBUSREQ <= FX68_DO(8);
 					end if;
-				elsif TG68_A(15 downto 8) = x"12" then
+				elsif FX68_A(15 downto 8) = x"12" then
 					-- ZRESET_N
-					if TG68_UDS_N = '0' then
-						ZRESET_N <= TG68_DO(8);
+					if FX68_UDS_N = '0' then
+						ZRESET_N <= FX68_DO(8);
 					end if;			
-				elsif TG68_A(15 downto 8) = x"41" then
+				elsif FX68_A(15 downto 8) = x"41" then
 					-- Cartridge Control Register
-					if TG68_LDS_N = '0' then
-						CART_EN <= TG68_DO(0);
+					if FX68_LDS_N = '0' then
+						CART_EN <= FX68_DO(0);
 					end if;								
 				end if;
 			else
 				-- Read
-				TG68_CTRL_D <= not TG68_CTRL_D;
-				if TG68_A(15 downto 8) = x"11" then
+				FX68_CTRL_D <= not FX68_CTRL_D;
+				if FX68_A(15 downto 8) = x"11" then
 					-- ZBUSACK_N
-					TG68_CTRL_D(8) <= ZBUSACK_N;
-					TG68_CTRL_D(0) <= ZBUSACK_N;
+					FX68_CTRL_D(8) <= ZBUSACK_N;
+					FX68_CTRL_D(0) <= ZBUSACK_N;
 				end if;
 			end if;		
 		elsif T80_CTRL_SEL = '1' and T80_CTRL_DTACK_N = '1' then
@@ -1083,14 +1083,14 @@ begin
 end process;
 
 -- I/O AREA
-TG68_IO_SEL <= '1' when TG68_A(23 downto 5) = x"A100" & "000" and TG68_SEL = '1' else '0';
+FX68_IO_SEL <= '1' when FX68_A(23 downto 5) = x"A100" & "000" and FX68_SEL = '1' else '0';
 T80_IO_SEL <= '1' when T80_A(15) = '1' and BAR & T80_A(14 downto 5) = x"A100" & "000" and
 	T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0') else '0';
 
 process( MRST_N, MCLK )
 begin
 	if MRST_N = '0' then
-		TG68_IO_DTACK_N <= '1';	
+		FX68_IO_DTACK_N <= '1';	
 		T80_IO_DTACK_N <= '1';	
 		
 		IO_SEL <= '0';
@@ -1101,8 +1101,8 @@ begin
 		IOC <= IOC_IDLE;
 		
 	elsif rising_edge(MCLK) then
-		if TG68_IO_SEL = '0' then 
-			TG68_IO_DTACK_N <= '1';
+		if FX68_IO_SEL = '0' then 
+			FX68_IO_DTACK_N <= '1';
 		end if;
 		if T80_IO_SEL = '0' then 
 			T80_IO_DTACK_N <= '1';
@@ -1110,14 +1110,14 @@ begin
 
 		case IOC is
 		when IOC_IDLE =>
-			if TG68_IO_SEL = '1' and TG68_IO_DTACK_N = '1' then
+			if FX68_IO_SEL = '1' and FX68_IO_DTACK_N = '1' then
 				IO_SEL <= '1';
-				IO_A <= TG68_A(4 downto 1) & '0';
-				IO_RNW <= TG68_RNW;
-				IO_UDS_N <= TG68_UDS_N;
-				IO_LDS_N <= TG68_LDS_N;
-				IO_DI <= TG68_DO;
-				IOC <= IOC_TG68_ACC;
+				IO_A <= FX68_A(4 downto 1) & '0';
+				IO_RNW <= FX68_RNW;
+				IO_UDS_N <= FX68_UDS_N;
+				IO_LDS_N <= FX68_LDS_N;
+				IO_DI <= FX68_DO;
+				IOC <= IOC_FX68_ACC;
 			elsif T80_IO_SEL = '1' and T80_IO_DTACK_N = '1' then
 				IO_SEL <= '1';
 				IO_A <= T80_A(4 downto 0);
@@ -1133,11 +1133,11 @@ begin
 				IOC <= IOC_T80_ACC;			
 			end if;
 
-		when IOC_TG68_ACC =>
+		when IOC_FX68_ACC =>
 			if IO_DTACK_N = '0' then
 				IO_SEL <= '0';
-				TG68_IO_D <= IO_DO;
-				TG68_IO_DTACK_N <= '0';
+				FX68_IO_D <= IO_DO;
+				FX68_IO_DTACK_N <= '0';
 				IOC <= IOC_DESEL;
 			end if;
 
@@ -1177,9 +1177,9 @@ end process;
 -- 7F = 01111111 000
 -- FF = 11111111 000
 -- VDP AREA
-TG68_VDP_SEL <= '1' when FX68_AS_N = '0' and
-	((TG68_A(23 downto 21) = "110" and TG68_A(18 downto 16) = "000") or
-	 (TG68_A(23 downto 16) = x"A0" and TG68_A(14 downto 5) = "1111111" & "000")) -- Z80 Address space
+FX68_VDP_SEL <= '1' when FX68_AS_N = '0' and
+	((FX68_A(23 downto 21) = "110" and FX68_A(18 downto 16) = "000") or
+	 (FX68_A(23 downto 16) = x"A0" and FX68_A(14 downto 5) = "1111111" & "000")) -- Z80 Address space
 	else '0';
 T80_VDP_SEL <= '1' when T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0') and
 	(T80_A(15 downto 5) = x"7F" & "000" or
@@ -1189,7 +1189,7 @@ T80_VDP_SEL <= '1' when T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0') 
 process( MRST_N, MCLK )
 begin
 	if MRST_N = '0' then
-		TG68_VDP_DTACK_N <= '1';	
+		FX68_VDP_DTACK_N <= '1';	
 		T80_VDP_DTACK_N <= '1';	
 		
 		VDP_SEL <= '0';
@@ -1200,8 +1200,8 @@ begin
 		HEXVALUE <= x"0000";
 		
 	elsif rising_edge(MCLK) then
-		if TG68_VDP_SEL = '0' then 
-			TG68_VDP_DTACK_N <= '1';
+		if FX68_VDP_SEL = '0' then 
+			FX68_VDP_DTACK_N <= '1';
 		end if;
 		if T80_VDP_SEL = '0' then 
 			T80_VDP_DTACK_N <= '1';
@@ -1209,24 +1209,24 @@ begin
 
 		case VDPC is
 		when VDPC_IDLE =>
-			if TG68_VDP_SEL = '1' and TG68_VDP_DTACK_N = '1' then
-				if TG68_A(4 downto 3) = "10" then
+			if FX68_VDP_SEL = '1' and FX68_VDP_DTACK_N = '1' then
+				if FX68_A(4 downto 3) = "10" then
 					-- PSG (used for debug)
-					if TG68_A(3 downto 1) = "000" and TG68_LDS_N = '0' and TG68_RNW = '0' then
-						HEXVALUE(15 downto 8) <= TG68_DO(7 downto 0);
+					if FX68_A(3 downto 1) = "000" and FX68_LDS_N = '0' and FX68_RNW = '0' then
+						HEXVALUE(15 downto 8) <= FX68_DO(7 downto 0);
 					end if;
-					if TG68_A(3 downto 1) = "001" and TG68_LDS_N = '0' and TG68_RNW = '0' then
-						HEXVALUE(7 downto 0) <= TG68_DO(7 downto 0);
+					if FX68_A(3 downto 1) = "001" and FX68_LDS_N = '0' and FX68_RNW = '0' then
+						HEXVALUE(7 downto 0) <= FX68_DO(7 downto 0);
 					end if;					
-					TG68_VDP_D <= x"FFFF";
-					TG68_VDP_DTACK_N <= '0';
+					FX68_VDP_D <= x"FFFF";
+					FX68_VDP_DTACK_N <= '0';
 				else
 					-- VDP
 					VDP_SEL <= '1';
-					VDP_A <= TG68_A(4 downto 1) & '0';
-					VDP_RNW <= TG68_RNW;
-					VDP_DI <= TG68_DO;
-					VDPC <= VDPC_TG68_ACC;
+					VDP_A <= FX68_A(4 downto 1) & '0';
+					VDP_RNW <= FX68_RNW;
+					VDP_DI <= FX68_DO;
+					VDPC <= VDPC_FX68_ACC;
 				end if;				
 			elsif T80_VDP_SEL = '1' and T80_VDP_DTACK_N = '1' then
 				if T80_A(4 downto 3) = "10" then
@@ -1248,11 +1248,11 @@ begin
 				end if;
 			end if;
 
-		when VDPC_TG68_ACC =>
+		when VDPC_FX68_ACC =>
 			if VDP_DTACK_N = '0' then
 				VDP_SEL <= '0';
-				TG68_VDP_D <= VDP_DO;
-				TG68_VDP_DTACK_N <= '0';
+				FX68_VDP_D <= VDP_DO;
+				FX68_VDP_DTACK_N <= '0';
 				VDPC <= VDPC_DESEL;
 			end if;
 
@@ -1291,13 +1291,13 @@ end process;
 -- C0 = 11000000
 -- DF = 11011111
 -- FM AREA
-TG68_FM_SEL <= '1' when  TG68_A(23 downto 16) = x"A0" and TG68_A(14 downto 13) = "10" and TG68_SEL = '1' else '0';
+FX68_FM_SEL <= '1' when  FX68_A(23 downto 16) = x"A0" and FX68_A(14 downto 13) = "10" and FX68_SEL = '1' else '0';
 T80_FM_SEL <= '1' when T80_A(15 downto 13) = "010" and T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0') else '0';
-FM_SEL <= T80_FM_SEL or TG68_FM_SEL;
-FM_RNW <= T80_WR_N when T80_FM_SEL = '1' else TG68_RNW when TG68_FM_SEL = '1' else '1';
-FM_A <= T80_A(1 downto 0) when T80_FM_SEL = '1' else TG68_A(1) & not TG68_LDS_N;
-FM_DI <= T80_DO when T80_FM_SEL = '1' else TG68_DO(15 downto 8) when TG68_UDS_N = '0' else TG68_DO(7 downto 0);
-TG68_FM_D <= FM_DO & FM_DO;
+FM_SEL <= T80_FM_SEL or FX68_FM_SEL;
+FM_RNW <= T80_WR_N when T80_FM_SEL = '1' else FX68_RNW when FX68_FM_SEL = '1' else '1';
+FM_A <= T80_A(1 downto 0) when T80_FM_SEL = '1' else FX68_A(1) & not FX68_LDS_N;
+FM_DI <= T80_DO when T80_FM_SEL = '1' else FX68_DO(15 downto 8) when FX68_UDS_N = '0' else FX68_DO(7 downto 0);
+FX68_FM_D <= FM_DO & FM_DO;
 T80_FM_D <= FM_DO;
 
 -- PSG AREA
@@ -1305,9 +1305,9 @@ T80_FM_D <= FM_DO;
 -- 68k: C00011
 
 T80_PSG_SEL <= '1' when T80_A(15 downto 3) = x"7F1"&'0' and T80_MREQ_N = '0' and T80_WR_N = '0' else '0';
-TG68_PSG_SEL <= '1' when TG68_A(23 downto 3) = x"C0001"&'0' and TG68_SEL = '1' and TG68_RNW='0' else '0';
-PSG_SEL <= T80_PSG_SEL or TG68_PSG_SEL;
-PSG_DI <= T80_DO when T80_PSG_SEL = '1' else TG68_DO(15 downto 8) when TG68_UDS_N = '0' else TG68_DO(7 downto 0);
+FX68_PSG_SEL <= '1' when FX68_A(23 downto 3) = x"C0001"&'0' and FX68_SEL = '1' and FX68_RNW='0' else '0';
+PSG_SEL <= T80_PSG_SEL or FX68_PSG_SEL;
+PSG_DI <= T80_DO when T80_PSG_SEL = '1' else FX68_DO(15 downto 8) when FX68_UDS_N = '0' else FX68_DO(7 downto 0);
 
 -- Z80:
 -- 60 = 01100000
@@ -1318,36 +1318,36 @@ PSG_DI <= T80_DO when T80_PSG_SEL = '1' else TG68_DO(15 downto 8) when TG68_UDS_
 -- E0 = 11100000
 -- FE = 11111110
 -- BANK ADDRESS REGISTER AND UNUSED AREA IN Z80 ADDRESS SPACE
-TG68_BAR_SEL <= '1' when (TG68_A(23 downto 16) = x"A0" and TG68_A(14 downto 13) = "11" and TG68_A(12 downto 8) /= "11111")
-		and TG68_SEL = '1' else '0';
+FX68_BAR_SEL <= '1' when (FX68_A(23 downto 16) = x"A0" and FX68_A(14 downto 13) = "11" and FX68_A(12 downto 8) /= "11111")
+		and FX68_SEL = '1' else '0';
 T80_BAR_SEL <= '1' when (T80_A(15 downto 13) = "011" and T80_A(12 downto 8) /= "11111")
 		and T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0') else '0';
 
 process( MRST_N, MCLK )
 begin
 	if MRST_N = '0' then
-		TG68_BAR_DTACK_N <= '1';	
+		FX68_BAR_DTACK_N <= '1';	
 		T80_BAR_DTACK_N <= '1';
 		
 		BAR <= (others => '0');
 		
 	elsif rising_edge(MCLK) then
-		if TG68_BAR_SEL = '0' then 
-			TG68_BAR_DTACK_N <= '1';
+		if FX68_BAR_SEL = '0' then 
+			FX68_BAR_DTACK_N <= '1';
 		end if;
 		if T80_BAR_SEL = '0' then 
 			T80_BAR_DTACK_N <= '1';
 		end if;
 
-		if TG68_BAR_SEL = '1' and TG68_BAR_DTACK_N = '1' then
-			if TG68_RNW = '0' then
-				if TG68_A(23 downto 16) = x"A0" and TG68_A(14 downto 8) = "1100000" and TG68_UDS_N = '0' then
-					BAR <= TG68_DO(8) & BAR(23 downto 16);
+		if FX68_BAR_SEL = '1' and FX68_BAR_DTACK_N = '1' then
+			if FX68_RNW = '0' then
+				if FX68_A(23 downto 16) = x"A0" and FX68_A(14 downto 8) = "1100000" and FX68_UDS_N = '0' then
+					BAR <= FX68_DO(8) & BAR(23 downto 16);
 				end if;
 			else
-				TG68_BAR_D <= x"FFFF";
+				FX68_BAR_D <= x"FFFF";
 			end if;
-			TG68_BAR_DTACK_N <= '0';
+			FX68_BAR_DTACK_N <= '0';
 		elsif T80_BAR_SEL = '1' and T80_BAR_DTACK_N = '1' then
 			if T80_WR_N = '0' then
 				if T80_A(15 downto 8) = x"60" then
@@ -1384,30 +1384,30 @@ begin
             SSF2_MAP(35 downto 30) <= "00"&x"5";
             SSF2_MAP(41 downto 36) <= "00"&x"6";
             SSF2_MAP(47 downto 42) <= "00"&x"7";
-        elsif TG68_A(23 downto 4) = x"a130f" and TG68_SEL = '1' and TG68_RNW = '0' then
-            case TG68_A(3 downto 1) is
+        elsif FX68_A(23 downto 4) = x"a130f" and FX68_SEL = '1' and FX68_RNW = '0' then
+            case FX68_A(3 downto 1) is
             when "000" =>
                 null; -- always 0;
             when "001" =>
-                SSF2_MAP(11 downto 6) <= TG68_DO(5 downto 0);
+                SSF2_MAP(11 downto 6) <= FX68_DO(5 downto 0);
             when "010" =>
-                SSF2_MAP(17 downto 12) <= TG68_DO(5 downto 0);
+                SSF2_MAP(17 downto 12) <= FX68_DO(5 downto 0);
             when "011" =>
-                SSF2_MAP(23 downto 18) <= TG68_DO(5 downto 0);
+                SSF2_MAP(23 downto 18) <= FX68_DO(5 downto 0);
             when "100" =>
-                SSF2_MAP(29 downto 24) <= TG68_DO(5 downto 0);
+                SSF2_MAP(29 downto 24) <= FX68_DO(5 downto 0);
             when "101" =>
-                SSF2_MAP(35 downto 30) <= TG68_DO(5 downto 0);
+                SSF2_MAP(35 downto 30) <= FX68_DO(5 downto 0);
             when "110" =>
-                SSF2_MAP(41 downto 36) <= TG68_DO(5 downto 0);
+                SSF2_MAP(41 downto 36) <= FX68_DO(5 downto 0);
             when "111" =>
-                SSF2_MAP(47 downto 42) <= TG68_DO(5 downto 0);
+                SSF2_MAP(47 downto 42) <= FX68_DO(5 downto 0);
             end case;
         end if;
     end if;
 end process;
 
-ROM_PAGE <= TG68_A(21 downto 19) when TG68_FLASH_SEL = '1' and TG68_DTACK_N = '1'
+ROM_PAGE <= FX68_A(21 downto 19) when FX68_FLASH_SEL = '1' and FX68_DTACK_N = '1'
           else BAR(21 downto 19) when T80_FLASH_SEL = '1' and T80_FLASH_DTACK_N = '1'
           else VBUS_ADDR(21 downto 19);
 
@@ -1421,8 +1421,8 @@ ROM_PAGE_A <= SSF2_MAP(4 downto 0) when ROM_PAGE = "000" else
               SSF2_MAP(46 downto 42);
 
 -- FLASH (SDRAM) CONTROL
-TG68_FLASH_SEL <= '1' when TG68_A(23 downto 22) = "00" and TG68_SEL = '1' and
-	TG68_RNW = '1' and TG68_SRAM_SEL = '0' and CART_EN = '1' else '0';
+FX68_FLASH_SEL <= '1' when FX68_A(23 downto 22) = "00" and FX68_SEL = '1' and
+	FX68_RNW = '1' and FX68_SRAM_SEL = '0' and CART_EN = '1' else '0';
 T80_FLASH_SEL <= '1' when T80_A(15) = '1' and BAR(23 downto 22) = "00" and
 	T80_MREQ_N = '0' and T80_RD_N = '0' else '0';
 DMA_FLASH_SEL <= '1' when VBUS_ADDR(23 downto 22) = "00" and VBUS_SEL = '1' else '0';
@@ -1432,7 +1432,7 @@ begin
 	if MRST_N = '0' then
 		FC <= FC_IDLE;
 		
-		TG68_FLASH_DTACK_N <= '1';
+		FX68_FLASH_DTACK_N <= '1';
 		T80_FLASH_DTACK_N <= '1';
 		DMA_FLASH_DTACK_N <= '1';
 
@@ -1441,8 +1441,8 @@ begin
 		romrd_q_cached <= (others => '0');
 		
 	elsif rising_edge( MCLK ) then
-		if TG68_FLASH_SEL = '0' then 
-			TG68_FLASH_DTACK_N <= '1';
+		if FX68_FLASH_SEL = '0' then 
+			FX68_FLASH_DTACK_N <= '1';
 		end if;
 		if T80_FLASH_SEL = '0' then 
 			T80_FLASH_DTACK_N <= '1';
@@ -1455,34 +1455,34 @@ begin
 		when FC_IDLE =>			
 			--if VCLKCNT = "001" then
 
-				if TG68_FLASH_SEL = '1' and TG68_FLASH_DTACK_N = '1' then
-					-- FF_FL_ADDR <= TG68_A(21 downto 0);
-					if useCache and (ROM_PAGE_A & TG68_A(18 downto 3) = romrd_a_cached(23 downto 3)) then
-						case TG68_A(2 downto 1) is
+				if FX68_FLASH_SEL = '1' and FX68_FLASH_DTACK_N = '1' then
+					-- FF_FL_ADDR <= FX68_A(21 downto 0);
+					if useCache and (ROM_PAGE_A & FX68_A(18 downto 3) = romrd_a_cached(23 downto 3)) then
+						case FX68_A(2 downto 1) is
 						when "00" =>
-							if TG68_UDS_N = '0' then TG68_FLASH_D(15 downto 8) <= romrd_q_cached(15 downto 8); end if;
-							if TG68_LDS_N = '0' then TG68_FLASH_D(7 downto 0) <= romrd_q_cached(7 downto 0); end if;
+							if FX68_UDS_N = '0' then FX68_FLASH_D(15 downto 8) <= romrd_q_cached(15 downto 8); end if;
+							if FX68_LDS_N = '0' then FX68_FLASH_D(7 downto 0) <= romrd_q_cached(7 downto 0); end if;
 
 						when "01" =>
-							if TG68_UDS_N = '0' then TG68_FLASH_D(15 downto 8) <= romrd_q_cached(31 downto 24); end if;
-							if TG68_LDS_N = '0' then TG68_FLASH_D(7 downto 0) <= romrd_q_cached(23 downto 16); end if;
+							if FX68_UDS_N = '0' then FX68_FLASH_D(15 downto 8) <= romrd_q_cached(31 downto 24); end if;
+							if FX68_LDS_N = '0' then FX68_FLASH_D(7 downto 0) <= romrd_q_cached(23 downto 16); end if;
 
 						when "10" =>
-							if TG68_UDS_N = '0' then TG68_FLASH_D(15 downto 8) <= romrd_q_cached(47 downto 40); end if;
-							if TG68_LDS_N = '0' then TG68_FLASH_D(7 downto 0) <= romrd_q_cached(39 downto 32); end if;
+							if FX68_UDS_N = '0' then FX68_FLASH_D(15 downto 8) <= romrd_q_cached(47 downto 40); end if;
+							if FX68_LDS_N = '0' then FX68_FLASH_D(7 downto 0) <= romrd_q_cached(39 downto 32); end if;
 
 						when "11" =>
-							if TG68_UDS_N = '0' then TG68_FLASH_D(15 downto 8) <= romrd_q_cached(63 downto 56); end if;
-							if TG68_LDS_N = '0' then TG68_FLASH_D(7 downto 0) <= romrd_q_cached(55 downto 48); end if;
+							if FX68_UDS_N = '0' then FX68_FLASH_D(15 downto 8) <= romrd_q_cached(63 downto 56); end if;
+							if FX68_LDS_N = '0' then FX68_FLASH_D(7 downto 0) <= romrd_q_cached(55 downto 48); end if;
 
 						when others => null;
 						end case;
-						TG68_FLASH_DTACK_N <= '0';
+						FX68_FLASH_DTACK_N <= '0';
 					else
 						romrd_req <= not romrd_req;
-						romrd_a <= ROM_PAGE_A & TG68_A(18 downto 3);
-						romrd_a_cached <= ROM_PAGE_A & TG68_A(18 downto 3);
-						FC <= FC_TG68_RD;
+						romrd_a <= ROM_PAGE_A & FX68_A(18 downto 3);
+						romrd_a_cached <= ROM_PAGE_A & FX68_A(18 downto 3);
+						FC <= FC_FX68_RD;
 					end if;
 				elsif T80_FLASH_SEL = '1' and T80_FLASH_DTACK_N = '1' then
 					-- FF_FL_ADDR <= BAR(21 downto 15) & T80_A(14 downto 0);
@@ -1540,29 +1540,29 @@ begin
 				end if;
 			--end if;
 
-		when FC_TG68_RD =>
+		when FC_FX68_RD =>
 			if romrd_req = romrd_ack then
 				romrd_q_cached <= romrd_q;
-				case TG68_A(2 downto 1) is
+				case FX68_A(2 downto 1) is
 				when "00" =>
-					if TG68_UDS_N = '0' then TG68_FLASH_D(15 downto 8) <= romrd_q(15 downto 8); end if;
-					if TG68_LDS_N = '0' then TG68_FLASH_D(7 downto 0) <= romrd_q(7 downto 0); end if;
+					if FX68_UDS_N = '0' then FX68_FLASH_D(15 downto 8) <= romrd_q(15 downto 8); end if;
+					if FX68_LDS_N = '0' then FX68_FLASH_D(7 downto 0) <= romrd_q(7 downto 0); end if;
 
 				when "01" =>
-					if TG68_UDS_N = '0' then TG68_FLASH_D(15 downto 8) <= romrd_q(31 downto 24); end if;
-					if TG68_LDS_N = '0' then TG68_FLASH_D(7 downto 0) <= romrd_q(23 downto 16); end if;
+					if FX68_UDS_N = '0' then FX68_FLASH_D(15 downto 8) <= romrd_q(31 downto 24); end if;
+					if FX68_LDS_N = '0' then FX68_FLASH_D(7 downto 0) <= romrd_q(23 downto 16); end if;
 
 				when "10" =>
-					if TG68_UDS_N = '0' then TG68_FLASH_D(15 downto 8) <= romrd_q(47 downto 40); end if;
-					if TG68_LDS_N = '0' then TG68_FLASH_D(7 downto 0) <= romrd_q(39 downto 32); end if;
+					if FX68_UDS_N = '0' then FX68_FLASH_D(15 downto 8) <= romrd_q(47 downto 40); end if;
+					if FX68_LDS_N = '0' then FX68_FLASH_D(7 downto 0) <= romrd_q(39 downto 32); end if;
 
 				when "11" =>
-					if TG68_UDS_N = '0' then TG68_FLASH_D(15 downto 8) <= romrd_q(63 downto 56); end if;
-					if TG68_LDS_N = '0' then TG68_FLASH_D(7 downto 0) <= romrd_q(55 downto 48); end if;
+					if FX68_UDS_N = '0' then FX68_FLASH_D(15 downto 8) <= romrd_q(63 downto 56); end if;
+					if FX68_LDS_N = '0' then FX68_FLASH_D(7 downto 0) <= romrd_q(55 downto 48); end if;
 
 				when others => null;
 				end case;				
-				TG68_FLASH_DTACK_N <= '0';
+				FX68_FLASH_DTACK_N <= '0';
 				FC <= FC_IDLE;
 			end if;
 
@@ -1619,7 +1619,7 @@ begin
 end process;
 
 -- SDRAM (68K RAM) CONTROL
-TG68_SDRAM_SEL <= '1' when TG68_A(23 downto 21) = "111" and TG68_SEL = '1' else '0';
+FX68_SDRAM_SEL <= '1' when FX68_A(23 downto 21) = "111" and FX68_SEL = '1' else '0';
 T80_SDRAM_SEL <= '1' when T80_A(15) = '1' and BAR(23 downto 21) = "111" and
 	T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0') else '0';
 DMA_SDRAM_SEL <= '1' when VBUS_ADDR(23 downto 21) = "111" and VBUS_SEL = '1' else '0';
@@ -1627,7 +1627,7 @@ DMA_SDRAM_SEL <= '1' when VBUS_ADDR(23 downto 21) = "111" and VBUS_SEL = '1' els
 process( MRST_N, MCLK )
 begin
 	if MRST_N = '0' then
-		TG68_SDRAM_DTACK_N <= '1';
+		FX68_SDRAM_DTACK_N <= '1';
 		T80_SDRAM_DTACK_N <= '1';
 		DMA_SDRAM_DTACK_N <= '1';
 
@@ -1636,8 +1636,8 @@ begin
 		SDRC <= SDRC_IDLE;
 		
 	elsif rising_edge(MCLK) then
-		if TG68_SDRAM_SEL = '0' then 
-			TG68_SDRAM_DTACK_N <= '1';
+		if FX68_SDRAM_SEL = '0' then 
+			FX68_SDRAM_DTACK_N <= '1';
 		end if;	
 		if T80_SDRAM_SEL = '0' then 
 			T80_SDRAM_DTACK_N <= '1';
@@ -1649,14 +1649,14 @@ begin
 		case SDRC is
 		when SDRC_IDLE =>
 			--if VCLKCNT = "001" then
-				if TG68_SDRAM_SEL = '1' and TG68_SDRAM_DTACK_N = '1' then
+				if FX68_SDRAM_SEL = '1' and FX68_SDRAM_DTACK_N = '1' then
 					ram68k_req <= not ram68k_req;
-					ram68k_a <= TG68_A(15 downto 1);
-					ram68k_d <= TG68_DO;
-					ram68k_we <= not TG68_RNW;
-					ram68k_u_n <= TG68_UDS_N;
-					ram68k_l_n <= TG68_LDS_N;
-					SDRC <= SDRC_TG68;
+					ram68k_a <= FX68_A(15 downto 1);
+					ram68k_d <= FX68_DO;
+					ram68k_we <= not FX68_RNW;
+					ram68k_u_n <= FX68_UDS_N;
+					ram68k_l_n <= FX68_LDS_N;
+					SDRC <= SDRC_FX68;
 				elsif T80_SDRAM_SEL = '1' and T80_SDRAM_DTACK_N = '1' then
 					ram68k_req <= not ram68k_req;
 					ram68k_a <= BAR(15) & T80_A(14 downto 1);
@@ -1675,10 +1675,10 @@ begin
 				end if;
 			--end if;
 
-		when SDRC_TG68 =>
+		when SDRC_FX68 =>
 			if ram68k_req = ram68k_ack then
-				TG68_SDRAM_D <= ram68k_q;
-				TG68_SDRAM_DTACK_N <= '0';
+				FX68_SDRAM_D <= ram68k_q;
+				FX68_SDRAM_DTACK_N <= '0';
 				SDRC <= SDRC_IDLE;
 			end if;
 		
@@ -1709,8 +1709,8 @@ end process;
 
 -- SRAM at 0x200000 - 20FFFF
 -- EEPROM at 0x20000
-TG68_SRAM_SEL <= '1' when SRAM_EN = '1' and TG68_SEL = '1' and TG68_A(23 downto 16) = x"20"
-			else '1' when EEPROM_EN = '1' and TG68_SEL = '1' and TG68_A(23 downto 4) = x"20000" and TG68_A(3 downto 1) = "000"
+FX68_SRAM_SEL <= '1' when SRAM_EN = '1' and FX68_SEL = '1' and FX68_A(23 downto 16) = x"20"
+			else '1' when EEPROM_EN = '1' and FX68_SEL = '1' and FX68_A(23 downto 4) = x"20000" and FX68_A(3 downto 1) = "000"
 			else '0';
 
 -- SRAM CONTROL
@@ -1718,33 +1718,33 @@ process( MRST_N, MCLK )
 begin
 
 	if MRST_N = '0' then
-		TG68_SRAM_DTACK_N <= '1';
+		FX68_SRAM_DTACK_N <= '1';
 		sram_req <= '0';
 		SRAMRC <= SRAMRC_IDLE;
 
 	elsif rising_edge(MCLK) then
-		if TG68_SRAM_SEL = '0' then
-			TG68_SRAM_DTACK_N <= '1';
+		if FX68_SRAM_SEL = '0' then
+			FX68_SRAM_DTACK_N <= '1';
 		end if;
 
 		case SRAMRC is
 		when SRAMRC_IDLE =>
 			--if VCLKCNT = "001" then
-				if TG68_SRAM_SEL = '1' and TG68_SRAM_DTACK_N = '1' then
+				if FX68_SRAM_SEL = '1' and FX68_SRAM_DTACK_N = '1' then
 					sram_req <= not sram_req;
-					sram_a <= TG68_A(15 downto 1);
-					sram_d <= TG68_DO;
-					sram_we <= not TG68_RNW;
-					sram_u_n <= TG68_UDS_N;
-					sram_l_n <= TG68_LDS_N;
-					SRAMRC <= SRAMRC_TG68;
+					sram_a <= FX68_A(15 downto 1);
+					sram_d <= FX68_DO;
+					sram_we <= not FX68_RNW;
+					sram_u_n <= FX68_UDS_N;
+					sram_l_n <= FX68_LDS_N;
+					SRAMRC <= SRAMRC_FX68;
 				end if;
 			--end if;
 
-		when SRAMRC_TG68 =>
+		when SRAMRC_FX68 =>
 			if sram_req = sram_ack then
-				TG68_SRAM_D <= sram_q;
-				TG68_SRAM_DTACK_N <= '0';
+				FX68_SRAM_D <= sram_q;
+				FX68_SRAM_DTACK_N <= '0';
 				SRAMRC <= SRAMRC_IDLE;
 			end if;
 		when others => null;
@@ -1754,28 +1754,28 @@ begin
 
 end process;
 
-TG68_ZRAM_SEL <= '1' when TG68_A(23 downto 16) = x"A0" and TG68_A(14) = '0' and TG68_SEL = '1' else '0';
+FX68_ZRAM_SEL <= '1' when FX68_A(23 downto 16) = x"A0" and FX68_A(14) = '0' and FX68_SEL = '1' else '0';
 T80_ZRAM_SEL <= '1' when T80_A(15 downto 14) = "00" and T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0') else '0';
 
-zram_a <= T80_A(12 downto 0) when T80_ZRAM_SEL = '1' else TG68_A(12 downto 1) & "0" when TG68_UDS_N = '0' else TG68_A(12 downto 1) & "1";
-zram_d <= T80_DO when T80_ZRAM_SEL = '1' else TG68_DO(15 downto 8) when TG68_UDS_N = '0' else TG68_DO(7 downto 0);
---zram_we <= not T80_WR_N when T80_ZRAM_SEL = '1' else not TG68_RNW when TG68_ZRAM_SEL = '1' else '0';
-TG68_ZRAM_D <= zram_q & zram_q;
+zram_a <= T80_A(12 downto 0) when T80_ZRAM_SEL = '1' else FX68_A(12 downto 1) & "0" when FX68_UDS_N = '0' else FX68_A(12 downto 1) & "1";
+zram_d <= T80_DO when T80_ZRAM_SEL = '1' else FX68_DO(15 downto 8) when FX68_UDS_N = '0' else FX68_DO(7 downto 0);
+--zram_we <= not T80_WR_N when T80_ZRAM_SEL = '1' else not FX68_RNW when FX68_ZRAM_SEL = '1' else '0';
+FX68_ZRAM_D <= zram_q & zram_q;
 T80_ZRAM_D <= zram_q;
 
 -- Z80 RAM CONTROL
 process( MRST_N, MCLK )
 begin
 	if MRST_N = '0' then
-		TG68_ZRAM_DTACK_N <= '1';
+		FX68_ZRAM_DTACK_N <= '1';
 		T80_ZRAM_DTACK_N <= '1';
 
 		zram_we <= '0';
 		ZRC <= ZRC_IDLE;
 
 	elsif rising_edge(MCLK) then
-		if TG68_ZRAM_SEL = '0' then 
-			TG68_ZRAM_DTACK_N <= '1';
+		if FX68_ZRAM_SEL = '0' then 
+			FX68_ZRAM_DTACK_N <= '1';
 		end if;	
 		if T80_ZRAM_SEL = '0' then 
 			T80_ZRAM_DTACK_N <= '1';
@@ -1783,8 +1783,8 @@ begin
 
 		case ZRC is
 		when ZRC_IDLE =>
-			if TG68_ZRAM_SEL = '1' and TG68_ZRAM_DTACK_N = '1' then
-				zram_we <= not TG68_RNW;
+			if FX68_ZRAM_SEL = '1' and FX68_ZRAM_DTACK_N = '1' then
+				zram_we <= not FX68_RNW;
 				ZRC <= ZRC_ACC1;
 			elsif T80_ZRAM_SEL = '1' and T80_ZRAM_DTACK_N = '1' then
 				zram_we <= not T80_WR_N;
@@ -1792,7 +1792,7 @@ begin
 			end if;
 		when ZRC_ACC1 =>
 			zram_we <= '0';
-			TG68_ZRAM_DTACK_N <= '0';
+			FX68_ZRAM_DTACK_N <= '0';
 			T80_ZRAM_DTACK_N <= '0';
 			ZRC <= ZRC_IDLE;
 		when others => null;
@@ -1881,35 +1881,35 @@ begin
 	if rising_edge( MCLK ) then
 
 		-- ROM ACCESS
-		if FC = FC_TG68_RD and romrd_req = romrd_ack then
+		if FC = FC_FX68_RD and romrd_req = romrd_ack then
 			write(L, string'("68K "));
 			write(L, string'("RD"));
 			write(L, string'(" ROM     ["));
-			hwrite(L, TG68_A(23 downto 0));
+			hwrite(L, FX68_A(23 downto 0));
 			write(L, string'("] = ["));
 			rom_q := x"FFFF";
-			case TG68_A(2 downto 1) is
+			case FX68_A(2 downto 1) is
 			when "00" =>
-				if TG68_UDS_N = '0' then rom_q(15 downto 8) := romrd_q(15 downto 8); end if;
-				if TG68_LDS_N = '0' then rom_q(7 downto 0) := romrd_q(7 downto 0); end if;
+				if FX68_UDS_N = '0' then rom_q(15 downto 8) := romrd_q(15 downto 8); end if;
+				if FX68_LDS_N = '0' then rom_q(7 downto 0) := romrd_q(7 downto 0); end if;
 
 			when "01" =>
-				if TG68_UDS_N = '0' then rom_q(15 downto 8) := romrd_q(31 downto 24); end if;
-				if TG68_LDS_N = '0' then rom_q(7 downto 0) := romrd_q(23 downto 16); end if;
+				if FX68_UDS_N = '0' then rom_q(15 downto 8) := romrd_q(31 downto 24); end if;
+				if FX68_LDS_N = '0' then rom_q(7 downto 0) := romrd_q(23 downto 16); end if;
 
 			when "10" =>
-				if TG68_UDS_N = '0' then rom_q(15 downto 8) := romrd_q(47 downto 40); end if;
-				if TG68_LDS_N = '0' then rom_q(7 downto 0) := romrd_q(39 downto 32); end if;
+				if FX68_UDS_N = '0' then rom_q(15 downto 8) := romrd_q(47 downto 40); end if;
+				if FX68_LDS_N = '0' then rom_q(7 downto 0) := romrd_q(39 downto 32); end if;
 
 			when "11" =>
-				if TG68_UDS_N = '0' then rom_q(15 downto 8) := romrd_q(63 downto 56); end if;
-				if TG68_LDS_N = '0' then rom_q(7 downto 0) := romrd_q(55 downto 48); end if;
+				if FX68_UDS_N = '0' then rom_q(15 downto 8) := romrd_q(63 downto 56); end if;
+				if FX68_LDS_N = '0' then rom_q(7 downto 0) := romrd_q(55 downto 48); end if;
 
 			when others => null;
 			end case;				
-			if TG68_UDS_N = '0' and TG68_LDS_N = '0' then
+			if FX68_UDS_N = '0' and FX68_LDS_N = '0' then
 				hwrite(L, rom_q);
-			elsif TG68_UDS_N = '0' then
+			elsif FX68_UDS_N = '0' then
 				hwrite(L, rom_q(15 downto 8));
 				write(L, string'("  "));
 			else
@@ -1922,30 +1922,30 @@ begin
 
 	
 		-- 68K RAM ACCESS
-		if SDRC = SDRC_TG68 and ram68k_req = ram68k_ack then
+		if SDRC = SDRC_FX68 and ram68k_req = ram68k_ack then
 			write(L, string'("68K "));
-			if TG68_RNW = '0' then
+			if FX68_RNW = '0' then
 				write(L, string'("WR"));
 			else
 				write(L, string'("RD"));
 			end if;
 			write(L, string'(" RAM-68K ["));
-			hwrite(L, TG68_A(23 downto 0));
+			hwrite(L, FX68_A(23 downto 0));
 			write(L, string'("] = ["));
-			if TG68_RNW = '0' then
-				if TG68_UDS_N = '0' and TG68_LDS_N = '0' then
-					hwrite(L, TG68_DO);
-				elsif TG68_UDS_N = '0' then
-					hwrite(L, TG68_DO(15 downto 8));
+			if FX68_RNW = '0' then
+				if FX68_UDS_N = '0' and FX68_LDS_N = '0' then
+					hwrite(L, FX68_DO);
+				elsif FX68_UDS_N = '0' then
+					hwrite(L, FX68_DO(15 downto 8));
 					write(L, string'("  "));
 				else
 					write(L, string'("  "));
-					hwrite(L, TG68_DO(7 downto 0));
+					hwrite(L, FX68_DO(7 downto 0));
 				end if;				
 			else
-				if TG68_UDS_N = '0' and TG68_LDS_N = '0' then
+				if FX68_UDS_N = '0' and FX68_LDS_N = '0' then
 					hwrite(L, ram68k_q);
-				elsif TG68_UDS_N = '0' then
+				elsif FX68_UDS_N = '0' then
 					hwrite(L, ram68k_q(15 downto 8));
 					write(L, string'("  "));
 				else
@@ -1959,30 +1959,30 @@ begin
 
 		
 		-- Z80 RAM ACCESS
-		if ZRC = ZRC_ACC3 and ZRCP = ZRCP_TG68 then
+		if ZRC = ZRC_ACC3 and ZRCP = ZRCP_FX68 then
 			write(L, string'("68K "));
-			if TG68_RNW = '0' then
+			if FX68_RNW = '0' then
 				write(L, string'("WR"));
 			else
 				write(L, string'("RD"));
 			end if;
 			write(L, string'(" RAM-Z80 ["));
-			hwrite(L, TG68_A(23 downto 0));
+			hwrite(L, FX68_A(23 downto 0));
 			write(L, string'("] = ["));
-			if TG68_RNW = '0' then
-				if TG68_UDS_N = '0' and TG68_LDS_N = '0' then
-					hwrite(L, TG68_DO);
-				elsif TG68_UDS_N = '0' then
-					hwrite(L, TG68_DO(15 downto 8));
+			if FX68_RNW = '0' then
+				if FX68_UDS_N = '0' and FX68_LDS_N = '0' then
+					hwrite(L, FX68_DO);
+				elsif FX68_UDS_N = '0' then
+					hwrite(L, FX68_DO(15 downto 8));
 					write(L, string'("  "));
 				else
 					write(L, string'("  "));
-					hwrite(L, TG68_DO(7 downto 0));
+					hwrite(L, FX68_DO(7 downto 0));
 				end if;				
 			else
-				if TG68_UDS_N = '0' and TG68_LDS_N = '0' then
+				if FX68_UDS_N = '0' and FX68_LDS_N = '0' then
 					hwrite(L, zram_q & zram_q);
-				elsif TG68_UDS_N = '0' then
+				elsif FX68_UDS_N = '0' then
 					hwrite(L, zram_q);
 					write(L, string'("  "));
 				else
@@ -1996,30 +1996,30 @@ begin
 
 		
 		-- 68K CTRL ACCESS
-		if TG68_CTRL_SEL = '1' and TG68_CTRL_DTACK_N = '1' then
+		if FX68_CTRL_SEL = '1' and FX68_CTRL_DTACK_N = '1' then
 			write(L, string'("68K "));
-			if TG68_RNW = '0' then
+			if FX68_RNW = '0' then
 				write(L, string'("WR"));
 			else
 				write(L, string'("RD"));
 			end if;
 			write(L, string'("    CTRL ["));
-			hwrite(L, TG68_A(23 downto 0));
+			hwrite(L, FX68_A(23 downto 0));
 			write(L, string'("] = ["));
-			if TG68_RNW = '0' then
-				if TG68_UDS_N = '0' and TG68_LDS_N = '0' then
-					hwrite(L, TG68_DO);
-				elsif TG68_UDS_N = '0' then
-					hwrite(L, TG68_DO(15 downto 8));
+			if FX68_RNW = '0' then
+				if FX68_UDS_N = '0' and FX68_LDS_N = '0' then
+					hwrite(L, FX68_DO);
+				elsif FX68_UDS_N = '0' then
+					hwrite(L, FX68_DO(15 downto 8));
 					write(L, string'("  "));
 				else
 					write(L, string'("  "));
-					hwrite(L, TG68_DO(7 downto 0));
+					hwrite(L, FX68_DO(7 downto 0));
 				end if;				
 			else
-				if TG68_UDS_N = '0' and TG68_LDS_N = '0' then
+				if FX68_UDS_N = '0' and FX68_LDS_N = '0' then
 					write(L, string'("????"));
-				elsif TG68_UDS_N = '0' then
+				elsif FX68_UDS_N = '0' then
 					write(L, string'("??"));
 					write(L, string'("  "));
 				else
@@ -2032,30 +2032,30 @@ begin
 		end if;
 
 		-- 68K I/O ACCESS
-		if IOC = IOC_TG68_ACC and IO_DTACK_N = '0' then
+		if IOC = IOC_FX68_ACC and IO_DTACK_N = '0' then
 			write(L, string'("68K "));
-			if TG68_RNW = '0' then
+			if FX68_RNW = '0' then
 				write(L, string'("WR"));
 			else
 				write(L, string'("RD"));
 			end if;
 			write(L, string'("     I/O ["));
-			hwrite(L, TG68_A(23 downto 0));
+			hwrite(L, FX68_A(23 downto 0));
 			write(L, string'("] = ["));
-			if TG68_RNW = '0' then
-				if TG68_UDS_N = '0' and TG68_LDS_N = '0' then
-					hwrite(L, TG68_DO);
-				elsif TG68_UDS_N = '0' then
-					hwrite(L, TG68_DO(15 downto 8));
+			if FX68_RNW = '0' then
+				if FX68_UDS_N = '0' and FX68_LDS_N = '0' then
+					hwrite(L, FX68_DO);
+				elsif FX68_UDS_N = '0' then
+					hwrite(L, FX68_DO(15 downto 8));
 					write(L, string'("  "));
 				else
 					write(L, string'("  "));
-					hwrite(L, TG68_DO(7 downto 0));
+					hwrite(L, FX68_DO(7 downto 0));
 				end if;				
 			else
-				if TG68_UDS_N = '0' and TG68_LDS_N = '0' then
+				if FX68_UDS_N = '0' and FX68_LDS_N = '0' then
 					hwrite(L, IO_DO);
-				elsif TG68_UDS_N = '0' then
+				elsif FX68_UDS_N = '0' then
 					hwrite(L, IO_DO(15 downto 8));
 					write(L, string'("  "));
 				else
@@ -2068,30 +2068,30 @@ begin
 		end if;
 		
 		-- 68K VDP ACCESS
-		if VDPC = VDPC_TG68_ACC and VDP_DTACK_N = '0' then
+		if VDPC = VDPC_FX68_ACC and VDP_DTACK_N = '0' then
 			write(L, string'("68K "));
-			if TG68_RNW = '0' then
+			if FX68_RNW = '0' then
 				write(L, string'("WR"));
 			else
 				write(L, string'("RD"));
 			end if;
 			write(L, string'("     VDP ["));
-			hwrite(L, TG68_A(23 downto 0));
+			hwrite(L, FX68_A(23 downto 0));
 			write(L, string'("] = ["));
-			if TG68_RNW = '0' then
-				if TG68_UDS_N = '0' and TG68_LDS_N = '0' then
-					hwrite(L, TG68_DO);
-				elsif TG68_UDS_N = '0' then
-					hwrite(L, TG68_DO(15 downto 8));
+			if FX68_RNW = '0' then
+				if FX68_UDS_N = '0' and FX68_LDS_N = '0' then
+					hwrite(L, FX68_DO);
+				elsif FX68_UDS_N = '0' then
+					hwrite(L, FX68_DO(15 downto 8));
 					write(L, string'("  "));
 				else
 					write(L, string'("  "));
-					hwrite(L, TG68_DO(7 downto 0));
+					hwrite(L, FX68_DO(7 downto 0));
 				end if;				
 			else
-				if TG68_UDS_N = '0' and TG68_LDS_N = '0' then
+				if FX68_UDS_N = '0' and FX68_LDS_N = '0' then
 					hwrite(L, VDP_DO);
-				elsif TG68_UDS_N = '0' then
+				elsif FX68_UDS_N = '0' then
 					hwrite(L, VDP_DO(15 downto 8));
 					write(L, string'("  "));
 				else

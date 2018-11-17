@@ -967,9 +967,12 @@ FX68_DI(7 downto 0) <= FX68_FLASH_D(7 downto 0) when FX68_FLASH_SEL = '1' and FX
 -- Z80 INPUTS
 
 T80_NMI_N <= '1';
-T80_BUSRQ_N <= not ZBUSREQ;
-T80_RESET_N <= ZRESET_N and MRST_N;
-ZBUSACK_N <= T80_BUSAK_N;
+process( MCLK )
+begin
+	T80_BUSRQ_N <= not ZBUSREQ;
+	T80_RESET_N <= ZRESET_N and MRST_N;
+	ZBUSACK_N <= T80_BUSAK_N;
+end process;
 
 T80_WAIT_N <= '0' when bootState /= BOOT_DONE
 	else not T80_SDRAM_DTACK_N when T80_SDRAM_SEL = '1'
@@ -1754,8 +1757,8 @@ begin
 
 end process;
 
-FX68_ZRAM_SEL <= '1' when FX68_A(23 downto 16) = x"A0" and FX68_A(14) = '0' and FX68_SEL = '1' else '0';
-T80_ZRAM_SEL <= '1' when T80_A(15 downto 14) = "00" and T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0') else '0';
+FX68_ZRAM_SEL <= '1' when FX68_A(23 downto 16) = x"A0" and FX68_A(14) = '0' and FX68_SEL = '1' and ZBUSACK_N = '0' else '0';
+T80_ZRAM_SEL <= '1' when T80_A(15 downto 14) = "00" and T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0') and ZBUSACK_N = '1' else '0';
 
 zram_a <= T80_A(12 downto 0) when T80_ZRAM_SEL = '1' else FX68_A(12 downto 1) & "0" when FX68_UDS_N = '0' else FX68_A(12 downto 1) & "1";
 zram_d <= T80_DO when T80_ZRAM_SEL = '1' else FX68_DO(15 downto 8) when FX68_UDS_N = '0' else FX68_DO(7 downto 0);

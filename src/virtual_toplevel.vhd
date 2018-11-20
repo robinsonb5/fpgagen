@@ -184,7 +184,7 @@ signal ZRC : zrc_t;
 constant useCache : boolean := false;
 
 -- Genesis core
-signal NO_DATA		: std_logic_vector(15 downto 0) := x"4E71";	-- SYNTHESIS gp/m68k.c line 12
+signal NO_DATA		: std_logic_vector(15 downto 0);	-- SYNTHESIS gp/m68k.c line 12
 
 signal MRST_N		: std_logic;
 
@@ -965,6 +965,20 @@ FX68_DI(7 downto 0) <= FX68_FLASH_D(7 downto 0) when FX68_FLASH_SEL = '1' and FX
 	else FX68_FM_D(7 downto 0) when FX68_FM_SEL = '1' and FX68_LDS_N = '0'
 	else NO_DATA(7 downto 0);
 
+-- Floating bus
+process( MRST_N, MCLK )
+begin
+	if MRST_N = '0' then
+		NO_DATA <= x"4E71";
+	elsif rising_edge( MCLK ) then
+		if FX68_FLASH_SEL = '1' then
+			NO_DATA <= FX68_FLASH_D;
+		elsif FX68_SDRAM_SEL = '1' then
+			NO_DATA <= FX68_SDRAM_D;
+		end if;
+	end if;
+end process;
+
 -- Z80 INPUTS
 process(MRST_N, MCLK)
 begin
@@ -1049,7 +1063,7 @@ begin
 				end if;
 			else
 				-- Read
-				FX68_CTRL_D <= not FX68_CTRL_D;
+				FX68_CTRL_D <= NO_DATA;
 				if FX68_A(15 downto 8) = x"11" then
 					-- ZBUSACK_N
 					FX68_CTRL_D(8) <= ZBUSACK_N;
@@ -1259,7 +1273,12 @@ begin
 		when VDPC_FX68_ACC =>
 			if VDP_DTACK_N = '0' then
 				VDP_SEL <= '0';
-				FX68_VDP_D <= VDP_DO;
+				if VDP_A(3 downto 2) = "01" then
+					-- status register
+					FX68_VDP_D <= NO_DATA(15 downto 10) & VDP_DO(9 downto 0);
+				else
+					FX68_VDP_D <= VDP_DO;
+				end if;
 				FX68_VDP_DTACK_N <= '0';
 				VDPC <= VDPC_DESEL;
 			end if;

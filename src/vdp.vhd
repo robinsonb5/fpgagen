@@ -2404,7 +2404,9 @@ begin
 			if IN_VBL = '0' and DE = '1' then
 				if (HV_HCNT(3 downto 0) = "0100" and HV_HCNT(5 downto 4) /= "11" and HV_HCNT < H_DISP_WIDTH) or
 					(H40 = '1' and (HV_HCNT = 322 or HV_HCNT = 324 or HV_HCNT = 464)) or
-					(H40 = '0' and (HV_HCNT = 290 or HV_HCNT = 486 or HV_HCNT = 258 or HV_HCNT = 260))
+					(H40 = '0' and (HV_HCNT = 290 or HV_HCNT = 486 or HV_HCNT = 258 or HV_HCNT = 260)) or
+					(H40 = '1' and HV_VCNT = '1'&x"FF" and (HV_HCNT = 330 or HV_HCNT = 332)) or
+					(H40 = '0' and HV_VCNT = '1'&x"FF" and (HV_HCNT = 266 or HV_HCNT = 268))
 				then
 					FIFO_EN <= '1';
 				end if;

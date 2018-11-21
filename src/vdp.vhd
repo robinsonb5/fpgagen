@@ -3033,7 +3033,7 @@ begin
 			
 			when DMA_FILL_LOOP =>
 				REG(20) <= DMA_LENGTH(15 downto 8);
-				REG(19) <= DMA_LENGTH(15 downto 8);
+				REG(19) <= DMA_LENGTH(7 downto 0);
 				REG(22) <= DMA_SOURCE(15 downto 8);
 				REG(21) <= DMA_SOURCE(7 downto 0);
 				if DMA_LENGTH = 0 then
@@ -3138,7 +3138,7 @@ begin
 			
 			when DMA_COPY_LOOP =>
 				REG(20) <= DMA_LENGTH(15 downto 8);
-				REG(19) <= DMA_LENGTH(15 downto 8);
+				REG(19) <= DMA_LENGTH(7 downto 0);
 				REG(22) <= DMA_SOURCE(15 downto 8);
 				REG(21) <= DMA_SOURCE(7 downto 0);
 				if DMA_LENGTH = 0 then
@@ -3203,7 +3203,7 @@ begin
 				if DT_FF_DTACK_N = '0' then
 					DT_VBUS_SEL <= '0';
 					REG(20) <= DMA_LENGTH(15 downto 8);
-					REG(19) <= DMA_LENGTH(15 downto 8);
+					REG(19) <= DMA_LENGTH(7 downto 0);
 					REG(22) <= DMA_SOURCE(15 downto 8);
 					REG(21) <= DMA_SOURCE(7 downto 0);
 					if DMA_LENGTH = 0 then

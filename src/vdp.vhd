@@ -2404,7 +2404,9 @@ begin
 			if IN_VBL = '0' and DE = '1' then
 				if (HV_HCNT(3 downto 0) = "0100" and HV_HCNT(5 downto 4) /= "11" and HV_HCNT < H_DISP_WIDTH) or
 					(H40 = '1' and (HV_HCNT = 322 or HV_HCNT = 324 or HV_HCNT = 464)) or
-					(H40 = '0' and (HV_HCNT = 290 or HV_HCNT = 486 or HV_HCNT = 258 or HV_HCNT = 260))
+					(H40 = '0' and (HV_HCNT = 290 or HV_HCNT = 486 or HV_HCNT = 258 or HV_HCNT = 260)) or
+					(H40 = '1' and HV_VCNT = '1'&x"FF" and (HV_HCNT = 330 or HV_HCNT = 332)) or
+					(H40 = '0' and HV_VCNT = '1'&x"FF" and (HV_HCNT = 266 or HV_HCNT = 268))
 				then
 					FIFO_EN <= '1';
 				end if;
@@ -2925,7 +2927,12 @@ begin
 			end if;
 
 			if DMA_FILL_PRE = '1' and DMAF_SET_REQ = '1' and FIFO_RD_POS = FIFO_WR_POS then
-				DT_DMAF_DATA <= DT_WR_DATA;
+				if CODE(3 downto 0) = "0011" or CODE(3 downto 0) = "0101" then
+					-- CRAM, VSRAM fill gets its data from the next FIFO write position
+					DT_DMAF_DATA <= FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) );
+				else -- VRAM Write
+					DT_DMAF_DATA <= DT_WR_DATA;
+				end if;
 				DMA_FILL <= '1';
 				DMAF_SET_REQ <= '0';
 			end if;
@@ -2974,11 +2981,7 @@ begin
 			when DMA_FILL_CRAM =>
 				CRAM_WE_A <= '1';
 				CRAM_ADDR_A <= ADDR(6 downto 1);
-				-- CRAM fill gets its data from the next FIFO write position
-				CRAM_D_A(8 downto 6) <= FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) )(11 downto 9);
-				CRAM_D_A(5 downto 3) <= FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) )(7 downto 5);
-				CRAM_D_A(2 downto 0) <= FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) )(3 downto 1);
-				--CRAM_D_A <= DT_DMAF_DATA(11 downto 9) & DT_DMAF_DATA(7 downto 5) & DT_DMAF_DATA(3 downto 1);
+				CRAM_D_A <= DT_DMAF_DATA(11 downto 9) & DT_DMAF_DATA(7 downto 5) & DT_DMAF_DATA(3 downto 1);
 				ADDR <= ADDR + ADDR_STEP;
 				DMA_SOURCE <= DMA_SOURCE + ADDR_STEP;
 				DMA_LENGTH <= DMA_LENGTH - 1;
@@ -2986,9 +2989,8 @@ begin
 				
 			when DMA_FILL_VSRAM =>
 				if ADDR(6 downto 1) < 40 then
-					VSRAM( CONV_INTEGER(ADDR(6 downto 1)) ) <= FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) )(10 downto 0);
+					VSRAM( CONV_INTEGER(ADDR(6 downto 1)) ) <= DT_DMAF_DATA(10 downto 0);
 				end if;
-				--VSRAM( CONV_INTEGER(ADDR(6 downto 1)) ) <= DT_DMAF_DATA(10 downto 0);
 				ADDR <= ADDR + ADDR_STEP;
 				DMA_SOURCE <= DMA_SOURCE + ADDR_STEP;
 				DMA_LENGTH <= DMA_LENGTH - 1;
@@ -3033,7 +3035,7 @@ begin
 			
 			when DMA_FILL_LOOP =>
 				REG(20) <= DMA_LENGTH(15 downto 8);
-				REG(19) <= DMA_LENGTH(15 downto 8);
+				REG(19) <= DMA_LENGTH(7 downto 0);
 				REG(22) <= DMA_SOURCE(15 downto 8);
 				REG(21) <= DMA_SOURCE(7 downto 0);
 				if DMA_LENGTH = 0 then
@@ -3138,7 +3140,7 @@ begin
 			
 			when DMA_COPY_LOOP =>
 				REG(20) <= DMA_LENGTH(15 downto 8);
-				REG(19) <= DMA_LENGTH(15 downto 8);
+				REG(19) <= DMA_LENGTH(7 downto 0);
 				REG(22) <= DMA_SOURCE(15 downto 8);
 				REG(21) <= DMA_SOURCE(7 downto 0);
 				if DMA_LENGTH = 0 then
@@ -3203,7 +3205,7 @@ begin
 				if DT_FF_DTACK_N = '0' then
 					DT_VBUS_SEL <= '0';
 					REG(20) <= DMA_LENGTH(15 downto 8);
-					REG(19) <= DMA_LENGTH(15 downto 8);
+					REG(19) <= DMA_LENGTH(7 downto 0);
 					REG(22) <= DMA_SOURCE(15 downto 8);
 					REG(21) <= DMA_SOURCE(7 downto 0);
 					if DMA_LENGTH = 0 then

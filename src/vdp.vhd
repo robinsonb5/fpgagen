@@ -570,9 +570,6 @@ signal SP3E_ACTIVATE	: std_logic;
 type sp3c_t is (
 	SP3C_INIT,
 	SP3C_NEXT,
-	SP3C_Y_RD,
-	SP3C_CALC_XY,
-	SP3C_CALC_BASE,
 	SP3C_LOOP,
 	SP3C_PLOT_RD,
 	SP3C_PLOT,
@@ -590,21 +587,17 @@ signal SP3_DTACK_N	: std_logic;
 signal OBJ_PIX			: std_logic_vector(8 downto 0);
 signal OBJ_NO			: std_logic_vector(4 downto 0);
 
-signal OBJ_Y_OFS		: std_logic_vector(5 downto 0);
 signal OBJ_LINK			: std_logic_vector(6 downto 0);
 
 signal OBJ_HS			: std_logic_vector(1 downto 0);
 signal OBJ_VS			: std_logic_vector(1 downto 0);
-signal OBJ_X			: std_logic_vector(8 downto 0);
 signal OBJ_MASKED		: std_logic;
 signal OBJ_VALID_X	: std_logic;
 signal OBJ_DOT_OVERFLOW	: std_logic;
 signal OBJ_X_OFS		: std_logic_vector(4 downto 0);
 signal OBJ_PRI			: std_logic;
 signal OBJ_PAL			: std_logic_vector(1 downto 0);
-signal OBJ_VF			: std_logic;
 signal OBJ_HF			: std_logic;
-signal OBJ_PAT			: std_logic_vector(10 downto 0);
 signal OBJ_POS			: std_logic_vector(8 downto 0);
 signal OBJ_TILEBASE		: std_logic_vector(14 downto 0);
 signal OBJ_COLNO		: std_logic_vector(3 downto 0);
@@ -1988,6 +1981,14 @@ end process;
 -- SPRITE ENGINE - PART THREE
 ----------------------------------------------------------------
 process( RST_N, MEMCLK )
+variable obj_vs_var	: std_logic_vector(1 downto 0);
+variable obj_hs_var : std_logic_vector(1 downto 0);
+variable obj_hf_var	: std_logic;
+variable obj_vf_var	: std_logic;
+variable obj_x_var	: std_logic_vector(8 downto 0);
+variable obj_y_ofs_var: std_logic_vector(5 downto 0);
+variable obj_pat_var	: std_logic_vector(10 downto 0);
+
 -- synthesis translate_off
 file F		: text open write_mode is "sp3_dbg.out";
 variable L	: line;
@@ -2022,61 +2023,45 @@ begin
 			when SP3C_NEXT =>
 
 				OBJ_COLINFO_WE_A <= '0';
-				SP3C <= SP3C_Y_RD;
+
+				SP3C <= SP3C_LOOP;
 				if OBJ_NO = OBJ_IDX	then
 					SP3C <= SP3C_DONE;
 				end if;
 
-			when SP3C_Y_RD =>
-				OBJ_VS <= OBJ_SPINFO_Q(7 downto 6);
-				OBJ_HS <= OBJ_SPINFO_Q(9 downto 8);
-				OBJ_X <= OBJ_SPINFO_Q(18 downto 10);
+				obj_vs_var := OBJ_SPINFO_Q(7 downto 6);
+				OBJ_VS <= obj_vs_var;
+				obj_hs_var := OBJ_SPINFO_Q(9 downto 8);
+				OBJ_HS <= obj_hs_var;
+				obj_x_var := OBJ_SPINFO_Q(18 downto 10);
 				if LSM = "11" then
-					OBJ_PAT <= OBJ_SPINFO_Q(28 downto 19) & '0';
-					OBJ_Y_OFS <= OBJ_SPINFO_Q(5 downto 0);
+					obj_pat_var := OBJ_SPINFO_Q(28 downto 19) & '0';
+					obj_y_ofs_var := OBJ_SPINFO_Q(5 downto 0);
 				else
-					OBJ_PAT <= OBJ_SPINFO_Q(29 downto 19);
-					OBJ_Y_OFS <= '0' & OBJ_SPINFO_Q(4 downto 0);
+					obj_pat_var := OBJ_SPINFO_Q(29 downto 19);
+					obj_y_ofs_var := '0' & OBJ_SPINFO_Q(4 downto 0);
 				end if;
-				OBJ_HF <= OBJ_SPINFO_Q(30);
-				OBJ_VF <= OBJ_SPINFO_Q(31);
+				obj_hf_var := OBJ_SPINFO_Q(30);
+				OBJ_HF <= obj_hf_var;
+				obj_vf_var := OBJ_SPINFO_Q(31);
 				OBJ_PAL <= OBJ_SPINFO_Q(33 downto 32);
 				OBJ_PRI <= OBJ_SPINFO_Q(34);
 
 				OBJ_SPINFO_ADDR_RD <= OBJ_NO + 1;
 				OBJ_NO <= OBJ_NO + 1;
 
-				SP3C <= SP3C_CALC_XY;
-
-			when SP3C_CALC_XY =>
-				-- synthesis translate_off
-				write(L, string'("OBJ NO="));
-				hwrite(L, "000" & OBJ_NO);
-				write(L, string'(" VCNT="));
-				hwrite(L, "0000000" & HV_VCNT);
-				write(L, string'(" SP2_Y="));
-				hwrite(L, "0000000" & SP2_Y);
-				write(L, string'(" Y OFS= "));
-				hwrite(L, "00" & OBJ_Y_OFS);
-				write(L, string'(" VS = "));
-				hwrite(L, "000000" & OBJ_VS);
-				write(L, string'(" HS = "));
-				hwrite(L, "000000" & OBJ_HS);
-				writeline(F,L);
-				-- synthesis translate_on
-
 				-- sprite masking algorithm as implemented by gens-ii
-				if OBJ_X = "000000000" and OBJ_VALID_X = '1' then
+				if obj_x_var = "000000000" and OBJ_VALID_X = '1' then
 					OBJ_MASKED <= '1';
 				end if;
 
-				if OBJ_X /= "000000000" then
+				if obj_x_var /= "000000000" then
 					OBJ_VALID_X <= '1';
 				end if;
 
 				OBJ_X_OFS <= "00000";
-				if OBJ_HF = '1' then
-					case OBJ_HS is
+				if obj_hf_var = '1' then
+					case obj_hs_var is
 					when "00" =>	-- 8 pixels
 						OBJ_X_OFS <= "00111";
 					when "01" =>	-- 16 pixels
@@ -2088,38 +2073,34 @@ begin
 					end case;
 				end if;
 
-				if LSM = "11" and OBJ_VF = '1' then
-					case OBJ_VS is
+				if LSM = "11" and obj_vf_var = '1' then
+					case obj_vs_var is
 					when "00" =>	-- 2*8 pixels
-						OBJ_Y_OFS <= "00" & not(OBJ_Y_OFS(3 downto 0));
+						obj_y_ofs_var := "00" & not(obj_y_ofs_var(3 downto 0));
 					when "01" =>	-- 2*16 pixels
-						OBJ_Y_OFS <= "0" & not(OBJ_Y_OFS(4 downto 0));
+						obj_y_ofs_var := "0" & not(obj_y_ofs_var(4 downto 0));
 					when "11" =>	-- 2*32 pixels
-						OBJ_Y_OFS <= not(OBJ_Y_OFS(5 downto 0));
+						obj_y_ofs_var := not(obj_y_ofs_var(5 downto 0));
 					when others =>	-- 2*24 pixels
-						OBJ_Y_OFS <= "101111" - OBJ_Y_OFS; -- 47-obj_y_ofs
+						obj_y_ofs_var := "101111" - obj_y_ofs_var; -- 47-obj_y_ofs
 					end case;
 				end if;
 
-				if LSM /= "11" and OBJ_VF = '1' then
-					case OBJ_VS is
+				if LSM /= "11" and obj_vf_var = '1' then
+					case obj_vs_var is
 					when "00" =>	-- 8 pixels
-						OBJ_Y_OFS <= "000" & not(OBJ_Y_OFS(2 downto 0));
+						obj_y_ofs_var := "000" & not(obj_y_ofs_var(2 downto 0));
 					when "01" =>	-- 16 pixels
-						OBJ_Y_OFS <= "00" & not(OBJ_Y_OFS(3 downto 0));
+						obj_y_ofs_var := "00" & not(obj_y_ofs_var(3 downto 0));
 					when "11" =>	-- 32 pixels
-						OBJ_Y_OFS <= "0" & not(OBJ_Y_OFS(4 downto 0));
+						obj_y_ofs_var := "0" & not(obj_y_ofs_var(4 downto 0));
 					when others =>	-- 24 pixels
-						OBJ_Y_OFS(4 downto 0) <= "10111" - OBJ_Y_OFS(4 downto 0);
+						obj_y_ofs_var := "010111" - obj_y_ofs_var(4 downto 0);
 					end case;
 				end if;
 
-				SP3C <= SP3C_CALC_BASE;
-
-			when SP3C_CALC_BASE =>
-				OBJ_POS <= OBJ_X - "010000000";
-				OBJ_TILEBASE <= (OBJ_PAT & "0000") + ("000" & OBJ_Y_OFS & "0");
-				SP3C <= SP3C_LOOP;
+				OBJ_POS <= obj_x_var - "010000000";
+				OBJ_TILEBASE <= (obj_pat_var & "0000") + ("000" & obj_y_ofs_var & "0");
 
 			-- loop over all sprite pixels on the current line
 			when SP3C_LOOP =>
@@ -2245,7 +2226,7 @@ begin
 					when others =>
 						OBJ_COLNO <= SP3_VRAM_DO(3 downto 0);
 					end case;
-					SP3C <= SP3C_PLOT_RD;
+					SP3C <= SP3C_PLOT;
 				end if;
 
 			when others => -- SP3C_DONE
@@ -2253,6 +2234,8 @@ begin
 
 				OBJ_COLINFO_WE_A <= '0';
 				OBJ_COLINFO_ADDR_A <= (others => '0');
+
+				OBJ_SPINFO_ADDR_RD <= (others => '0');
 
 				if SP3E_ACTIVATE = '1' then
 					SP3C <= SP3C_INIT;

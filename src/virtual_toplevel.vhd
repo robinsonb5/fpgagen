@@ -344,10 +344,11 @@ signal FM_DI			: std_logic_vector(7 downto 0);
 signal FM_DO			: std_logic_vector(7 downto 0);
 signal FM_CLKOUT		: std_logic;
 signal FM_SAMPLE		: std_logic;
-signal FM_LEFT			: std_logic_vector(8 downto 0);
-signal FM_RIGHT			: std_logic_vector(8 downto 0);
-signal FM_MUX_LEFT		: std_logic_vector(8 downto 0);
-signal FM_MUX_RIGHT		: std_logic_vector(8 downto 0);
+signal FM_LEFT			: std_logic_vector(15 downto 0);
+signal FM_RIGHT		: std_logic_vector(15 downto 0);
+signal FM_MUX_LEFT	: std_logic_vector(15 downto 0);
+signal FM_MUX_RIGHT	: std_logic_vector(15 downto 0);
+
 signal FM_ENABLE		: std_logic;
 
 -- PSG
@@ -787,27 +788,26 @@ port map(
 	rst		=> not T80_RESET_N,
 	clk		=> MCLK,
 	cen		=> FCLK_EN,
-	limiter_en	=> '1',
 	addr	=> FM_A,
 	cs_n	=> '0',
 	wr_n	=> FM_RNW,
 	din		=> FM_DI,
 	dout	=> FM_DO,
 
-	mux_left	=> FM_LEFT,
-	mux_right=> FM_RIGHT
+	snd_left  => FM_LEFT,
+	snd_right => FM_RIGHT
 );
 
 -- Audio control
 PSG_ENABLE <= not SW(3);
-FM_ENABLE <= not SW(4);
+FM_ENABLE  <= not SW(4);
 
-FM_MUX_LEFT  <= FM_LEFT  when FM_ENABLE = '1' else "000000000";
-FM_MUX_RIGHT <= FM_RIGHT when FM_ENABLE = '1' else "000000000";
+FM_MUX_LEFT  <= FM_LEFT  when FM_ENABLE = '1' else "0000000000000000";
+FM_MUX_RIGHT <= FM_RIGHT when FM_ENABLE = '1' else "0000000000000000";
 PSG_MUX_SND <= PSG_SND when PSG_ENABLE = '1' else "000000";
 
-DAC_LDATA <= std_logic_vector(signed(FM_MUX_LEFT(8)  & FM_MUX_LEFT &"000000") + signed("00"&PSG_MUX_SND&"000000"));
-DAC_RDATA <= std_logic_vector(signed(FM_MUX_RIGHT(8) & FM_MUX_RIGHT&"000000") + signed("00"&PSG_MUX_SND&"000000"));
+DAC_LDATA <= std_logic_vector(signed(FM_MUX_LEFT(15)  & FM_MUX_LEFT(15 downto 1)) + signed("00"&PSG_MUX_SND&"000000"));
+DAC_RDATA <= std_logic_vector(signed(FM_MUX_RIGHT(15) & FM_MUX_RIGHT(15 downto 1)) + signed("00"&PSG_MUX_SND&"000000"));
 
 -- #############################################################################
 -- #############################################################################

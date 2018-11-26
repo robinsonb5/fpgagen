@@ -268,6 +268,7 @@ signal FX68_SRAM_D			: std_logic_vector(15 downto 0);
 signal FX68_SRAM_DTACK_N	: std_logic;
 
 signal SSF2_MAP             : std_logic_vector(8*6-1 downto 0);
+signal SSF2_USE_MAP         : std_logic;
 signal ROM_PAGE             : std_logic_vector(2 downto 0);
 signal ROM_PAGE_A           : std_logic_vector(4 downto 0); -- 16 MB only (original mapper: max. 32)
 
@@ -1403,6 +1404,7 @@ process( MRST_N, MCLK )
 begin
     if rising_edge( MCLK ) then
         if ( MRST_N = '0' ) then
+            SSF2_USE_MAP <= '0';
             SSF2_MAP( 5 downto  0) <= "00"&x"0";
             SSF2_MAP(11 downto  6) <= "00"&x"1";
             SSF2_MAP(17 downto 12) <= "00"&x"2";
@@ -1412,6 +1414,7 @@ begin
             SSF2_MAP(41 downto 36) <= "00"&x"6";
             SSF2_MAP(47 downto 42) <= "00"&x"7";
         elsif FX68_A(23 downto 4) = x"a130f" and FX68_SEL = '1' and FX68_RNW = '0' then
+            SSF2_USE_MAP <= '1';
             case FX68_A(3 downto 1) is
             when "000" =>
                 null; -- always 0;
@@ -1438,7 +1441,10 @@ ROM_PAGE <= FX68_A(21 downto 19) when FX68_FLASH_SEL = '1' and FX68_DTACK_N = '1
           else BAR(21 downto 19) when T80_FLASH_SEL = '1' and T80_FLASH_DTACK_N = '1'
           else VBUS_ADDR(21 downto 19);
 
-ROM_PAGE_A <= SSF2_MAP(4 downto 0) when ROM_PAGE = "000" else
+ROM_PAGE_A <= FX68_A(23 downto 19) when FX68_FLASH_SEL = '1' and FX68_DTACK_N = '1' and SSF2_USE_MAP = '0' else
+              BAR(23 downto 19) when T80_FLASH_SEL = '1' and T80_FLASH_DTACK_N = '1' and SSF2_USE_MAP = '0' else
+              VBUS_ADDR(23 downto 19) when SSF2_USE_MAP = '0' else
+              SSF2_MAP(4 downto 0) when ROM_PAGE = "000" else
               SSF2_MAP(10 downto 6) when ROM_PAGE = "001" else
               SSF2_MAP(16 downto 12) when ROM_PAGE = "010" else
               SSF2_MAP(22 downto 18) when ROM_PAGE = "011" else
@@ -1448,11 +1454,15 @@ ROM_PAGE_A <= SSF2_MAP(4 downto 0) when ROM_PAGE = "000" else
               SSF2_MAP(46 downto 42);
 
 -- FLASH (SDRAM) CONTROL
-FX68_FLASH_SEL <= '1' when FX68_A(23 downto 22) = "00" and FX68_SEL = '1' and
+-- 68000: 000000 - 9fffff
+-- Z80  : 000000 - 9fffff
+-- DMA  : 000000 - 9fffff
+
+FX68_FLASH_SEL <= '1' when (FX68_A(23) = '0' or FX68_A(23 downto 21) = "100") and FX68_SEL = '1' and
 	FX68_RNW = '1' and FX68_SRAM_SEL = '0' and CART_EN = '1' else '0';
-T80_FLASH_SEL <= '1' when T80_A(15) = '1' and BAR(23 downto 22) = "00" and
-	T80_MREQ_N = '0' and T80_RD_N = '0' else '0';
-DMA_FLASH_SEL <= '1' when VBUS_ADDR(23 downto 22) = "00" and VBUS_SEL = '1' else '0';
+T80_FLASH_SEL <= '1' when T80_A(15) = '1' and T80_MREQ_N = '0' and T80_RD_N = '0' and (BAR(23) = '0' or BAR(23 downto 21) = "100")
+	else '0';
+DMA_FLASH_SEL <= '1' when (VBUS_ADDR(23) = '0' or VBUS_ADDR(23 downto 21) = "100") and VBUS_SEL = '1' else '0';
 
 process( MRST_N, MCLK )
 begin

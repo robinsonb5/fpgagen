@@ -1523,7 +1523,7 @@ begin
 					end if;
 					BGAC <= BGAC_LOOP;
 				end if;
-						
+
 			when BGAC_LOOP =>
 				if BGA_POS(9) = '0' and WIN_H = '0' and WRIGT = '1' 
 					and BGA_POS(3 downto 0) = "0000" and BGA_POS(8 downto 4) = WHP 
@@ -1531,10 +1531,13 @@ begin
 					WIN_H <= not WIN_H;
 					BGAC <= BGAC_CALC_Y;				
 				elsif BGA_POS(9) = '0' and WIN_H = '1' and WRIGT = '0' 
-					and BGA_POS(3 downto 0) = "0000" and BGA_POS(8 downto 4) = WHP
+				--	and BGA_POS(3 downto 0) = "0000" and BGA_POS(8 downto 4) = WHP
+					and BGA_X(2 downto 0) = "000" and BGA_POS(8 downto 4) = WHP
 				then
 					WIN_H <= not WIN_H;
-					BGAC <= BGAC_CALC_Y;
+					if WIN_V = '0' then
+						BGAC <= BGAC_CALC_Y;
+					end if;
 				elsif BGA_POS(1 downto 0) = "00" and BGA_SEL = '0' and (WIN_H = '1' or WIN_V = '1') then
 					BGA_COLINFO_WE_A <= '0';
 					if BGA_POS(2) = '0' then

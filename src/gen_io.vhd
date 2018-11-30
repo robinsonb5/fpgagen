@@ -110,6 +110,9 @@ signal REG			: std_logic_vector(3 downto 0);
 signal WD			: std_logic_vector(7 downto 0);
 signal RD			: std_logic_vector(7 downto 0);
 
+signal THA			: std_logic;
+signal THB			: std_logic;
+
 signal JCNT1		: integer range 0 to 3;
 signal JCNT2		: integer range 0 to 3;
 
@@ -170,6 +173,12 @@ begin
 			JTMR2 <= JTMR2 + 1;
 		end if;
 
+		THA <= DATA(6) or not CTLA(6);
+		if THA = '0' and (DATA(6) or not CTLA(6)) = '1' then JTMR1 <= 0; JCNT1 <= JCNT1 + 1; end if;
+
+		THB <= DATB(6) or not CTLB(6);
+		if THB = '0' and (DATB(6) or not CTLB(6)) = '1' then JTMR2 <= 0; JCNT2 <= JCNT2 + 1; end if;
+
 		if SEL = '0' then
 			FF_DTACK_N <= '1';
 		elsif SEL = '1' and FF_DTACK_N = '1' then
@@ -181,14 +190,8 @@ begin
 					VERS_D <= WD;
 				when x"1" =>
 					DATA <= WD;
-					if CTLA(6) = '1' then 
-						if(DATA(6)='0' and WD(6)='1') then JTMR1 <= 0; JCNT1 <= JCNT1 + 1; end if;
-					end if;
 				when x"2" =>
 					DATB <= WD;
-					if CTLB(6) = '1' then
-						if(DATB(6)='0' and WD(6)='1') then JTMR2 <= 0; JCNT2 <= JCNT2 + 1; end if;
-					end if;
 				when x"3" =>
 					DATC <= WD;
 				when x"4" =>
@@ -233,8 +236,8 @@ begin
 							if CTLA(1) = '0' then RD(1) <= P1_DOWN;  end if;
 							if CTLA(0) = '0' then RD(0) <= P1_UP;    end if;
 						else
-							if CTLA(5) = '0' then RD(5) <= '1';      end if;
-							if CTLA(4) = '0' then RD(4) <= '1';      end if;
+							if CTLA(5) = '0' then RD(5) <= P1_C;     end if;
+							if CTLA(4) = '0' then RD(4) <= P1_B;     end if;
 							if CTLA(3) = '0' then RD(3) <= P1_MODE;  end if;
 							if CTLA(2) = '0' then RD(2) <= P1_X;     end if;
 							if CTLA(1) = '0' then RD(1) <= P1_Y;     end if;
@@ -276,8 +279,8 @@ begin
 							if CTLB(1) = '0' then RD(1) <= P2_DOWN;  end if;
 							if CTLB(0) = '0' then RD(0) <= P2_UP;    end if;
 						else
-							if CTLB(5) = '0' then RD(5) <= '1';      end if;
-							if CTLB(4) = '0' then RD(4) <= '1';      end if;
+							if CTLB(5) = '0' then RD(5) <= P2_C;     end if;
+							if CTLB(4) = '0' then RD(4) <= P2_B;     end if;
 							if CTLB(3) = '0' then RD(3) <= P2_MODE;  end if;
 							if CTLB(2) = '0' then RD(2) <= P2_X;     end if;
 							if CTLB(1) = '0' then RD(1) <= P2_Y;     end if;

@@ -502,12 +502,18 @@ signal OBJ_SPINFO_Q			: std_logic_vector(34 downto 0);
 
 signal OBJ_COLINFO_ADDR_A	: std_logic_vector(8 downto 0);
 signal OBJ_COLINFO_ADDR_B	: std_logic_vector(8 downto 0);
-signal OBJ_COLINFO_D_A		: std_logic_vector(6 downto 0);
 signal OBJ_COLINFO_D_B		: std_logic_vector(6 downto 0);
 signal OBJ_COLINFO_WE_A		: std_logic;
 signal OBJ_COLINFO_WE_B		: std_logic;
 signal OBJ_COLINFO_Q_A		: std_logic_vector(6 downto 0);
-signal OBJ_COLINFO_Q_B		: std_logic_vector(6 downto 0);
+signal OBJ_COLINFO_ADDR_RD_SP3  : std_logic_vector(8 downto 0);
+signal OBJ_COLINFO_ADDR_RD_REND : std_logic_vector(8 downto 0);
+signal OBJ_COLINFO_ADDR_WR_SP3  : std_logic_vector(8 downto 0);
+signal OBJ_COLINFO_ADDR_WR_REND : std_logic_vector(8 downto 0);
+signal OBJ_COLINFO_WE_SP3       : std_logic;
+signal OBJ_COLINFO_WE_REND      : std_logic;
+signal OBJ_COLINFO_D_SP3        : std_logic_vector(6 downto 0);
+signal OBJ_COLINFO_D_REND       : std_logic_vector(6 downto 0);
 
 -- PART 1
 signal SP1E_ACTIVATE	: std_logic;
@@ -571,7 +577,6 @@ type sp3c_t is (
 	SP3C_INIT,
 	SP3C_NEXT,
 	SP3C_LOOP,
-	SP3C_PLOT_RD,
 	SP3C_PLOT,
 	SP3C_TILE_RD,
 	SP3C_DONE
@@ -580,6 +585,7 @@ signal SP3C		: SP3C_t;
 
 signal SP3_VRAM_ADDR	: std_logic_vector(14 downto 0);
 signal SP3_VRAM_DO	: std_logic_vector(15 downto 0);
+signal SP3_VRAM_DO_SAVE	: std_logic_vector(15 downto 0);
 signal SP3_VRAM_DO_REG	: std_logic_vector(15 downto 0);
 signal SP3_SEL		: std_logic;
 signal SP3_DTACK_N	: std_logic;
@@ -600,7 +606,6 @@ signal OBJ_PAL			: std_logic_vector(1 downto 0);
 signal OBJ_HF			: std_logic;
 signal OBJ_POS			: std_logic_vector(8 downto 0);
 signal OBJ_TILEBASE		: std_logic_vector(14 downto 0);
-signal OBJ_COLNO		: std_logic_vector(3 downto 0);
 
 ----------------------------------------------------------------
 -- VIDEO OUTPUT
@@ -667,13 +672,19 @@ port map(
 	address_a	=> OBJ_COLINFO_ADDR_A,
 	address_b	=> OBJ_COLINFO_ADDR_B,
 	clock		=> MEMCLK,
-	data_a		=> OBJ_COLINFO_D_A,
+	data_a		=> (others => '0'),
 	data_b		=> OBJ_COLINFO_D_B,
 	wren_a		=> OBJ_COLINFO_WE_A,
 	wren_b		=> OBJ_COLINFO_WE_B,
 	q_a			=> OBJ_COLINFO_Q_A,
-	q_b			=> OBJ_COLINFO_Q_B
+	q_b			=> open
 );
+
+OBJ_COLINFO_ADDR_A <= OBJ_COLINFO_ADDR_RD_SP3 when SP3C /= SP3C_DONE else OBJ_COLINFO_ADDR_RD_REND;
+OBJ_COLINFO_ADDR_B <= OBJ_COLINFO_ADDR_WR_SP3 when SP3C /= SP3C_DONE else OBJ_COLINFO_ADDR_WR_REND;
+OBJ_COLINFO_WE_A <= '0';
+OBJ_COLINFO_WE_B <= OBJ_COLINFO_WE_SP3 when SP3C /= SP3C_DONE else OBJ_COLINFO_WE_REND;
+OBJ_COLINFO_D_B <= OBJ_COLINFO_D_SP3 when SP3C /= SP3C_DONE else OBJ_COLINFO_D_REND;
 
 obj_cache_y_l : entity work.DualPortRAM
 generic map (
@@ -774,7 +785,7 @@ generic map (
 	databits	=> 35
 )
 port map(
-	clock		=> MEMCLK,
+	clock		=> CLK,
 	data_a		=> (others => '0'),
 	data_b		=> OBJ_SPINFO_D,
 	address_a	=> OBJ_SPINFO_ADDR_RD,
@@ -1983,7 +1994,7 @@ end process;
 ----------------------------------------------------------------
 -- SPRITE ENGINE - PART THREE
 ----------------------------------------------------------------
-process( RST_N, MEMCLK )
+process( RST_N, CLK )
 variable obj_vs_var	: std_logic_vector(1 downto 0);
 variable obj_hs_var : std_logic_vector(1 downto 0);
 variable obj_hf_var	: std_logic;
@@ -1991,6 +2002,7 @@ variable obj_vf_var	: std_logic;
 variable obj_x_var	: std_logic_vector(8 downto 0);
 variable obj_y_ofs_var: std_logic_vector(5 downto 0);
 variable obj_pat_var	: std_logic_vector(10 downto 0);
+variable obj_color	: std_logic_vector(3 downto 0);
 
 -- synthesis translate_off
 file F		: text open write_mode is "sp3_dbg.out";
@@ -2000,15 +2012,13 @@ begin
 	if RST_N = '0' then
 		SP3_SEL <= '0';
 		SP3C <= SP3C_DONE;
-		OBJ_COLINFO_ADDR_A <= (others => '0');
-		OBJ_COLINFO_WE_A <= '0';
 
 		OBJ_DOT_OVERFLOW <= '0';
 
 		SCOL_SET <= '0';
 		SP3_SOVR_SET <= '0';
 
-	elsif rising_edge(MEMCLK) then
+	elsif rising_edge(CLK) then
 
 		SCOL_SET <= '0';
 		SP3_SOVR_SET <= '0';
@@ -2025,7 +2035,7 @@ begin
 
 			when SP3C_NEXT =>
 
-				OBJ_COLINFO_WE_A <= '0';
+				OBJ_COLINFO_WE_SP3 <= '0';
 
 				SP3C <= SP3C_LOOP;
 				if OBJ_NO = OBJ_IDX	then
@@ -2105,103 +2115,118 @@ begin
 				OBJ_POS <= obj_x_var - "010000000";
 				OBJ_TILEBASE <= (obj_pat_var & "0000") + ("000" & obj_y_ofs_var & "0");
 
-			-- loop over all sprite pixels on the current line
+			-- loop over all tiles of the sprite
 			when SP3C_LOOP =>
-				OBJ_COLINFO_WE_A <= '0';
-				OBJ_COLINFO_ADDR_A <= OBJ_POS;
-				if (OBJ_X_OFS(1 downto 0) = "00" and OBJ_HF = '0' and SP3_SEL = '0')
-				or (OBJ_X_OFS(1 downto 0) = "11" and OBJ_HF = '1' and SP3_SEL = '0')
-				then
-					if LSM = "11" then
-						case OBJ_VS is
-						when "00" =>	-- 2*8 pixels
-							SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "0000" & OBJ_X_OFS(2));
-						when "01" =>	-- 2*16 pixels
-							SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "00000" & OBJ_X_OFS(2));
-						when "11" =>	-- 2*32 pixels
-							SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "000000" & OBJ_X_OFS(2));
-						when others =>	-- 2*24 pixels
-							case OBJ_X_OFS(4 downto 3) is
-							when "00" =>
-								SP3_VRAM_ADDR <= OBJ_TILEBASE + OBJ_X_OFS(2);
-							when "01" =>
-								SP3_VRAM_ADDR <= OBJ_TILEBASE + ("00110000" & OBJ_X_OFS(2));
-							when "11" =>
-								SP3_VRAM_ADDR <= OBJ_TILEBASE + ("10010000" & OBJ_X_OFS(2));
-							when others =>
-								SP3_VRAM_ADDR <= OBJ_TILEBASE + ("01100000" & OBJ_X_OFS(2));
-							end case;
+				OBJ_COLINFO_WE_SP3 <= '0';
+				OBJ_COLINFO_ADDR_RD_SP3 <= OBJ_POS;
+
+				if LSM = "11" then
+					case OBJ_VS is
+					when "00" =>	-- 2*8 pixels
+						SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "0000" & OBJ_X_OFS(2));
+					when "01" =>	-- 2*16 pixels
+						SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "00000" & OBJ_X_OFS(2));
+					when "11" =>	-- 2*32 pixels
+						SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "000000" & OBJ_X_OFS(2));
+					when others =>	-- 2*24 pixels
+						case OBJ_X_OFS(4 downto 3) is
+						when "00" =>
+							SP3_VRAM_ADDR <= OBJ_TILEBASE + OBJ_X_OFS(2);
+						when "01" =>
+							SP3_VRAM_ADDR <= OBJ_TILEBASE + ("00110000" & OBJ_X_OFS(2));
+						when "11" =>
+							SP3_VRAM_ADDR <= OBJ_TILEBASE + ("10010000" & OBJ_X_OFS(2));
+						when others =>
+							SP3_VRAM_ADDR <= OBJ_TILEBASE + ("01100000" & OBJ_X_OFS(2));
 						end case;
-					else
-						case OBJ_VS is
-						when "00" =>	-- 8 pixels
-							SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "000" & OBJ_X_OFS(2));
-						when "01" =>	-- 16 pixels
-							SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "0000" & OBJ_X_OFS(2));
-						when "11" =>	-- 32 pixels
-							SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "00000" & OBJ_X_OFS(2));
-						when others =>	-- 24 pixels
-							case OBJ_X_OFS(4 downto 3) is
-							when "00" =>
-								SP3_VRAM_ADDR <= OBJ_TILEBASE + OBJ_X_OFS(2);
-							when "01" =>
-								SP3_VRAM_ADDR <= OBJ_TILEBASE + ("0011000" & OBJ_X_OFS(2));
-							when "11" =>
-								SP3_VRAM_ADDR <= OBJ_TILEBASE + ("1001000" & OBJ_X_OFS(2));
-							when others =>
-								SP3_VRAM_ADDR <= OBJ_TILEBASE + ("0110000" & OBJ_X_OFS(2));
-							end case;
-						end case;
-					end if;
-					
-					SP3_SEL <= '1';
-					SP3C <= SP3C_TILE_RD;
-				else
-					case OBJ_X_OFS(1 downto 0) is
-					when "00" =>
-						OBJ_COLNO <= SP3_VRAM_DO(15 downto 12);
-					when "01" =>
-						OBJ_COLNO <= SP3_VRAM_DO(11 downto 8);
-					when "10" =>
-						OBJ_COLNO <= SP3_VRAM_DO(7 downto 4);
-					when others =>
-						OBJ_COLNO <= SP3_VRAM_DO(3 downto 0);
 					end case;
-					SP3C <= SP3C_PLOT_RD;
+				else
+					case OBJ_VS is
+					when "00" =>	-- 8 pixels
+						SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "000" & OBJ_X_OFS(2));
+					when "01" =>	-- 16 pixels
+						SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "0000" & OBJ_X_OFS(2));
+					when "11" =>	-- 32 pixels
+						SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "00000" & OBJ_X_OFS(2));
+					when others =>	-- 24 pixels
+						case OBJ_X_OFS(4 downto 3) is
+						when "00" =>
+							SP3_VRAM_ADDR <= OBJ_TILEBASE + OBJ_X_OFS(2);
+						when "01" =>
+							SP3_VRAM_ADDR <= OBJ_TILEBASE + ("0011000" & OBJ_X_OFS(2));
+						when "11" =>
+							SP3_VRAM_ADDR <= OBJ_TILEBASE + ("1001000" & OBJ_X_OFS(2));
+						when others =>
+							SP3_VRAM_ADDR <= OBJ_TILEBASE + ("0110000" & OBJ_X_OFS(2));
+						end case;
+					end case;
 				end if;
 
-				-- limit total sprite pixels per line
-				if OBJ_PIX = H_DISP_WIDTH then
-					OBJ_DOT_OVERFLOW <= '1';
-					SP3C <= SP3C_DONE;
-					SP3_SOVR_SET <= '1';
-				end if;
+				SP3_SEL <= '1';
+				SP3C <= SP3C_TILE_RD;
 
-			when SP3C_PLOT_RD =>
-				SP3C <= SP3C_PLOT;
-				
+			-- loop over all sprite pixels on the current line
 			when SP3C_PLOT =>
-				if OBJ_POS < 320 then
+			  if ((OBJ_X_OFS(2 downto 0) = "011" and OBJ_HF = '0') or
+				  (OBJ_X_OFS(2 downto 0) = "100" and OBJ_HF = '1')) and early_ack_sp3 /= '0'
+			  then
+				null; --wait for the pre-fetched value
+			  else
+				-- pre-fetch the 2nd word of the tile
+				if (OBJ_X_OFS(2 downto 0) = "000" and OBJ_HF = '0') then
+					SP3_VRAM_ADDR <= SP3_VRAM_ADDR + 1;
+					SP3_SEL <= '1';
+				elsif (OBJ_X_OFS(2 downto 0) = "111" and OBJ_HF = '1') then
+					SP3_VRAM_ADDR <= SP3_VRAM_ADDR - 1;
+					SP3_SEL <= '1';
+				end if;
 
+				-- prepare to use the pre-fetched value for the next 4 pixels
+				if (OBJ_X_OFS(2 downto 0) = "011" and OBJ_HF = '0') or
+				   (OBJ_X_OFS(2 downto 0) = "100" and OBJ_HF = '1') then
+					SP3_SEL <= '0';
+					SP3_VRAM_DO_SAVE <= SP3_VRAM_DO;
+				end if;
+
+				case OBJ_X_OFS(1 downto 0) is
+				when "00" =>
+					obj_color := SP3_VRAM_DO_SAVE(15 downto 12);
+				when "01" =>
+					obj_color := SP3_VRAM_DO_SAVE(11 downto 8);
+				when "10" =>
+					obj_color := SP3_VRAM_DO_SAVE(7 downto 4);
+				when others =>
+					obj_color := SP3_VRAM_DO_SAVE(3 downto 0);
+				end case;
+
+				OBJ_COLINFO_WE_SP3 <= '0';
+				if OBJ_POS < 320 then
 					if OBJ_COLINFO_Q_A(3 downto 0) = "0000" then
 						if OBJ_MASKED = '0' then
-							OBJ_COLINFO_WE_A <= '1';
-							OBJ_COLINFO_D_A <= OBJ_PRI & OBJ_PAL & OBJ_COLNO;
+							OBJ_COLINFO_WE_SP3 <= '1';
+							OBJ_COLINFO_ADDR_WR_SP3 <= OBJ_POS;
+							OBJ_COLINFO_D_SP3 <= OBJ_PRI & OBJ_PAL & obj_color;
 						end if;
 					else
-						if OBJ_COLNO /= "0000" then
+						if obj_color /= "0000" then
 							SCOL_SET <= '1';
 						end if;
 					end if;
 				end if;
+
 				OBJ_POS <= OBJ_POS + 1;
 				OBJ_PIX <= OBJ_PIX + 1;
+				OBJ_COLINFO_ADDR_RD_SP3 <= OBJ_POS + 1;
 				if OBJ_HF = '1' then
 					if OBJ_X_OFS = "00000" then
 						SP3C <= SP3C_NEXT;
 					else
 						OBJ_X_OFS <= OBJ_X_OFS - 1;
-						SP3C <= SP3C_LOOP;
+						if OBJ_X_OFS(2 downto 0) = "000" then
+							SP3C <= SP3C_LOOP; -- fetch the next tile
+						else
+							SP3C <= SP3C_PLOT;
+						end if;
 					end if;
 				else
 					if (OBJ_X_OFS = "00111" and OBJ_HS = "00")
@@ -2212,31 +2237,35 @@ begin
 						SP3C <= SP3C_NEXT;
 					else
 						OBJ_X_OFS <= OBJ_X_OFS + 1;
-						SP3C <= SP3C_LOOP;
+						if OBJ_X_OFS(2 downto 0) = "111" then
+							SP3C <= SP3C_LOOP; -- fetch the next tile
+						else
+							SP3C <= SP3C_PLOT;
+						end if;
 					end if;
 				end if;
-			
+
+				-- limit total sprite pixels per line
+				if OBJ_PIX = H_DISP_WIDTH then
+					OBJ_DOT_OVERFLOW <= '1';
+					SP3C <= SP3C_DONE;
+					SP3_SOVR_SET <= '1';
+				end if;
+			  end if;
+
 			when SP3C_TILE_RD =>
 				if early_ack_sp3='0' then
 					SP3_SEL <= '0';
-					case OBJ_X_OFS(1 downto 0) is
-					when "00" =>
-						OBJ_COLNO <= SP3_VRAM_DO(15 downto 12);
-					when "01" =>
-						OBJ_COLNO <= SP3_VRAM_DO(11 downto 8);
-					when "10" =>
-						OBJ_COLNO <= SP3_VRAM_DO(7 downto 4);
-					when others =>
-						OBJ_COLNO <= SP3_VRAM_DO(3 downto 0);
-					end case;
 					SP3C <= SP3C_PLOT;
+					SP3_VRAM_DO_SAVE <= SP3_VRAM_DO;
 				end if;
 
 			when others => -- SP3C_DONE
 				SP3_SEL <= '0';
 
-				OBJ_COLINFO_WE_A <= '0';
-				OBJ_COLINFO_ADDR_A <= (others => '0');
+				OBJ_COLINFO_WE_SP3 <= '0';
+				OBJ_COLINFO_ADDR_WR_SP3 <= (others => '0');
+				OBJ_COLINFO_ADDR_RD_SP3 <= (others => '0');
 
 				OBJ_SPINFO_ADDR_RD <= (others => '0');
 
@@ -2455,8 +2484,8 @@ BGEN_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = HSCROLL_READ else '0';
 SP1E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = H_INT_POS + 1 else '0';
 -- Stage 2 - runs in the active area
 SP2E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = HBLANK_END else '0';
--- Stage 3 runs during HBLANK, just before the vcounter incremented
-SP3E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = H_INT_POS-2 else '0';
+-- Stage 3 runs during HBLANK, just after the active display
+SP3E_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = HBLANK_END + H_DISP_WIDTH + 2 else '0';
 DT_ACTIVE <= '1';
 
 -- PIXEL COUNTER AND OUTPUT
@@ -2465,14 +2494,11 @@ process( RST_N, CLK )
 	variable col : std_logic_vector(5 downto 0);
 	variable cold: std_logic_vector(5 downto 0);
 begin
-	OBJ_COLINFO_D_B <= (others => '0');
+	OBJ_COLINFO_D_REND <= (others => '0');
 	if RST_N = '0' then
 		X <= (others => '0');
 		PIXDIV <= (others => '0');
 		PIXOUT <= '0';
-		OBJ_COLINFO_ADDR_B <= (others => '0');
-
-		OBJ_COLINFO_WE_B <= '0';
 		
 	elsif rising_edge(CLK) then
 		if DISP_ACTIVE = '0' and DISP_ACTIVE_LAST_COLUMN = '0' then
@@ -2486,7 +2512,7 @@ begin
 
 			BGB_COLINFO_ADDR_B <= (others => '0');
 			BGA_COLINFO_ADDR_B <= (others => '0');
-			OBJ_COLINFO_WE_B <= '0';			
+			OBJ_COLINFO_WE_REND <= '0';
 		else
 			PIXDIV <= PIXDIV + 1;
 
@@ -2494,8 +2520,9 @@ begin
 			when "0000" =>
 				BGB_COLINFO_ADDR_B <= X;
 				BGA_COLINFO_ADDR_B <= X;
-				OBJ_COLINFO_ADDR_B <= X;
-				OBJ_COLINFO_WE_B <= '0';
+				OBJ_COLINFO_ADDR_RD_REND <= X;
+				OBJ_COLINFO_ADDR_WR_REND <= X;
+				OBJ_COLINFO_WE_REND <= '0';
 
 			when "0010" =>
 				if SHI = '1' and BGA_COLINFO_Q_B(6) = '0' and BGB_COLINFO_Q_B(6) = '0' then
@@ -2506,22 +2533,22 @@ begin
 				end if;
 
 			when "0011" =>
-				if SHI = '1' and (OBJ_COLINFO_Q_B(6) = '1' or
+				if SHI = '1' and (OBJ_COLINFO_Q_A(6) = '1' or
 					((BGA_COLINFO_Q_B(6) = '0' or BGA_COLINFO_Q_B(3 downto 0) = "0000") and
 					 (BGB_COLINFO_Q_B(6) = '0' or BGB_COLINFO_Q_B(3 downto 0) = "0000"))) then
 					--sprite is visible
-					if OBJ_COLINFO_Q_B(5 downto 0) = "111110" then
+					if OBJ_COLINFO_Q_A(5 downto 0) = "111110" then
 						--if sprite is palette 3/color 14 increase intensity
 						if PIX_MODE = PIX_SHADOW then 
 							PIX_MODE <= PIX_NORMAL;
 						else
 							PIX_MODE <= PIX_HIGHLIGHT;
 						end if;
-					elsif OBJ_COLINFO_Q_B(5 downto 0) = "111111" then
+					elsif OBJ_COLINFO_Q_A(5 downto 0) = "111111" then
 						-- if sprite is visible and palette 3/color 15, decrease intensity
 						PIX_MODE <= PIX_SHADOW;
-					elsif (OBJ_COLINFO_Q_B(6) = '1' and OBJ_COLINFO_Q_B(3 downto 0) /= "0000") or 
-					       OBJ_COLINFO_Q_B(3 downto 0) = "1110" then
+					elsif (OBJ_COLINFO_Q_A(6) = '1' and OBJ_COLINFO_Q_A(3 downto 0) /= "0000") or 
+					       OBJ_COLINFO_Q_A(3 downto 0) = "1110" then
 						--sprite color 14 or high prio always shows up normal
 						PIX_MODE <= PIX_NORMAL;
 					end if;
@@ -2529,16 +2556,16 @@ begin
 
 				if DE='0' then
 					col := BGCOL;
-				elsif OBJ_COLINFO_Q_B(3 downto 0) /= "0000" and OBJ_COLINFO_Q_B(6) = '1' and
-					(SHI='0' or OBJ_COLINFO_Q_B(5 downto 1) /= "11111") then
-					col := OBJ_COLINFO_Q_B(5 downto 0);
+				elsif OBJ_COLINFO_Q_A(3 downto 0) /= "0000" and OBJ_COLINFO_Q_A(6) = '1' and
+					(SHI='0' or OBJ_COLINFO_Q_A(5 downto 1) /= "11111") then
+					col := OBJ_COLINFO_Q_A(5 downto 0);
 				elsif BGA_COLINFO_Q_B(3 downto 0) /= "0000" and BGA_COLINFO_Q_B(6) = '1' then
 					col := BGA_COLINFO_Q_B(5 downto 0);
 				elsif BGB_COLINFO_Q_B(3 downto 0) /= "0000" and BGB_COLINFO_Q_B(6) = '1' then
 					col := BGB_COLINFO_Q_B(5 downto 0);
-				elsif OBJ_COLINFO_Q_B(3 downto 0) /= "0000" and
-					(SHI='0' or OBJ_COLINFO_Q_B(5 downto 1) /= "11111") then
-					col := OBJ_COLINFO_Q_B(5 downto 0);
+				elsif OBJ_COLINFO_Q_A(3 downto 0) /= "0000" and
+					(SHI='0' or OBJ_COLINFO_Q_A(5 downto 1) /= "11111") then
+					col := OBJ_COLINFO_Q_A(5 downto 0);
 				elsif BGA_COLINFO_Q_B(3 downto 0) /= "0000" then
 					col := BGA_COLINFO_Q_B(5 downto 0);
 				elsif BGB_COLINFO_Q_B(3 downto 0) /= "0000" then
@@ -2549,7 +2576,7 @@ begin
 
 				case DBG(8 downto 7) is
 					when "00" => cold := BGCOL;
-					when "01" => cold := OBJ_COLINFO_Q_B(5 downto 0);
+					when "01" => cold := OBJ_COLINFO_Q_A(5 downto 0);
 					when "10" => cold := BGA_COLINFO_Q_B(5 downto 0);
 					when "11" => cold := BGB_COLINFO_Q_B(5 downto 0);
 					when others => null;
@@ -2589,10 +2616,10 @@ begin
 						FF_R <= '0' & CRAM_Q_B(2 downto 0) + 7;
 					end case;
 				end if;
-				OBJ_COLINFO_WE_B <= '1';
+				OBJ_COLINFO_WE_REND <= '1';
 
 			when "0111" =>
-				OBJ_COLINFO_WE_B <= '0';
+				OBJ_COLINFO_WE_REND <= '0';
 			
 			when others => null;
 			end case;

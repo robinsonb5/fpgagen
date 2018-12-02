@@ -358,7 +358,7 @@ signal PSG_SEL			: std_logic;
 signal T80_PSG_SEL		: std_logic;
 signal FX68_PSG_SEL		: std_logic;
 signal PSG_DI			: std_logic_vector(7 downto 0);
-signal PSG_SND			: std_logic_vector(11 downto 0);
+signal PSG_SND			: std_logic_vector(10 downto 0);
 signal PSG_MUX_SND		: std_logic_vector(15 downto 0);
 signal PSG_ENABLE		: std_logic;
 
@@ -806,7 +806,7 @@ FM_ENABLE  <= not SW(4);
 
 FM_MUX_LEFT  <= FM_LEFT  when FM_ENABLE = '1' else "0000000000000000";
 FM_MUX_RIGHT <= FM_RIGHT when FM_ENABLE = '1' else "0000000000000000";
-PSG_MUX_SND <= std_logic_vector(PSG_SND(11)&PSG_SND(11)&PSG_SND&"00") when PSG_ENABLE = '1' else "0000000000000000";
+PSG_MUX_SND <= std_logic_vector("00"&PSG_SND&"000") when PSG_ENABLE = '1' else "0000000000000000";
 
 DAC_LDATA <= std_logic_vector(signed(FM_MUX_LEFT (15) & FM_MUX_LEFT (15 downto 1)) + signed(PSG_MUX_SND));
 DAC_RDATA <= std_logic_vector(signed(FM_MUX_RIGHT(15) & FM_MUX_RIGHT(15 downto 1)) + signed(PSG_MUX_SND));

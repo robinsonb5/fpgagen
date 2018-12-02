@@ -120,15 +120,6 @@ reg  [9:0] hs_max;
 reg  [9:0] hs_rise;
 reg  [9:0] hcnt;
 
-reg [11:0 ] last_pixel;
-reg [4:0] r_mix, g_mix, b_mix;
-
-always @(*) begin
-	b_mix = last_pixel[ 3:0] + b_in[3:0];
-	g_mix = last_pixel[ 7:4] + g_in[3:0];
-	r_mix = last_pixel[11:8] + r_in[3:0];
-end
-
 always @(posedge clk_sys) begin
 	reg hsD, vsD;
 
@@ -152,9 +143,7 @@ always @(posedge clk_sys) begin
 		// begin of incoming hsync
 		if(hsD && !hs_in) line_toggle <= !line_toggle;
 
-		// low pass filter
-		last_pixel <= { r_in, g_in, b_in };
-		sd_buffer[{line_toggle, hcnt}] <= { r_mix[4:1], g_mix[4:1], b_mix[4:1] };
+		sd_buffer[{line_toggle, hcnt}] <= {r_in, g_in, b_in};
 	end
 end
 

@@ -23,7 +23,7 @@ void video_c(char clk, char r[4], char g[4], char b[4], char hs, char vs) {
   static int vskip = 1;
   static int cap_frames = -1;
   static int vdetect = 0;
-  static int frame_pre_time = -1;
+  static int last_vs_time = -1;
   static int clk_cnt = 0;
 
   if(cap_frames < 0)
@@ -37,8 +37,8 @@ void video_c(char clk, char r[4], char g[4], char b[4], char hs, char vs) {
   // subcnt
   static int subcnt = 1;
   if(--subcnt) return;
-
   subcnt = 4;
+  
   clk_cnt++;
   
   // ignore first few events
@@ -81,15 +81,15 @@ void video_c(char clk, char r[4], char g[4], char b[4], char hs, char vs) {
   hcnt++;
   
   if((chs != last_hs) && chs) {
-    printf("HS@%d %d\n", vcnt, hcnt);
-
+    printf("HS@%d %d\n", vcnt, hcnt-1);
+#if 0
     // check time since last vsync
-    if(frame_pre_time >= 0) {
+    if(last_vs_time >= 0) {
       printf("Interlace offset: %d (%d/%.2f lines)\n",
-	     clk_cnt-frame_pre_time, hcnt, (float)(clk_cnt-frame_pre_time)/(float)hcnt);
-      frame_pre_time = -1;
+	     clk_cnt-last_vs_time, hcnt-1, (float)(clk_cnt-last_vs_time)/(float)hcnt-1);
+      last_vs_time = -1;
     }
-
+#endif
     hcnt = 0;
     vcnt++;
     
@@ -131,9 +131,18 @@ void video_c(char clk, char r[4], char g[4], char b[4], char hs, char vs) {
   }
   last_hs = chs;
   
+  if((cvs != last_vs) && !cvs)
+    printf("VS begin @%d/%d\n", vcnt, hcnt);
+
   if((cvs != last_vs) && cvs) {
-    printf("VS@%d/%d\n", vcnt, hcnt);
-    if(vcnt > 0) frame_pre_time = clk_cnt;
+    printf("VS@%d/%d (%d,%d)\n", vcnt, hcnt, clk_cnt, last_vs_time);
+
+    if(last_vs_time > 0) {
+      unsigned long c = clk_cnt-last_vs_time;
+      printf("clocks since last vsync: %ld/%ld/%ld\n", c, c/3420, c%3420);
+    }
+      
+    if(vcnt > 0) last_vs_time = clk_cnt;
     vcnt = 0;
 
     if(vskip) {

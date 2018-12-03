@@ -342,8 +342,7 @@ signal HBLANK_END      : std_logic_vector(8 downto 0);
 signal HSCROLL_READ    : std_logic_vector(8 downto 0);
 signal V_DISP_START    : std_logic_vector(8 downto 0);
 signal V_DISP_HEIGHT   : std_logic_vector(8 downto 0);
-signal VSYNC_HSTART_O  : std_logic_vector(8 downto 0);
-signal VSYNC_HSTART_E  : std_logic_vector(8 downto 0);
+signal VSYNC_HSTART    : std_logic_vector(8 downto 0);
 signal VSYNC_START     : std_logic_vector(8 downto 0);
 signal V_TOTAL_HEIGHT  : std_logic_vector(8 downto 0);
 signal V_INT_POS       : std_logic_vector(8 downto 0);
@@ -2298,10 +2297,8 @@ HBLANK_END      <= conv_std_logic_vector(HBLANK_END_H40, 9) when H40='1'
               else conv_std_logic_vector(HBLANK_END_H32, 9);
 HSCROLL_READ    <= conv_std_logic_vector(HSCROLL_READ_H40, 9) when H40='1'
               else conv_std_logic_vector(HSCROLL_READ_H32, 9);
-VSYNC_HSTART_O  <= conv_std_logic_vector(VSYNC_HSTART_O_H40, 9) when H40='1'
-              else conv_std_logic_vector(VSYNC_HSTART_O_H32, 9);
-VSYNC_HSTART_E  <= conv_std_logic_vector(VSYNC_HSTART_E_H40, 9) when H40='1'
-              else conv_std_logic_vector(VSYNC_HSTART_E_H32, 9);
+VSYNC_HSTART    <= conv_std_logic_vector(VSYNC_HSTART_H40, 9) when H40='1'
+              else conv_std_logic_vector(VSYNC_HSTART_H32, 9);
 VSYNC_START     <= conv_std_logic_vector(VSYNC_START_PAL_V30, 9) when V30='1' and PAL='1'
               else conv_std_logic_vector(VSYNC_START_PAL_V28, 9) when V30='0' and PAL='1'
               else conv_std_logic_vector(VSYNC_START_NTSC_V30, 9) when V30='1' and PAL='0'
@@ -2656,9 +2653,7 @@ begin
 			FF_HS <= '1';
 		end if;
 
-		-- vertical sync is half a line delayed in interlace mode every second frame
-		if (((LSM(0) = '0'  or FIELD = '1') and HV_HCNT = VSYNC_HSTART_O) or 
-			  (LSM(0) = '1' and FIELD = '0'  and HV_HCNT = VSYNC_HSTART_E)) then
+		if HV_HCNT = VSYNC_HSTART then
 			if HV_VCNT = VSYNC_START then
 				FF_VS <= '0';
 			end if;
@@ -2669,7 +2664,46 @@ begin
 	end if;
 end process;
 
-VS <= FF_VS;
+-- VSync extension by half a line for interlace
+process( CLK )
+  -- 1710 = 1/2 * 3420 clock per line
+  variable VS_START_DELAY : integer range 0 to 1710;
+  variable VS_END_DELAY : integer range 0 to 1710;
+  variable VS_DELAY_ACTIVE: boolean;
+begin
+  if rising_edge( CLK ) then
+    if FF_VS = '1' then
+      -- LSM(0) = 1 and FIELD = 0 right before vsync start -> start the delay
+      if HV_HCNT = VSYNC_HSTART and HV_VCNT = VSYNC_START and LSM(0) = '1' and FIELD = '0' then
+        VS_START_DELAY := 1710;
+        VS_DELAY_ACTIVE := true;
+      end if;
+
+      -- FF_VS already inactive, but end delay still != 0
+      if VS_END_DELAY /= 0 then
+        VS_END_DELAY := VS_END_DELAY - 1;
+      else
+        VS <= '1';
+      end if;
+      
+    else
+      -- FF_VS = '0'
+      if VS_DELAY_ACTIVE then
+        VS_END_DELAY := 1710;
+        VS_DELAY_ACTIVE := false;
+      end if;
+
+      -- FF_VS active, but start delay still != 0
+      if VS_START_DELAY /= 0 then
+        VS_START_DELAY := VS_START_DELAY - 1;
+      else
+        VS <= '0';
+      end if;
+    end if;
+  end if;  
+end process;
+
+-- VS <= FF_VS;
 HS <= FF_HS;
 
 R <= FF_R;

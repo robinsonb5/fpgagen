@@ -182,7 +182,7 @@ signal T80_ZRAM_DTACK_N	: std_logic;
 type zrc_t is ( ZRC_IDLE, ZRC_ACC1, ZRC_ACC2 );
 signal ZRC : zrc_t;
 
-constant useCache : boolean := false;
+constant useCache : boolean := true;
 
 -- Genesis core
 signal NO_DATA		: std_logic_vector(15 downto 0);	-- SYNTHESIS gp/m68k.c line 12

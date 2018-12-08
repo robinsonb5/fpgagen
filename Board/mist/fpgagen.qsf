@@ -322,6 +322,7 @@ set_global_assignment -name PROJECT_OUTPUT_DIRECTORY ../../syn/mist
 set_global_assignment -name PHYSICAL_SYNTHESIS_EFFORT NORMAL
 set_global_assignment -name TIMEQUEST_DO_REPORT_TIMING OFF
 set_global_assignment -name TIMEQUEST_DO_CCPP_REMOVAL ON
+set_global_assignment -name QIP_FILE ../../jt89/hdl/jt89.qip
 set_global_assignment -name SYSTEMVERILOG_FILE ../../src/fx68k/uaddrPla.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../src/fx68k/fx68kAlu.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../src/fx68k/fx68k.sv
@@ -333,9 +334,6 @@ set_global_assignment -name VERILOG_FILE ../../../Board/mist/user_io.v
 set_global_assignment -name VERILOG_FILE ../../../Board/mist/osd.v
 set_global_assignment -name VERILOG_FILE ../../Board/mist/hybrid_pwm_sd.v
 set_global_assignment -name VERILOG_FILE ../../Board/mist/scandoubler.v
-set_global_assignment -name VHDL_FILE ../../src/psg/psg_tone.vhd
-set_global_assignment -name VHDL_FILE ../../src/psg/psg_noise.vhd
-set_global_assignment -name VHDL_FILE ../../src/psg/psg.vhd
 set_global_assignment -name VHDL_FILE ../../src/virtual_toplevel.vhd
 set_global_assignment -name VHDL_FILE ../../src/vdp_common.vhd
 set_global_assignment -name VHDL_FILE ../../src/vdp.vhd

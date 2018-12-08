@@ -40,6 +40,7 @@ use IEEE.STD_LOGIC_UNSIGNED.ALL;
 use IEEE.STD_LOGIC_TEXTIO.all;
 use IEEE.NUMERIC_STD.ALL;
 use work.jt12.all;
+use work.jt89.all;
 
 entity Virtual_Toplevel is
 	generic (
@@ -361,8 +362,8 @@ signal PSG_SEL			: std_logic;
 signal T80_PSG_SEL		: std_logic;
 signal FX68_PSG_SEL		: std_logic;
 signal PSG_DI			: std_logic_vector(7 downto 0);
-signal PSG_SND			: std_logic_vector(5 downto 0);
-signal PSG_MUX_SND		: std_logic_vector(5 downto 0);
+signal PSG_SND			: std_logic_vector(10 downto 0);
+signal PSG_MUX_SND		: std_logic_vector(15 downto 0);
 signal PSG_ENABLE		: std_logic;
 
 signal FX68_FM_SEL		: std_logic;
@@ -776,14 +777,14 @@ port map(
 
 -- PSG
 
-u_psg : work.psg
+u_psg : jt89
 port map(
-	reset	=> not MRST_N,
+	rst    	=> not MRST_N,
 	clk		=> MCLK,
-	clken	=> ZCLK_ENA,
-	WR_n	=> not PSG_SEL,
-	D_in	=> PSG_DI,
-	output	=> PSG_SND
+	clk_en	=> ZCLK_ENA,
+	wr_n	=> not PSG_SEL,
+	din  	=> PSG_DI,
+	sound	=> PSG_SND
 );
 
 -- FM
@@ -809,10 +810,10 @@ FM_ENABLE  <= not SW(4);
 
 FM_MUX_LEFT  <= FM_LEFT  when FM_ENABLE = '1' else "0000000000000000";
 FM_MUX_RIGHT <= FM_RIGHT when FM_ENABLE = '1' else "0000000000000000";
-PSG_MUX_SND <= PSG_SND when PSG_ENABLE = '1' else "000000";
+PSG_MUX_SND <= std_logic_vector("000"&PSG_SND&"00") when PSG_ENABLE = '1' else "0000000000000000";
 
-DAC_LDATA <= std_logic_vector(signed(FM_MUX_LEFT(15)  & FM_MUX_LEFT(15 downto 1)) + signed("00"&PSG_MUX_SND&"000000"));
-DAC_RDATA <= std_logic_vector(signed(FM_MUX_RIGHT(15) & FM_MUX_RIGHT(15 downto 1)) + signed("00"&PSG_MUX_SND&"000000"));
+DAC_LDATA <= std_logic_vector(signed(FM_MUX_LEFT (15) & FM_MUX_LEFT (15 downto 1)) + signed(PSG_MUX_SND));
+DAC_RDATA <= std_logic_vector(signed(FM_MUX_RIGHT(15) & FM_MUX_RIGHT(15 downto 1)) + signed(PSG_MUX_SND));
 
 -- #############################################################################
 -- #############################################################################

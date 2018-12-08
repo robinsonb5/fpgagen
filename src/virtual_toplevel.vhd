@@ -806,7 +806,8 @@ FM_ENABLE  <= not SW(4);
 
 FM_MUX_LEFT  <= FM_LEFT  when FM_ENABLE = '1' else "0000000000000000";
 FM_MUX_RIGHT <= FM_RIGHT when FM_ENABLE = '1' else "0000000000000000";
-PSG_MUX_SND <= std_logic_vector("00"&PSG_SND&"000") when PSG_ENABLE = '1' else "0000000000000000";
+-- PSG_MUX_SND <= std_logic_vector("00"&PSG_SND&"000") when PSG_ENABLE = '1' else "0000000000000000";
+PSG_MUX_SND <= std_logic_vector("000"&PSG_SND&"00") when PSG_ENABLE = '1' else "0000000000000000";
 
 DAC_LDATA <= std_logic_vector(signed(FM_MUX_LEFT (15) & FM_MUX_LEFT (15 downto 1)) + signed(PSG_MUX_SND));
 DAC_RDATA <= std_logic_vector(signed(FM_MUX_RIGHT(15) & FM_MUX_RIGHT(15 downto 1)) + signed(PSG_MUX_SND));

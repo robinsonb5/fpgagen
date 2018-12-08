@@ -268,6 +268,10 @@ signal FX68_SRAM_SEL		: std_logic;
 signal FX68_SRAM_D			: std_logic_vector(15 downto 0);
 signal FX68_SRAM_DTACK_N	: std_logic;
 
+signal FX68_EEPROM_SEL		: std_logic;
+signal FX68_EEPROM_DATA		: std_logic_vector(15 downto 0);
+signal FX68_EEPROM_DTACK_N	: std_logic;
+
 signal SSF2_MAP             : std_logic_vector(8*6-1 downto 0);
 signal SSF2_USE_MAP         : std_logic;
 signal ROM_PAGE             : std_logic_vector(2 downto 0);
@@ -954,6 +958,7 @@ FX68_DI(15 downto 8) <= FX68_FLASH_D(15 downto 8) when FX68_FLASH_SEL = '1' and 
 	else FX68_BAR_D(15 downto 8) when FX68_BAR_SEL = '1' and FX68_UDS_N = '0'
 	else FX68_VDP_D(15 downto 8) when FX68_VDP_SEL = '1' and FX68_UDS_N = '0'
 	else FX68_FM_D(15 downto 8) when FX68_FM_SEL = '1' and FX68_UDS_N = '0'
+	else FX68_EEPROM_DATA(15 downto 8) when FX68_EEPROM_SEL = '1' and FX68_UDS_N = '0'
 	else NO_DATA(15 downto 8);
 FX68_DI(7 downto 0) <= FX68_FLASH_D(7 downto 0) when FX68_FLASH_SEL = '1' and FX68_LDS_N = '0'
 	else FX68_SDRAM_D(7 downto 0) when FX68_SDRAM_SEL = '1' and FX68_LDS_N = '0'
@@ -965,6 +970,7 @@ FX68_DI(7 downto 0) <= FX68_FLASH_D(7 downto 0) when FX68_FLASH_SEL = '1' and FX
 	else FX68_BAR_D(7 downto 0) when FX68_BAR_SEL = '1' and FX68_LDS_N = '0'
 	else FX68_VDP_D(7 downto 0) when FX68_VDP_SEL = '1' and FX68_LDS_N = '0'
 	else FX68_FM_D(7 downto 0) when FX68_FM_SEL = '1' and FX68_LDS_N = '0'
+	else FX68_EEPROM_DATA(7 downto 0) when FX68_EEPROM_SEL = '1' and FX68_LDS_N = '0'
 	else NO_DATA(7 downto 0);
 
 -- Floating bus
@@ -1460,7 +1466,7 @@ ROM_PAGE_A <= FX68_A(23 downto 19) when FX68_FLASH_SEL = '1' and FX68_DTACK_N = 
 -- DMA  : 000000 - 9fffff
 
 FX68_FLASH_SEL <= '1' when (FX68_A(23) = '0' or FX68_A(23 downto 21) = "100") and FX68_SEL = '1' and
-	FX68_RNW = '1' and FX68_SRAM_SEL = '0' and CART_EN = '1' else '0';
+	FX68_RNW = '1' and FX68_SRAM_SEL = '0' and FX68_EEPROM_SEL = '0' and CART_EN = '1' else '0';
 T80_FLASH_SEL <= '1' when T80_A(15) = '1' and T80_MREQ_N = '0' and T80_RD_N = '0' and (BAR(23) = '0' or BAR(23 downto 21) = "100")
 	else '0';
 DMA_FLASH_SEL <= '1' when (VBUS_ADDR(23) = '0' or VBUS_ADDR(23 downto 21) = "100") and VBUS_SEL = '1' else '0';
@@ -1747,9 +1753,8 @@ end process;
 
 -- SRAM at 0x200000 - 20FFFF
 -- EEPROM at 0x20000
-FX68_SRAM_SEL <= '1' when SRAM_EN = '1' and FX68_SEL = '1' and FX68_A(23 downto 16) = x"20"
-			else '1' when EEPROM_EN = '1' and FX68_SEL = '1' and FX68_A(23 downto 4) = x"20000" and FX68_A(3 downto 1) = "000"
-			else '0';
+FX68_SRAM_SEL <= '1' when SRAM_EN = '1' and FX68_SEL = '1' and FX68_A(23 downto 16) = x"20" and FX68_EEPROM_SEL = '0' else '0';
+FX68_EEPROM_SEL <= '1' when EEPROM_EN = '1' and FX68_SEL = '1' and FX68_A(23 downto 4) = x"20000" and FX68_A(3 downto 1) = "000" else '0';
 
 -- SRAM CONTROL
 process( MRST_N, MCLK )
@@ -1787,9 +1792,24 @@ begin
 			end if;
 		when others => null;
 		end case;
-
 	end if;
+end process;
 
+-- EEPROM CONTROL
+process( MRST_N, MCLK )
+begin
+	if MRST_N = '0' then
+		FX68_EEPROM_DTACK_N <= '1';
+	elsif rising_edge(MCLK) then
+		if FX68_EEPROM_SEL = '0' then
+			FX68_EEPROM_DTACK_N <= '1';
+		end if;
+
+		if FX68_EEPROM_SEL = '1' and FX68_EEPROM_DTACK_N = '1' then
+			FX68_EEPROM_DATA <= FX68_DO;
+			FX68_EEPROM_DTACK_N <= '0';
+		end if;
+	end if;
 end process;
 
 FX68_ZRAM_SEL <= '1' when FX68_A(23 downto 16) = x"A0" and FX68_A(14) = '0' and FX68_SEL = '1' and ZBUSACK_N = '0' else '0';

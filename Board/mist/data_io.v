@@ -26,7 +26,7 @@ module data_io (
     input               ss,
     input               sdi,
 
-    output              downloading,   // signal indicating an active download
+    output reg          downloading,   // signal indicating an active download
     output reg [7:0]    index,         // menu index used to upload the file
 
     // external ram interface
@@ -34,10 +34,8 @@ module data_io (
     input               clkref,
     output reg          wr,
     output reg [24:0]   a,
-    output [7:0]        d
+    output reg [7:0]    d
 );
-
-assign d = data;
 
 parameter START_ADDR = 25'h0;
 
@@ -57,8 +55,8 @@ localparam UIO_FILE_TX      = 8'h53;
 localparam UIO_FILE_TX_DAT  = 8'h54;
 localparam UIO_FILE_INDEX   = 8'h55;
 
-assign downloading = downloading_reg;
-reg downloading_reg = 1'b0;
+reg       downloading_reg = 1'b0;
+reg [7:0] index_reg;
 
 // data_io has its own SPI interface to the io controller
 always@(posedge sck, posedge ss) begin
@@ -75,13 +73,13 @@ always@(posedge sck, posedge ss) begin
 		// increase target address after write
 		if(rclk)
 			addr <= addr + 25'd1;
-	 
+
 		// count 0-7 8-15 8-15 ... 
 		if(cnt < 15) 	cnt <= cnt + 4'd1;
-		else				cnt <= 4'd8;
+		else cnt <= 4'd8;
 
 		// finished command byte
-      if(cnt == 7)
+		 if(cnt == 7)
 			cmd <= {sbuf, sdi};
 
 		// prepare/end transmission
@@ -93,7 +91,7 @@ always@(posedge sck, posedge ss) begin
 			end else
 				downloading_reg <= 1'b0; 
 		end
-		
+
 		// command 0x54: UIO_FILE_TX
 		if((cmd == UIO_FILE_TX_DAT) && (cnt == 15)) begin
 			data <= {sbuf, sdi};
@@ -103,26 +101,32 @@ always@(posedge sck, posedge ss) begin
 
 		// expose file (menu) index
 		if((cmd == UIO_FILE_INDEX) && (cnt == 15))
-			index <= {sbuf[3:0], sdi};
+			index_reg <= {sbuf[3:0], sdi};
 	end
 end
 
 always@(posedge clk) begin
 	// bring rclk from spi clock domain into core clock domain
-    reg rclkD, rclkD2;
-    reg wr_int;
+	reg rclkD, rclkD2;
+	reg wr_int;
 
-    rclkD <= rclk;
-    rclkD2 <= rclkD;
-    wr <= 0;
-   
-    if (clkref) begin
-        wr_int <= 0;
-        if (wr_int) wr <= 1'b1;
-    end
+	rclkD <= rclk;
+	rclkD2 <= rclkD;
+	wr <= 0;
 
-    if(rclkD && !rclkD2)
-        wr_int <= 1'b1;
+	downloading <= downloading_reg;
+	index <= index_reg;
+
+	if (clkref) begin
+		wr_int <= 0;
+		if (wr_int) begin
+			d <= data;
+			wr <= 1'b1;
+		end
+	end
+
+	if(rclkD && !rclkD2)
+		wr_int <= 1'b1;
 end
 
 endmodule

@@ -6,4 +6,4 @@
 	url = https://github.com/jotego/jt12
 [submodule "jt89"]
 	path = jt89
-	url = git@github.com:jotego/jt89.git
+	url = https://github.com/jotego/jt89

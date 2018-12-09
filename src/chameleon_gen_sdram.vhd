@@ -734,12 +734,6 @@ end process;
 							null;
 					end case;
 				when RAM_READ_3 =>
-					-- FIXME - need to schdule this according to CAS Latency
-					-- Terminate burst - assuming we're not in cache mode...
-					sd_we_n_reg <= '0';
-					sd_ba_0_reg <= currentBank(0);
-					sd_ba_1_reg <= currentBank(1);
-
 					ramState <= RAM_READ_4;
 					currentRdData(31 downto 16) <= ram_data_reg;
 					ramAlmostDone <= '1'; -- Safe to issue next command to this bank

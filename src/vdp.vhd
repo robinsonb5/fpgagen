@@ -535,7 +535,7 @@ signal SP1_EN			: std_logic;
 signal OBJ_TOT			: std_logic_vector(6 downto 0);
 signal OBJ_NEXT			: std_logic_vector(6 downto 0);
 signal OBJ_NB			: std_logic_vector(4 downto 0);
-signal OBJ_Y_OFS1		: std_logic_vector(9 downto 0);
+signal OBJ_Y_OFS		: std_logic_vector(8 downto 0);
 
 signal OBJ_VS1			: std_logic_vector(1 downto 0);
 
@@ -1744,6 +1744,7 @@ process( RST_N, CLK )
 file F		: text open write_mode is "sp1_dbg.out";
 variable L	: line;
 -- synthesis translate_on
+variable y_offset: std_logic_vector(9 downto 0);
 begin
 	if RST_N = '0' then
 		SP1C <= SP1C_DONE;
@@ -1782,33 +1783,24 @@ begin
 
 			when SP1C_Y_RD3 =>
 				if LSM = "11" then
-					OBJ_Y_OFS1 <= "0100000000" + SP1_Y - OBJ_CACHE_Y_Q(9 downto 0);
+					y_offset := "0100000000" + SP1_Y - OBJ_CACHE_Y_Q(9 downto 0);
+					OBJ_Y_OFS <= y_offset(9 downto 1);
 				else
-					OBJ_Y_OFS1 <= "0010000000" + SP1_Y - ('0' & OBJ_CACHE_Y_Q(8 downto 0));
+					y_offset := "0010000000" + SP1_Y - ('0' & OBJ_CACHE_Y_Q(8 downto 0));
+					OBJ_Y_OFS <= y_offset(8 downto 0);
 				end if;
 				OBJ_VS1 <= OBJ_CACHE_SL_Q(9 downto 8);
 				OBJ_LINK <= OBJ_CACHE_SL_Q(6 downto 0);
 				SP1C <= SP1C_Y_TST;
 
 			when SP1C_Y_TST =>
-
 				SP1C <= SP1C_NEXT;
-				if LSM = "11" then
-					if (OBJ_VS1 = "00" and OBJ_Y_OFS1(9 downto 4) = "00000") or -- 2*8 pix
-					   (OBJ_VS1 = "01" and OBJ_Y_OFS1(9 downto 5) = "0000") or  -- 2*16 pix
-					   (OBJ_VS1 = "11" and OBJ_Y_OFS1(9 downto 6) = "000") or   -- 2*32 pix
-					   (OBJ_VS1 = "10" and OBJ_Y_OFS1(9 downto 6) = "000" and OBJ_Y_OFS1(5 downto 4) /= "11") --2*24 pix
-					then
-						SP1C <= SP1C_SHOW;
-					end if;
-				else
-					if (OBJ_VS1 = "00" and OBJ_Y_OFS1(8 downto 3) = "000000") or -- 8 pix
-					   (OBJ_VS1 = "01" and OBJ_Y_OFS1(8 downto 4) = "00000") or  -- 16 pix
-					   (OBJ_VS1 = "11" and OBJ_Y_OFS1(8 downto 5) = "0000") or   -- 32 pix
-					   (OBJ_VS1 = "10" and OBJ_Y_OFS1(8 downto 5) = "0000" and OBJ_Y_OFS1(4 downto 3) /= "11") --24 pix
-					then
-						SP1C <= SP1C_SHOW;
-					end if;
+				if (OBJ_VS1 = "00" and OBJ_Y_OFS(8 downto 3) = "000000") or -- 8 pix
+				   (OBJ_VS1 = "01" and OBJ_Y_OFS(8 downto 4) = "00000") or  -- 16 pix
+				   (OBJ_VS1 = "11" and OBJ_Y_OFS(8 downto 5) = "0000") or   -- 32 pix
+				   (OBJ_VS1 = "10" and OBJ_Y_OFS(8 downto 5) = "0000" and OBJ_Y_OFS(4 downto 3) /= "11") --24 pix
+				then
+					SP1C <= SP1C_SHOW;
 				end if;
 
 			when SP1C_SHOW =>
@@ -1826,7 +1818,7 @@ begin
 				write(L, string'(" HV_VCNT = "));
 				hwrite(L, "0000000" & HV_VCNT);
 				write(L, string'(" OFS ="));
-				hwrite(L, "000000" & OBJ_Y_OFS1);
+				hwrite(L, "000000" & OBJ_Y_OFS);
 				write(L, string'(" OBJ_NB ="));
 				hwrite(L, "000" & OBJ_NB);
 				writeline(F,L);

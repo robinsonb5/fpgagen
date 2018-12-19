@@ -352,8 +352,6 @@ signal FM_CLKOUT		: std_logic;
 signal FM_SAMPLE		: std_logic;
 signal FM_LEFT			: std_logic_vector(15 downto 0);
 signal FM_RIGHT		: std_logic_vector(15 downto 0);
-signal FM_MUX_LEFT	: std_logic_vector(15 downto 0);
-signal FM_MUX_RIGHT	: std_logic_vector(15 downto 0);
 
 signal FM_ENABLE		: std_logic;
 
@@ -363,7 +361,6 @@ signal T80_PSG_SEL		: std_logic;
 signal FX68_PSG_SEL		: std_logic;
 signal PSG_DI			: std_logic_vector(7 downto 0);
 signal PSG_SND			: std_logic_vector(10 downto 0);
-signal PSG_MUX_SND		: std_logic_vector(15 downto 0);
 signal PSG_ENABLE		: std_logic;
 
 signal FX68_FM_SEL		: std_logic;
@@ -808,12 +805,19 @@ port map(
 PSG_ENABLE <= not SW(3);
 FM_ENABLE  <= not SW(4);
 
-FM_MUX_LEFT  <= FM_LEFT  when FM_ENABLE = '1' else "0000000000000000";
-FM_MUX_RIGHT <= FM_RIGHT when FM_ENABLE = '1' else "0000000000000000";
-PSG_MUX_SND <= std_logic_vector("000"&PSG_SND&"00") when PSG_ENABLE = '1' else "0000000000000000";
-
-DAC_LDATA <= std_logic_vector(signed(FM_MUX_LEFT (15) & FM_MUX_LEFT (15 downto 1)) + signed(PSG_MUX_SND));
-DAC_RDATA <= std_logic_vector(signed(FM_MUX_RIGHT(15) & FM_MUX_RIGHT(15 downto 1)) + signed(PSG_MUX_SND));
+genmix : jt12_genmix
+port map(
+	rst		=> not T80_RESET_N,
+	clk		=> MCLK,
+    fm_left => FM_LEFT,
+    fm_right=> FM_RIGHT,
+    psg_snd => PSG_SND,
+    fm_en   => FM_ENABLE,
+    psg_en  => PSG_ENABLE,
+    -- Mixed sound at 54 MHz
+    snd_left  => DAC_LDATA,
+    snd_right => DAC_RDATA
+);
 
 -- #############################################################################
 -- #############################################################################

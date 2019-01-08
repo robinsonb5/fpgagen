@@ -1085,7 +1085,6 @@ begin
 				if FX68_A(15 downto 8) = x"11" then
 					-- ZBUSACK_N
 					FX68_CTRL_D(8) <= ZBUSACK_N;
-					FX68_CTRL_D(0) <= ZBUSACK_N;
 				end if;
 			end if;		
 		elsif T80_CTRL_SEL = '1' and T80_CTRL_DTACK_N = '1' then

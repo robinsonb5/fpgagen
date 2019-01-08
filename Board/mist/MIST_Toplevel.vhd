@@ -89,12 +89,37 @@ signal par_out_strobe: std_logic;
 signal ypbpr: std_logic;
 signal scandoubler_disable: std_logic;
 
+-- sd io
+signal sd_lba:  unsigned(31 downto 0);
+signal sd_rd:   std_logic;
+signal sd_wr:   std_logic;
+signal sd_ack:  std_logic;
+signal sd_ackD:  std_logic;
+signal sd_conf: std_logic;
+signal sd_sdhc: std_logic;
+signal sd_din:  std_logic_vector(7 downto 0);
+signal sd_din_strobe:  std_logic;
+signal sd_dout: std_logic_vector(7 downto 0);
+signal sd_dout_strobe:  std_logic;
+signal sd_buff_addr: std_logic_vector(8 downto 0);
+signal img_mounted  : std_logic;
+signal img_mountedD : std_logic;
+signal img_size : std_logic_vector(31 downto 0);
+
+-- backup ram controller
+signal bk_state : std_logic := '0';
+signal bk_ena   : std_logic := '0';
+signal bk_load  : std_logic := '0';
+signal bk_loadD : std_logic := '0';
+signal bk_saveD : std_logic := '0';
+
 -- data_io
 signal downloading      : std_logic;
 signal data_io_wr       : std_logic;
 signal data_io_clkref   : std_logic;
 signal data_io_d        : std_logic_vector(7 downto 0);
 signal downloadingD     : std_logic;
+signal downloadingD_MCLK: std_logic;
 signal d_state          : std_logic_vector(1 downto 0);
 
 -- external controller signals
@@ -108,6 +133,8 @@ signal core_led         : std_logic;
 
 constant CONF_STR : string :=
     "GENESIS;BINGENMD ;"&
+    "S,SAV,Mount;"&
+    "TE,Write Save RAM;"&
     "O78,Region,Auto,EU,JP,US;"&
     "OBC,Scanlines,Off,25%,50%,75%;"&
     "O6,Joystick swap,Off,On;"&
@@ -175,6 +202,19 @@ component user_io
         buttons : out std_logic_vector(1 downto 0);
         scandoubler_disable: out std_logic;
         ypbpr: out std_logic;
+        sd_lba : in std_logic_vector(31 downto 0);
+        sd_rd : in std_logic;
+        sd_wr : in std_logic;
+        sd_ack : out std_logic;
+        sd_conf : in std_logic;
+        sd_sdhc : in std_logic;
+        sd_dout : out std_logic_vector(7 downto 0);
+        sd_dout_strobe : out std_logic;
+        sd_din : in std_logic_vector(7 downto 0);
+        sd_din_strobe : out std_logic;
+        sd_buff_addr : out std_logic_vector(8 downto 0);
+        img_mounted : out std_logic;
+        img_size : out std_logic_vector(31 downto 0);
         ps2_kbd_clk : out std_logic;
         ps2_kbd_data : out std_logic;
         ps2_mouse_clk : out std_logic;
@@ -240,7 +280,7 @@ component osd
 	
 begin
 
-LED <= core_led and not downloading;
+LED <= not core_led and not downloading and not bk_ena;
 
 U00 : entity work.pll
     port map(
@@ -317,7 +357,14 @@ virtualtoplevel : entity work.Virtual_Toplevel
 
     DAC_LDATA => audiol,
     DAC_RDATA => audior,
-	 
+
+    -- save ram
+    saveram_addr    => std_logic_vector(sd_lba)(5 downto 0) & sd_buff_addr,
+    saveram_we      => sd_dout_strobe,
+    saveram_din     => sd_dout,
+    saveram_rd      => sd_din_strobe,
+    saveram_dout    => sd_din,
+
     ext_reset_n  => ext_reset_n(2) and ext_reset_n(1) and ext_reset_n(0),
     ext_bootdone => ext_bootdone(2) or ext_bootdone(1) or ext_bootdone(0),
     ext_data     => ext_data,
@@ -347,6 +394,21 @@ user_io_inst : user_io
         joystick_analog_1 => open,
 --      switches => switches,
         buttons => buttons,
+
+        sd_lba  => std_logic_vector(sd_lba),
+        sd_rd   => sd_rd,
+        sd_wr   => sd_wr,
+        sd_ack  => sd_ack,
+        sd_sdhc => '1',
+        sd_conf => sd_conf,
+        sd_dout => sd_dout,
+        sd_dout_strobe => sd_dout_strobe,
+        sd_din => sd_din,
+        sd_din_strobe => sd_din_strobe,
+        sd_buff_addr => sd_buff_addr,
+        img_mounted => img_mounted,
+        img_size => img_size,
+
         ps2_kbd_clk => open,
         ps2_kbd_data => open,
         ps2_mouse_clk => open,
@@ -354,6 +416,51 @@ user_io_inst : user_io
         serial_data => par_out_data,
         serial_strobe => par_out_strobe
  );
+
+process (MCLK) begin
+    if rising_edge(MCLK) then
+
+        downloadingD_MCLK <= downloading;
+        if downloadingD_MCLK = '0' and downloading = '1' then
+            bk_ena <= '0';
+        end if;
+
+        img_mountedD <= img_mounted;
+        if img_mountedD = '0' and img_mounted = '1' then
+            bk_ena <= '1';
+            bk_load <= '1';
+        end if;
+
+        bk_loadD <= bk_load;
+        bk_saveD <= status(14);
+        sd_ackD  <= sd_ack;
+
+        if sd_ackD = '0' and sd_ack = '1' then
+            sd_rd <= '0';
+            sd_wr <= '0';
+        end if;
+
+        if bk_state = '0' then
+            if bk_ena = '1' and ((bk_loadD = '0' and bk_load = '1') or (bk_saveD = '0' and status(14) = '1')) then
+                bk_state <= '1';
+                sd_lba <= (others =>'0');
+                sd_rd <= bk_load;
+                sd_wr <= not bk_load;
+            end if;
+        else
+            if sd_ackD = '1' and sd_ack = '0' then
+                if sd_lba(5 downto 0) = "111111" then
+                    bk_load <= '0';
+                    bk_state <= '0';
+                else
+                    sd_lba <= sd_lba + 1;
+                    sd_rd  <= bk_load;
+                    sd_wr  <= not bk_load;
+                end if;
+            end if;
+        end if;
+    end if;
+end process;
 
 data_io_inst: data_io
     port map (

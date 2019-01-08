@@ -80,6 +80,12 @@ entity Virtual_Toplevel is
 		joya : in std_logic_vector(11 downto 0) := (others =>'1');
 		joyb : in std_logic_vector(11 downto 0) := (others =>'1');
 
+		saveram_addr : in std_logic_vector(14 downto 0);
+		saveram_we   : in std_logic;
+		saveram_din  : in std_logic_vector(7 downto 0);
+		saveram_rd   : in std_logic;
+		saveram_dout : out std_logic_vector(7 downto 0);
+
         -- ROM Loader / Host boot data
 		ext_reset_n    : in std_logic := '1';
 		ext_bootdone   : in std_logic := '0';
@@ -160,7 +166,7 @@ type sdrc_t is ( SDRC_IDLE,
 	SDRC_T80);
 signal SDRC : sdrc_t;
 
-type sramrc_t is ( SRAMRC_IDLE,	SRAMRC_FX68);
+type sramrc_t is ( SRAMRC_IDLE,	SRAMRC_EXT, SRAMRC_FX68);
 signal SRAMRC : sramrc_t;
 signal SRAM_EN : std_logic;
 signal EEPROM_EN : std_logic;
@@ -518,7 +524,7 @@ DRAM_CKE <= '1';
 DRAM_CS_N <= '0';
 
 -- LED
-LED <= FM_ENABLE;
+LED <= '0';
 
 -- -----------------------------------------------------------------------
 -- SDRAM Controller
@@ -1770,14 +1776,22 @@ begin
 		SRAMRC <= SRAMRC_IDLE;
 
 	elsif rising_edge(MCLK) then
-		if FX68_SRAM_SEL = '0' then
+		if FX68_SRAM_SEL = '0' and saveram_rd ='0' and saveram_we = '0' then
 			FX68_SRAM_DTACK_N <= '1';
 		end if;
 
 		case SRAMRC is
 		when SRAMRC_IDLE =>
-			if VCLKCNT = "001" then
-				if FX68_SRAM_SEL = '1' and FX68_SRAM_DTACK_N = '1' then
+			--if VCLKCNT = "001" then
+				if (saveram_we = '1' or saveram_rd = '1') and FX68_SRAM_DTACK_N = '1' then
+					sram_req <= not sram_req;
+					sram_a <= saveram_addr(14 downto 0);
+					sram_d <= saveram_din & saveram_din;
+					sram_we <= saveram_we;
+					sram_u_n <= '0';
+					sram_l_n <= '0';
+					SRAMRC <= SRAMRC_EXT;
+				elsif FX68_SRAM_SEL = '1' and FX68_SRAM_DTACK_N = '1' then
 					sram_req <= not sram_req;
 					sram_a <= FX68_A(15 downto 1);
 					sram_d <= FX68_DO;
@@ -1786,11 +1800,18 @@ begin
 					sram_l_n <= FX68_LDS_N;
 					SRAMRC <= SRAMRC_FX68;
 				end if;
-			end if;
+			--end if;
 
 		when SRAMRC_FX68 =>
 			if sram_req = sram_ack then
 				FX68_SRAM_D <= sram_q;
+				FX68_SRAM_DTACK_N <= '0';
+				SRAMRC <= SRAMRC_IDLE;
+			end if;
+
+		when SRAMRC_EXT =>
+			if sram_req = sram_ack then
+				saveram_dout <= sram_q(7 downto 0);
 				FX68_SRAM_DTACK_N <= '0';
 				SRAMRC <= SRAMRC_IDLE;
 			end if;

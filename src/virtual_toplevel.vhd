@@ -139,6 +139,12 @@ signal ram68k_q : std_logic_vector(15 downto 0);
 signal ram68k_l_n : std_logic;
 signal ram68k_u_n : std_logic;
 
+type sdrc_t is ( SDRC_IDLE,
+	SDRC_FX68,
+	SDRC_DMA, 
+	SDRC_T80);
+signal SDRC : sdrc_t;
+
 -- SRAM
 signal sram_req : std_logic := '0';
 signal sram_ack : std_logic;
@@ -148,6 +154,13 @@ signal sram_d : std_logic_vector(15 downto 0);
 signal sram_q : std_logic_vector(15 downto 0);
 signal sram_l_n : std_logic;
 signal sram_u_n : std_logic;
+
+type sramrc_t is ( SRAMRC_IDLE,	SRAMRC_EXT, SRAMRC_FX68);
+signal SRAMRC : sramrc_t;
+signal SRAM_EN : std_logic;
+signal SRAM_EN_AUTO : std_logic;
+signal SRAM_EN_PAGEIN : std_logic;
+signal EEPROM_EN : std_logic;
 
 -- VRAM
 signal vram_req : std_logic;
@@ -159,19 +172,7 @@ signal vram_q : std_logic_vector(15 downto 0);
 signal vram_l_n : std_logic;
 signal vram_u_n : std_logic;
 
-
-type sdrc_t is ( SDRC_IDLE,
-	SDRC_FX68,
-	SDRC_DMA, 
-	SDRC_T80);
-signal SDRC : sdrc_t;
-
-type sramrc_t is ( SRAMRC_IDLE,	SRAMRC_EXT, SRAMRC_FX68);
-signal SRAMRC : sramrc_t;
-signal SRAM_EN : std_logic;
-signal EEPROM_EN : std_logic;
 -- Z80 RAM
-
 signal zram_a : std_logic_vector(12 downto 0);
 signal zram_d : std_logic_vector(7 downto 0);
 signal zram_q : std_logic_vector(7 downto 0);
@@ -278,6 +279,7 @@ signal FX68_EEPROM_SEL		: std_logic;
 signal FX68_EEPROM_DATA		: std_logic_vector(15 downto 0);
 signal FX68_EEPROM_DTACK_N	: std_logic;
 
+signal BIG_CART             : std_logic;
 signal SSF2_MAP             : std_logic_vector(8*6-1 downto 0);
 signal SSF2_USE_MAP         : std_logic;
 signal ROM_PAGE             : std_logic_vector(2 downto 0);
@@ -829,10 +831,7 @@ port map(
 -- #############################################################################
 -- #############################################################################
 
--- UNUSED SIGNALS
--- VBUS_DMA_ACK <= '0';
--- VRAM_DTACK_N <= '0';
-process( MCLK )
+process( MRST_N, MCLK )
 begin
 	if MRST_N = '0' then
 		FX68_IO_READY <= '1';
@@ -1415,12 +1414,13 @@ end process;
 -- -----------------------------------------------------------------------
 -- -----------------------------------------------------------------------
 -- -----------------------------------------------------------------------
--- SSF2 mapper
+-- !TIME control (SSF2 mapper / SRAM page in/out)
 process( MRST_N, MCLK )
 begin
     if rising_edge( MCLK ) then
         if ( MRST_N = '0' ) then
             SSF2_USE_MAP <= '0';
+            SRAM_EN_PAGEIN <= '0';
             SSF2_MAP( 5 downto  0) <= "00"&x"0";
             SSF2_MAP(11 downto  6) <= "00"&x"1";
             SSF2_MAP(17 downto 12) <= "00"&x"2";
@@ -1430,25 +1430,31 @@ begin
             SSF2_MAP(41 downto 36) <= "00"&x"6";
             SSF2_MAP(47 downto 42) <= "00"&x"7";
         elsif FX68_A(23 downto 4) = x"a130f" and FX68_SEL = '1' and FX68_RNW = '0' then
-            SSF2_USE_MAP <= '1';
-            case FX68_A(3 downto 1) is
-            when "000" =>
-                null; -- always 0;
-            when "001" =>
-                SSF2_MAP(11 downto 6) <= FX68_DO(5 downto 0);
-            when "010" =>
-                SSF2_MAP(17 downto 12) <= FX68_DO(5 downto 0);
-            when "011" =>
-                SSF2_MAP(23 downto 18) <= FX68_DO(5 downto 0);
-            when "100" =>
-                SSF2_MAP(29 downto 24) <= FX68_DO(5 downto 0);
-            when "101" =>
-                SSF2_MAP(35 downto 30) <= FX68_DO(5 downto 0);
-            when "110" =>
-                SSF2_MAP(41 downto 36) <= FX68_DO(5 downto 0);
-            when "111" =>
-                SSF2_MAP(47 downto 42) <= FX68_DO(5 downto 0);
-            end case;
+            if BIG_CART = '1' then
+                -- use for ROM bank switch when cart > 4 MB
+                SSF2_USE_MAP <= '1';
+                case FX68_A(3 downto 1) is
+                when "000" =>
+                    null; -- always 0;
+                when "001" =>
+                    SSF2_MAP(11 downto 6) <= FX68_DO(5 downto 0);
+                when "010" =>
+                    SSF2_MAP(17 downto 12) <= FX68_DO(5 downto 0);
+                when "011" =>
+                    SSF2_MAP(23 downto 18) <= FX68_DO(5 downto 0);
+                when "100" =>
+                    SSF2_MAP(29 downto 24) <= FX68_DO(5 downto 0);
+                when "101" =>
+                    SSF2_MAP(35 downto 30) <= FX68_DO(5 downto 0);
+                when "110" =>
+                    SSF2_MAP(41 downto 36) <= FX68_DO(5 downto 0);
+                when "111" =>
+                    SSF2_MAP(47 downto 42) <= FX68_DO(5 downto 0);
+                end case;
+            else
+                -- use for SRAM paging
+                SRAM_EN_PAGEIN <= FX68_DO(0);
+            end if;
         end if;
     end if;
 end process;
@@ -1475,7 +1481,7 @@ ROM_PAGE_A <= FX68_A(23 downto 19) when FX68_FLASH_SEL = '1' and FX68_DTACK_N = 
 -- DMA  : 000000 - 9fffff
 
 FX68_FLASH_SEL <= '1' when (FX68_A(23) = '0' or FX68_A(23 downto 21) = "100") and FX68_SEL = '1' and
-	FX68_RNW = '1' and FX68_SRAM_SEL = '0' and FX68_EEPROM_SEL = '0' and CART_EN = '1' else '0';
+	FX68_RNW = '1' and FX68_SRAM_SEL = '0' and FX68_SRAM_SEL = '0' and FX68_EEPROM_SEL = '0' and CART_EN = '1' else '0';
 T80_FLASH_SEL <= '1' when T80_A(15) = '1' and T80_MREQ_N = '0' and T80_RD_N = '0' and (BAR(23) = '0' or BAR(23 downto 21) = "100")
 	else '0';
 DMA_FLASH_SEL <= '1' when (VBUS_ADDR(23) = '0' or VBUS_ADDR(23 downto 21) = "100") and VBUS_SEL = '1' else '0';
@@ -1761,7 +1767,9 @@ begin
 end process;
 
 -- SRAM at 0x200000 - 20FFFF
--- EEPROM at 0x20000
+-- EEPROM at 0x200000
+SRAM_EN <= SRAM_EN_AUTO or SRAM_EN_PAGEIN;
+
 FX68_SRAM_SEL <= '1' when SRAM_EN = '1' and FX68_SEL = '1' and FX68_A(23 downto 16) = x"20" and FX68_EEPROM_SEL = '0' else '0';
 FX68_EEPROM_SEL <= '1' when EEPROM_EN = '1' and FX68_SEL = '1' and FX68_A(23 downto 4) = x"20000" and FX68_A(3 downto 1) = "000" else '0';
 
@@ -1910,7 +1918,8 @@ begin
 			romwr_req <= '0';
 			romwr_a <= to_unsigned(0, 23);
 			bootState<=BOOT_READ_1;
-			SRAM_EN <= '0';
+			SRAM_EN_AUTO <= '0';
+			BIG_CART <= '0';
 		elsif reset = '0' then
 			ext_data_req <= '0';
 			romwr_req <= '0';
@@ -1927,7 +1936,11 @@ begin
 						ext_data_req <= '0';
 						-- enable SRAM for carts < 2 MB
 						if romwr_a(23 downto 21) = "000" then
-							SRAM_EN <= '1';
+							SRAM_EN_AUTO <= '1';
+						end if;
+						-- enable ROM paging for carts > 4 MB
+						if romwr_a(23 downto 22) /= "00" then
+							BIG_CART <= '1';
 						end if;
 						bootState <= BOOT_DONE;
 					end if;

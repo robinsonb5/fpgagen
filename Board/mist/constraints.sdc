@@ -99,7 +99,7 @@ set_false_path -to [get_ports {LED}]
 #**************************************************************
 
 set_multicycle_path -from [get_clocks {U00|altpll_component|auto_generated|pll1|clk[2]}] -to [get_clocks {U00|altpll_component|auto_generated|pll1|clk[0]}] -setup 2
-set_multicycle_path -from [get_clocks {U00|altpll_component|auto_generated|pll1|clk[2]}] -to [get_clocks {U00|altpll_component|auto_generated|pll1|clk[0]}] -hold 2
+set_multicycle_path -from [get_clocks {U00|altpll_component|auto_generated|pll1|clk[2]}] -to [get_clocks {U00|altpll_component|auto_generated|pll1|clk[0]}] -hold 1
 #set_multicycle_path -from [get_clocks {sysclk}] -to [get_clocks {memclk}] -setup 2
 #set_multicycle_path -from [get_clocks {sysclk}] -to [get_clocks {memclk}] -hold 2
 
@@ -109,10 +109,10 @@ set_multicycle_path -start -setup -from [get_keepers Virtual_Toplevel:virtualtop
 set_multicycle_path -start -hold -from [get_keepers Virtual_Toplevel:virtualtoplevel|fx68k:fx68k_inst|Ir[*]] -to [get_keepers Virtual_Toplevel:virtualtoplevel|fx68k:fx68k_inst|nanoAddr[*]] 1
 
 set_multicycle_path -from {Virtual_Toplevel:virtualtoplevel|T80pa:t80|T80:u0|*} -setup 2
-set_multicycle_path -from {Virtual_Toplevel:virtualtoplevel|T80pa:t80|T80:u0|*} -hold 2
+set_multicycle_path -from {Virtual_Toplevel:virtualtoplevel|T80pa:t80|T80:u0|*} -hold 1
 
 set_multicycle_path -to {VGA_*[*]} -setup 2
-set_multicycle_path -to {VGA_*[*]} -hold 2
+set_multicycle_path -to {VGA_*[*]} -hold 1
 
 #**************************************************************
 # Set Maximum Delay

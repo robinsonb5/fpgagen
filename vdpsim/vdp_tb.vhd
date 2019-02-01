@@ -20,7 +20,6 @@ component vdp
        port(
                 RST_N           : in std_logic;
                 CLK                     : in std_logic;
-                MEMCLK  : in std_logic;
 
                 SEL                     : in std_logic;
                 A                       : in std_logic_vector(4 downto 0);
@@ -89,7 +88,6 @@ begin
     port map (
       RST_N => reset_n,
       CLK => clk,
-      MEMCLK => memclk,
 
       -- CPU bus interface
       SEL => CPU_SEL,

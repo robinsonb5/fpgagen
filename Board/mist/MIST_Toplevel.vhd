@@ -88,6 +88,10 @@ signal par_out_data: std_logic_vector(7 downto 0);
 signal par_out_strobe: std_logic;
 signal ypbpr: std_logic;
 signal scandoubler_disable: std_logic;
+signal mouse_x: std_logic_vector(7 downto 0);
+signal mouse_y: std_logic_vector(7 downto 0);
+signal mouse_flags: std_logic_vector(7 downto 0);
+signal mouse_strobe: std_logic;
 
 -- sd io
 signal sd_lba:  unsigned(31 downto 0);
@@ -140,6 +144,7 @@ constant CONF_STR : string :=
     "O6,Joystick swap,Off,On;"&
     "O9,Swap Y axis,Off,On;"&
     "OA,Only 3 buttons,Off,On;"&
+    "OFG,Mouse,Off,Port 1,Port 2;"&
     "O3,VRAM Speed,Slow,Fast;"&
     "OD,Fake EEPROM,Off,On;"&
     "O4,FM Sound,Enable,Disable;"&
@@ -219,6 +224,10 @@ component user_io
         ps2_kbd_data : out std_logic;
         ps2_mouse_clk : out std_logic;
         ps2_mouse_data : out std_logic;
+        mouse_x: out std_logic_vector(7 downto 0);
+        mouse_y: out std_logic_vector(7 downto 0);
+        mouse_flags: out std_logic_vector(7 downto 0);
+        mouse_strobe: out std_logic;
         serial_data : in std_logic_vector(7 downto 0);
         serial_strobe : in std_logic
       );
@@ -315,6 +324,7 @@ ext_sw(7) <= status(9); --swap Y
 ext_sw(8) <= status(10); --3 buttons
 ext_sw(9) <= not status(3); -- VRAM speed emulation
 ext_sw(10) <= status(13); -- Fake EEPROM
+ext_sw(12 downto 11) <= status(16 downto 15); -- Mouse
 
 --SDRAM_A(12)<='0';
 virtualtoplevel : entity work.Virtual_Toplevel
@@ -341,9 +351,15 @@ virtualtoplevel : entity work.Virtual_Toplevel
     DRAM_ADDR => SDRAM_A,
     DRAM_DQ => SDRAM_DQ,
 
---    -- Joystick ports (Port_A, Port_B)
+    -- Joystick ports (Port_A, Port_B)
 	joya => joy_1(11 downto 0),
 	joyb => joy_0(11 downto 0),
+
+    -- Mouse
+    mouse_x => mouse_x,
+    mouse_y => mouse_y,
+    mouse_flags => mouse_flags,
+    mouse_strobe => mouse_strobe,
 
 	-- Video, Audio/CMT ports
     RED => gen_red,
@@ -413,6 +429,10 @@ user_io_inst : user_io
         ps2_kbd_data => open,
         ps2_mouse_clk => open,
         ps2_mouse_data => open,
+        mouse_x => mouse_x,
+        mouse_y => mouse_y,
+        mouse_flags => mouse_flags,
+        mouse_strobe => mouse_strobe,
         serial_data => par_out_data,
         serial_strobe => par_out_strobe
  );

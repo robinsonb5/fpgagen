@@ -80,6 +80,11 @@ entity Virtual_Toplevel is
 		joya : in std_logic_vector(11 downto 0) := (others =>'1');
 		joyb : in std_logic_vector(11 downto 0) := (others =>'1');
 
+		mouse_x: in std_logic_vector(7 downto 0);
+		mouse_y: in std_logic_vector(7 downto 0);
+		mouse_flags: in std_logic_vector(7 downto 0);
+		mouse_strobe: in std_logic;
+
 		saveram_addr : in std_logic_vector(14 downto 0);
 		saveram_we   : in std_logic;
 		saveram_din  : in std_logic_vector(7 downto 0);
@@ -434,6 +439,7 @@ signal KEY : std_logic_vector(3 downto 0);
 signal PAL : std_logic;
 signal model: std_logic;
 signal PAL_IO: std_logic;
+signal MSEL : std_logic_vector(1 downto 0);
 
 -- DEBUG
 signal HEXVALUE			: std_logic_vector(15 downto 0);
@@ -517,6 +523,7 @@ PAL <= SW(6);
 
 VDP_VRAM_SPEED <= SW(9);
 EEPROM_EN <= SW(10);
+MSEL <= SW(12 downto 11);
 
 -- DIP Switches
 SW <= ext_sw;
@@ -720,6 +727,12 @@ port map(
 	P2_Y		=> not JOY_2(9),
 	P2_Z		=> not JOY_2(10),
 	P2_MODE		=> not JOY_2(11),
+
+	MSEL		=> MSEL,
+	mouse_x		=> mouse_x,
+	mouse_y		=> mouse_y,
+	mouse_flags => mouse_flags,
+	mouse_strobe => mouse_strobe,
 
 	SEL		=> IO_SEL,
 	A			=> IO_A,

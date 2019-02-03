@@ -63,11 +63,17 @@ module user_io #(parameter STRLEN=0, parameter PS2DIV=100) (
 	output reg          img_mounted, //rising edge if a new image is mounted
 	output reg   [31:0] img_size,    // size of image in bytes
 
-	// ps2 keyboard emulation
+	// ps2 keyboard/mouse emulation
 	output              ps2_kbd_clk,
 	output reg          ps2_kbd_data,
 	output              ps2_mouse_clk,
 	output reg          ps2_mouse_data,
+
+	// mouse data
+	output reg    [7:0] mouse_x,
+	output reg    [7:0] mouse_y,
+	output reg    [7:0] mouse_flags,  // YOvfl, XOvfl, dy8, dx8, 1, mbtn, rbtn, lbtn
+	output reg          mouse_strobe, // mouse data is valid on mouse_strobe
 
 	// serial com port 
 	input [7:0]         serial_data,
@@ -374,11 +380,16 @@ always @(posedge clk_sys) begin
 	reg [7:0] acmd;
 	reg [7:0] abyte_cnt;   // counts bytes
 
+	reg [7:0] mouse_flags_r;
+	reg [7:0] mouse_x_r;
+
 	//synchronize between SPI and sys clock domains
 	spi_receiver_strobeD <= spi_receiver_strobe_r;
 	spi_receiver_strobe <= spi_receiver_strobeD;
 	spi_transfer_endD	<= spi_transfer_end_r;
 	spi_transfer_end	<= spi_transfer_endD;
+
+	mouse_strobe <= 0;
 
 	if (~spi_transfer_endD & spi_transfer_end) begin
 		abyte_cnt <= 8'd0;
@@ -402,6 +413,14 @@ always @(posedge clk_sys) begin
 					// store incoming ps2 mouse bytes 
 					ps2_mouse_fifo[ps2_mouse_wptr] <= spi_byte_in;
 					ps2_mouse_wptr <= ps2_mouse_wptr + 1'd1;
+					if (abyte_cnt == 1) mouse_flags_r <= spi_byte_in;
+					else if (abyte_cnt == 2) mouse_x_r <= spi_byte_in;
+					else if (abyte_cnt == 3) begin
+						mouse_flags <= mouse_flags_r;
+						mouse_x <= mouse_x_r;
+						mouse_y <= spi_byte_in;
+						mouse_strobe <= 1;
+					end
 				end
 				8'h05: begin
 					// store incoming ps2 keyboard bytes 

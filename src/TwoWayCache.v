@@ -32,7 +32,7 @@ module TwoWayCache
 	input cpu_rwl_n,
 	input cpu_rwu_n,
 	input [15:0] data_from_cpu,
-	output [15:0] data_to_cpu,
+	output reg [15:0] data_to_cpu,
 	input [15:0] data_from_sdram,
 	output reg sdram_req,
 	input sdram_fill
@@ -116,10 +116,6 @@ wire [10:0] cacheline1;
 wire [10:0] cacheline2;
 
 reg [10:3] latched_cpuaddr;
-reg [15:0] firstword;
-
-assign data_to_cpu = (readword_burst ? firstword :
-									((tag_hit1 && data_valid1) ? data_port1_r[15:0] : data_port2_r[15:0]));
 
 assign cpu_cachevalid = ((tag_hit1 && data_valid1) || (tag_hit2 && data_valid2)) && !readword_burst;
 								
@@ -181,7 +177,9 @@ begin
 	init<=1'b0;
 	readword_burst<=1'b0;
 
-	case(state)
+	if(reset_n == 0)
+		state<=INIT1;
+	else case(state)
 
 		// We use an init state here to loop through the data, clearing
 		// the valid flag - for which we'll use bit 17 of the data entry.
@@ -253,9 +251,9 @@ begin
 
 				cpu_ack<=1'b1;
 
-				if(cpu_rw_n==1'b0)
-					state<=WRITE2;
-				else
+				//if(cpu_rw_n==1'b0)
+					//state<=WRITE2;
+				//else
 					state<=WAITING;
 			end
 
@@ -274,9 +272,8 @@ begin
 				// Check both tags for a match...
 				if(tag_hit1 && data_valid1)
 				begin
-					// Copy data to output
-//					data_to_cpu<=data_port1_r;
 					cpu_ack<=1'b1;
+					data_to_cpu <= data_port1_r[15:0];
 
 					// Mark tag1 as most recently used.
 					tag_mru1<=1'b1;
@@ -284,10 +281,9 @@ begin
 				end
 				else if(tag_hit2 && data_valid2)
 				begin
-					// Copy data to output
-//					data_to_cpu<=data_port2_r;
 					cpu_ack<=1'b1;
-					
+					data_to_cpu <= data_port2_r[15:0];
+
 					// Mark tag2 as most recently used.
 					tag_mru1<=1'b0;
 					tag_wren1<=1'b1;
@@ -336,7 +332,7 @@ begin
 			if (sdram_fill==1'b1)
 			begin
 				sdram_req<=1'b0;
-				firstword <= data_from_sdram;
+				data_to_cpu <= data_from_sdram;
 				//cpu_ack<=1'b1; // Too soon?
 
 				// write first word to Cache...
@@ -384,6 +380,7 @@ begin
 
 		FILL5:
 		begin
+			//cpu_ack <= 1'b1;
 			readword<=cpu_addr[2:1];
 //			state<=WAITING;
 			state<=PAUSE1; // Allow one extra clock after clearing readword_burst
@@ -393,8 +390,6 @@ begin
 			state<=WAITING;
 	endcase
 
-	if(reset_n==1'b0)
-		state<=INIT1;
 end
 
 

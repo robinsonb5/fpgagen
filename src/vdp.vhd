@@ -48,7 +48,6 @@ entity vdp is
 	port(
 		RST_N		: in std_logic;
 		CLK			: in std_logic;
-		MEMCLK	: in std_logic;
 		
 		SEL			: in std_logic;
 		A			: in std_logic_vector(4 downto 0);
@@ -499,6 +498,7 @@ signal OBJ_SPINFO_D			: std_logic_vector(34 downto 0);
 signal OBJ_SPINFO_WE		: std_logic;
 signal OBJ_SPINFO_Q			: std_logic_vector(34 downto 0);
 
+signal OBJ_COLINFO_CLK		: std_logic;
 signal OBJ_COLINFO_ADDR_A	: std_logic_vector(8 downto 0);
 signal OBJ_COLINFO_ADDR_B	: std_logic_vector(8 downto 0);
 signal OBJ_COLINFO_D_B		: std_logic_vector(6 downto 0);
@@ -670,7 +670,7 @@ generic map (
 port map(
 	address_a	=> OBJ_COLINFO_ADDR_A,
 	address_b	=> OBJ_COLINFO_ADDR_B,
-	clock		=> MEMCLK,
+	clock		=> OBJ_COLINFO_CLK,
 	data_a		=> (others => '0'),
 	data_b		=> OBJ_COLINFO_D_B,
 	wren_a		=> OBJ_COLINFO_WE_A,
@@ -678,7 +678,7 @@ port map(
 	q_a			=> OBJ_COLINFO_Q_A,
 	q_b			=> open
 );
-
+OBJ_COLINFO_CLK <= not CLK;
 OBJ_COLINFO_ADDR_A <= OBJ_COLINFO_ADDR_RD_SP3 when SP3C /= SP3C_DONE else OBJ_COLINFO_ADDR_RD_REND;
 OBJ_COLINFO_ADDR_B <= OBJ_COLINFO_ADDR_WR_SP3 when SP3C /= SP3C_DONE else OBJ_COLINFO_ADDR_WR_REND;
 OBJ_COLINFO_WE_A <= '0';

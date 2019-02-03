@@ -71,6 +71,12 @@ entity gen_io is
 		P2_Y	   : in std_logic;
 		P2_Z	   : in std_logic;
 
+		MSEL   : in std_logic_vector(1 downto 0);
+		mouse_x: in std_logic_vector(7 downto 0);
+		mouse_y: in std_logic_vector(7 downto 0);
+		mouse_flags: in std_logic_vector(7 downto 0);
+		mouse_strobe: in std_logic;
+
 		SEL		: in std_logic;
 		A			: in std_logic_vector(4 downto 0);
 		RNW		: in std_logic;
@@ -112,6 +118,25 @@ signal RD			: std_logic_vector(7 downto 0);
 
 signal THA			: std_logic;
 signal THB			: std_logic;
+signal THA_D		: std_logic;
+signal THB_D		: std_logic;
+
+signal TRA			: std_logic;
+signal TRB			: std_logic;
+signal TRA_D		: std_logic;
+signal TRB_D		: std_logic;
+
+signal MSTATE       : std_logic_vector(3 downto 0);
+signal MOUSE        : std_logic_vector(4 downto 0);
+signal MSTROB       : std_logic;
+signal MACKDELAY	: integer;
+signal mouse_x_latch: std_logic_vector(7 downto 0);
+signal mouse_y_latch: std_logic_vector(7 downto 0);
+signal mouse_flags_latch: std_logic_vector(7 downto 0);
+
+signal mouse_x_latch_d: std_logic_vector(7 downto 0);
+signal mouse_y_latch_d: std_logic_vector(7 downto 0);
+signal mouse_flags_latch_d: std_logic_vector(7 downto 0);
 
 signal JCNT1		: integer range 0 to 3;
 signal JCNT2		: integer range 0 to 3;
@@ -130,6 +155,12 @@ WD <= DI(7 downto 0) when LDS_N = '0' else DI(15 downto 8);
 --invalid combination (PAL with Japanese model) means auto-detect
 VERS <= VERS_D when MODEL = '0' and PAL = '1' else (MODEL & PAL & "10" & x"0");
 PAL_OUT <= VERS(6);
+
+THA <= DATA(6) or not CTLA(6);
+THB <= DATB(6) or not CTLB(6);
+
+TRA <= DATA(5) or not CTLA(5);
+TRB <= DATB(5) or not CTLB(5);
 
 process( RST_N, CLK )
 begin
@@ -173,11 +204,14 @@ begin
 			JTMR2 <= JTMR2 + 1;
 		end if;
 
-		THA <= DATA(6) or not CTLA(6);
-		if THA = '0' and (DATA(6) or not CTLA(6)) = '1' then JTMR1 <= 0; JCNT1 <= JCNT1 + 1; end if;
+		THA_D <= DATA(6) or not CTLA(6);
+		if THA_D = '0' and THA = '1' then JTMR1 <= 0; JCNT1 <= JCNT1 + 1; end if;
 
-		THB <= DATB(6) or not CTLB(6);
-		if THB = '0' and (DATB(6) or not CTLB(6)) = '1' then JTMR2 <= 0; JCNT2 <= JCNT2 + 1; end if;
+		THB_D <= DATB(6) or not CTLB(6);
+		if THB_D = '0' and THB = '1' then JTMR2 <= 0; JCNT2 <= JCNT2 + 1; end if;
+
+		TRA_D <= DATA(5) or not CTLA(5);
+		TRB_D <= DATB(5) or not CTLB(5);
 
 		if SEL = '0' then
 			FF_DTACK_N <= '1';
@@ -227,7 +261,8 @@ begin
 				when x"1" =>
 					RD <= DATA;
 					if CTLA(7) = '0' then RD(7) <= '1'; end if;
-					if DATA(6) = '1' then
+					if MSEL(0) = '0' and DATA(6) = '1' then
+						-- joy TH = 1
 						if(J3BUT='1' or JCNT1/=3) then
 							if CTLA(5) = '0' then RD(5) <= P1_C;     end if;
 							if CTLA(4) = '0' then RD(4) <= P1_B;     end if;
@@ -243,7 +278,8 @@ begin
 							if CTLA(1) = '0' then RD(1) <= P1_Y;     end if;
 							if CTLA(0) = '0' then RD(0) <= P1_Z;     end if;
 						end if;
-					else
+					elsif MSEL(0) = '0' then
+						-- joy TH = 0
 						if(J3BUT='1' or JCNT1<2) then
 							if CTLA(5) = '0' then RD(5) <= P1_START; end if;
 							if CTLA(4) = '0' then RD(4) <= P1_A;     end if;
@@ -266,11 +302,18 @@ begin
 							if CTLA(1) = '0' then RD(1) <= '1';      end if;
 							if CTLA(0) = '0' then RD(0) <= '1';      end if;
 						end if;
+					else
+						-- mouse
+						if CTLA(4) = '0' then RD(4) <= MOUSE(4); end if;
+						if CTLA(3) = '0' then RD(3) <= MOUSE(3); end if;
+						if CTLA(2) = '0' then RD(2) <= MOUSE(2); end if;
+						if CTLA(1) = '0' then RD(1) <= MOUSE(1); end if;
+						if CTLA(0) = '0' then RD(0) <= MOUSE(0); end if;
 					end if;
 				when x"2" =>
 					RD <= DATB;
 					if CTLB(7) = '0' then RD(7) <= '1'; end if;
-					if DATB(6) = '1' then
+					if MSEL(1) = '0' and DATB(6) = '1' then
 						if(J3BUT='1' or JCNT2/=3) then
 							if CTLB(5) = '0' then RD(5) <= P2_C;     end if;
 							if CTLB(4) = '0' then RD(4) <= P2_B;     end if;
@@ -286,7 +329,7 @@ begin
 							if CTLB(1) = '0' then RD(1) <= P2_Y;     end if;
 							if CTLB(0) = '0' then RD(0) <= P2_Z;     end if;
 						end if;
-					else
+					elsif MSEL(1) = '0' then
 						if(J3BUT='1' or JCNT2<2) then
 							if CTLB(5) = '0' then RD(5) <= P2_START; end if;
 							if CTLB(4) = '0' then RD(4) <= P2_A;     end if;
@@ -309,6 +352,13 @@ begin
 							if CTLB(1) = '0' then RD(1) <= '1';      end if;
 							if CTLB(0) = '0' then RD(0) <= '1';      end if;
 						end if;
+					else
+						-- mouse
+						if CTLB(4) = '0' then RD(4) <= MOUSE(4); end if;
+						if CTLB(3) = '0' then RD(3) <= MOUSE(3); end if;
+						if CTLB(2) = '0' then RD(2) <= MOUSE(2); end if;
+						if CTLB(1) = '0' then RD(1) <= MOUSE(1); end if;
+						if CTLB(0) = '0' then RD(0) <= MOUSE(0); end if;
 					end if;
 				when x"3" => -- Unconnected port
 					RD <= DATC;
@@ -349,6 +399,80 @@ begin
 			end if;
 			
 			FF_DTACK_N <= '0';
+		end if;
+	end if;
+end process;
+
+process( RST_N, CLK )
+begin
+	if RST_N = '0' then
+		MOUSE <= (others => '0');
+		MSTATE <= (others =>'0');
+		MACKDELAY <= 0;
+		MSTROB <= '0';
+	elsif rising_edge(CLK) then
+		MSTROB <= '0';
+		if MSTROB = '1' then
+			case MSTATE is
+			when "0000" => MOUSE <= "10000";
+			when "0001" => MOUSE <= "01011";
+			when "0010" => MOUSE(3 downto 0) <= "1111";
+			when "0011" => MOUSE(3 downto 0) <= "1111";
+			when "0100" => MOUSE(3 downto 0) <= mouse_flags_latch_d(7 downto 4);
+			when "0101" => MOUSE(3 downto 0) <= '0' & mouse_flags_latch_d(2 downto 0);
+			when "0110" => MOUSE(3 downto 0) <= mouse_x_latch_d(7 downto 4);
+			when "0111" => MOUSE(3 downto 0) <= mouse_x_latch_d(3 downto 0);
+			when "1000" => MOUSE(3 downto 0) <= mouse_y_latch_d(7 downto 4);
+			when "1001" => MOUSE(3 downto 0) <= mouse_y_latch_d(3 downto 0);
+			when others => null;
+			end case;
+		end if;
+
+		if MSTATE = "1001" and
+			((MSEL(0) = '1' and THA = '1' and TRA = '1') or
+			 (MSEL(1) = '1' and THB = '1' and TRB = '1')) then
+			mouse_x_latch <= (others => '0');
+			mouse_y_latch <= (others => '0');
+			mouse_flags_latch(7 downto 4) <= (others => '0');
+		end if;
+		if mouse_strobe = '1' then
+			mouse_x_latch <= mouse_x;
+			mouse_y_latch <= mouse_y;
+			mouse_flags_latch <= mouse_flags;
+		end if;
+		if MSTATE = "0000" and MSTROB = '1' then
+			mouse_x_latch_d <= mouse_x_latch;
+			mouse_y_latch_d <= mouse_y_latch;
+			mouse_flags_latch_d <= mouse_flags_latch;
+		end if;
+
+		if MSEL(0) = '1' then
+			if THA = '1' and TRA = '1' then
+				MSTATE <= "0000";
+				MACKDELAY <= 0;
+				MSTROB <= '1';
+			elsif ((THA_D /= THA) or (TRA_D /= TRA)) and MSTATE /= "1001" then
+				MSTATE <= MSTATE + 1;
+				MACKDELAY <= 500;
+				MSTROB <= '1';
+			end if;
+		elsif MSEL(1) = '1' then
+			if THB = '1' and TRB = '1' then
+				MSTATE <= "0000";
+				MACKDELAY <= 0;
+				MSTROB <= '1';
+			elsif ((THB_D /= THB) or (TRB_D /= TRB)) and MSTATE /= "1001" then
+				MSTATE <= MSTATE + 1;
+				MACKDELAY <= 500;
+				MSTROB <= '1';
+			end if;
+		end if;
+
+		if MACKDELAY /= 0 then
+			MACKDELAY <= MACKDELAY - 1;
+			if MACKDELAY = 1 then
+				MOUSE(4) <= not MOUSE(4);
+			end if;
 		end if;
 	end if;
 end process;

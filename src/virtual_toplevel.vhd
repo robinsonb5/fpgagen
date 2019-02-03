@@ -36,9 +36,9 @@ library STD;
 use STD.TEXTIO.ALL;
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.STD_LOGIC_ARITH.ALL;
 use IEEE.STD_LOGIC_UNSIGNED.ALL;
 use IEEE.STD_LOGIC_TEXTIO.all;
-use IEEE.NUMERIC_STD.ALL;
 use work.jt12.all;
 use work.jt89.all;
 
@@ -112,6 +112,8 @@ entity Virtual_Toplevel is
 end entity;
 
 architecture rtl of Virtual_Toplevel is
+
+constant addrwidth : integer := rowAddrBits+colAddrBits+2;
 
 -- "FLASH"
 signal romwr_req : std_logic := '0';
@@ -538,7 +540,7 @@ LED <= '0';
 -- -----------------------------------------------------------------------
 -- SDRAM Controller
 -- -----------------------------------------------------------------------		
-sdc : entity work.sdram_controller generic map (
+sdc : entity work.chameleon_sdram generic map (
 	colAddrBits => colAddrBits,
 	rowAddrBits => rowAddrBits,
 	prechargeTiming => prechargeTiming,
@@ -546,42 +548,42 @@ sdc : entity work.sdram_controller generic map (
 ) port map(
 	clk			=> SDR_CLK,
 	reset_n => reset,
-	
+
 	std_logic_vector(sd_data)	=> DRAM_DQ,
 	std_logic_vector(sd_addr)	=> DRAM_ADDR,
-	sd_we_n							=> DRAM_WE_N,
-	sd_ras_n							=> DRAM_RAS_N,
-	sd_cas_n							=> DRAM_CAS_N,
-	sd_ba_0							=> DRAM_BA_0,
-	sd_ba_1							=> DRAM_BA_1,
-	sd_ldqm							=> DRAM_LDQM,
-	sd_udqm							=> DRAM_UDQM,
-		
+	sd_we_n						=> DRAM_WE_N,
+	sd_ras_n					=> DRAM_RAS_N,
+	sd_cas_n					=> DRAM_CAS_N,
+	sd_ba_0						=> DRAM_BA_0,
+	sd_ba_1						=> DRAM_BA_1,
+	sd_ldqm						=> DRAM_LDQM,
+	sd_udqm						=> DRAM_UDQM,
+
 	romwr_req	=> romwr_req,
 	romwr_ack	=> romwr_ack,
 	romwr_we 	=> romwr_we,
-	romwr_a		=> std_logic_vector(romwr_a),
+	romwr_a		=> conv_std_logic_vector(0, addrwidth - 23) & std_logic_vector(romwr_a),
 	romwr_d		=> romwr_d,
 	romwr_q		=> romwr_q,
-	
+
 	romrd_req	=> romrd_req,
 	romrd_ack	=> romrd_ack,
-	romrd_a		=> romrd_a,
+	romrd_a		=> conv_std_logic_vector(0, addrwidth - 23) & romrd_a,
 	romrd_q		=> romrd_q,
 
 	ram68k_req	=> ram68k_req,
 	ram68k_ack	=> ram68k_ack,
 	ram68k_we	=> ram68k_we,
-	ram68k_a		=> ram68k_a,
-	ram68k_d		=> ram68k_d,
-	ram68k_q		=> ram68k_q,
+	ram68k_a	=> conv_std_logic_vector(2#100000000#, addrwidth - 15) & ram68k_a,
+	ram68k_d	=> ram68k_d,
+	ram68k_q	=> ram68k_q,
 	ram68k_u_n	=> ram68k_u_n,
 	ram68k_l_n	=> ram68k_l_n,
 
 	sram_req	=> sram_req,
 	sram_ack	=> sram_ack,
 	sram_we	=> sram_we,
-	sram_a		=> sram_a,
+	sram_a		=> conv_std_logic_vector(2#010000000#, addrwidth - 15) & sram_a,
 	sram_d		=> sram_d,
 	sram_q		=> sram_q,
 	sram_u_n	=> sram_u_n,
@@ -590,7 +592,7 @@ sdc : entity work.sdram_controller generic map (
 	vram_req	=> vram_req,
 	vram_ack => vram_ack,
 	vram_we	=> vram_we,
-	vram_a	=> vram_a,
+	vram_a	=> conv_std_logic_vector(2#110000000#, addrwidth - 15) & vram_a,
 	vram_d	=> vram_d,
 	vram_q	=> vram_q,
 	vram_u_n => vram_u_n,
@@ -1524,7 +1526,7 @@ begin
 
 		case FC is
 		when FC_IDLE =>			
-			if VCLKCNT = "001" then
+			--if VCLKCNT = "001" then
 
 				if FX68_FLASH_SEL = '1' and FX68_FLASH_DTACK_N = '1' then
 					-- FF_FL_ADDR <= FX68_A(21 downto 0);
@@ -1609,7 +1611,7 @@ begin
 						FC <= FC_DMA_RD;
 					end if;
 				end if;
-			end if;
+			--end if;
 
 		when FC_FX68_RD =>
 			if romrd_req = romrd_ack then
@@ -1719,7 +1721,7 @@ begin
 
 		case SDRC is
 		when SDRC_IDLE =>
-			if VCLKCNT = "001" then
+			--if VCLKCNT = "001" then
 				if FX68_SDRAM_SEL = '1' and FX68_SDRAM_DTACK_N = '1' then
 					ram68k_req <= not ram68k_req;
 					ram68k_a <= FX68_A(15 downto 1);
@@ -1744,7 +1746,7 @@ begin
 					ram68k_l_n <= '0';					
 					SDRC <= SDRC_DMA;
 				end if;
-			end if;
+			--end if;
 
 		when SDRC_FX68 =>
 			if ram68k_req = ram68k_ack then
@@ -1928,7 +1930,7 @@ begin
 			ext_data_req <= '0';
 
 			romwr_req <= '0';
-			romwr_a <= to_unsigned(0, 23);
+			romwr_a <= (others => '0');
 			bootState<=BOOT_READ_1;
 			SRAM_EN_AUTO <= '0';
 			BIG_CART <= '0';
@@ -1947,11 +1949,11 @@ begin
 					if ext_bootdone = '1' then
 						ext_data_req <= '0';
 						-- enable SRAM for carts < 2 MB
-						if romwr_a(23 downto 21) = "000" then
+						if romwr_a(23 downto 21) = 0 then
 							SRAM_EN_AUTO <= '1';
 						end if;
 						-- enable ROM paging for carts > 4 MB
-						if romwr_a(23 downto 22) /= "00" then
+						if romwr_a(23 downto 22) /= 0 then
 							BIG_CART <= '1';
 						end if;
 						bootState <= BOOT_DONE;

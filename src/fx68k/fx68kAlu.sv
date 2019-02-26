@@ -412,7 +412,8 @@ module fx68kAlu ( input clk, pwrUp, enT1, enT3, enT4,
 	logic [4:0] ccrMasked;
 	always_comb begin
 		ccrMasked = (ccrTemp & ccrMask) | (pswCcr & ~ccrMask);
-		if( finish | isCorf | isArX)
+		// if( finish | isCorf | isArX)		// No need to check specicially for isCorf as they always have the "finish" flag anyway
+		if( finish | isArX)
 			ccrMasked[ ZF] = ccrTemp[ ZF] & pswCcr[ ZF];
 	end
 		
@@ -767,6 +768,8 @@ module ccrTable(
 							// DIVS: ends with 1i (AND), again, V & C always clear.
 
 		KNZVC	= 5'b01111,
+		XNKVC	= 5'b11011,	// Used by BCD instructions. Don't modify Z at all at the binary operation. Only at the BCD correction cycle
+		
 		CUPDALL = 5'b11111,
 		CUNUSED = 5'bxxxxx;
     
@@ -780,12 +783,16 @@ module ccrTable(
 		2,3:
 			unique case( 1'b1)
 			row[1]:		ccrMask = KNZ0C;		// DIV, used as 3n in col3
-			row[2],
+			
 			row[3],								// ABCD
+			row[9]:								// SBCD/NBCD
+						ccrMask = (col == 2) ? XNKVC : CUPDALL;
+			
+			row[2],
 			row[5],
-			row[9],								// SBCD/NBCD
 			row[10],							// SUBX/NEGX
 			row[12]:	ccrMask = CUPDALL;		// ADDX
+			
 			row[6],								// CMP
 			row[7],								// MUL		
 			row[11]:	ccrMask = KNZVC;		// NOT
@@ -810,6 +817,7 @@ module ccrTable(
 			`ALU_ROW_07:	ccrMask = KNZ00;		// MUL (originally KNZ0A)
 			`ALU_ROW_09,
 			`ALU_ROW_10:	ccrMask = KNZ00;		// RO[lr] (originally KNZ0A)
+			`ALU_ROW_08,							// ROXR (originally ANZ0A)
 			`ALU_ROW_11:	ccrMask = CUPDALL;		// ROXL (originally ANZ0A)
 			default:	ccrMask = CUNUSED;
 			endcase

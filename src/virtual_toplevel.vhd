@@ -108,6 +108,7 @@ entity Virtual_Toplevel is
 														  -- 8 - 3 Buttons only
 														  -- 9 - VRAM speed emu
 														  -- 10 - EEPROM emu (fake)
+														  -- 12-11 - Mouse
 	);
 end entity;
 
@@ -442,6 +443,7 @@ signal PAL : std_logic;
 signal model: std_logic;
 signal PAL_IO: std_logic;
 signal MSEL : std_logic_vector(1 downto 0);
+signal MOUSE_Y_ADJ : std_logic_vector(8 downto 0);
 
 -- DEBUG
 signal HEXVALUE			: std_logic_vector(15 downto 0);
@@ -526,6 +528,9 @@ PAL <= SW(6);
 VDP_VRAM_SPEED <= SW(9);
 EEPROM_EN <= SW(10);
 MSEL <= SW(12 downto 11);
+
+MOUSE_Y_ADJ <= mouse_flags(5) & mouse_y when JOY_Y_SWAP = '0' else (not mouse_flags(5) & not mouse_y) + 1;
+JOY_Y_SWAP <= SW(7);
 
 -- DIP Switches
 SW <= ext_sw;
@@ -732,8 +737,8 @@ port map(
 
 	MSEL		=> MSEL,
 	mouse_x		=> mouse_x,
-	mouse_y		=> mouse_y,
-	mouse_flags => mouse_flags,
+	mouse_y		=> MOUSE_Y_ADJ(7 downto 0),
+	mouse_flags => mouse_flags(7 downto 6) & MOUSE_Y_ADJ(8) & mouse_flags(4 downto 0),
 	mouse_strobe => mouse_strobe,
 
 	SEL		=> IO_SEL,

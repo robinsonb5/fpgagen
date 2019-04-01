@@ -128,6 +128,7 @@ signal FIFO_WR_POS	: std_logic_vector(1 downto 0);
 signal FIFO_RD_POS	: std_logic_vector(1 downto 0);
 signal FIFO_EMPTY	: std_logic;
 signal FIFO_FULL	: std_logic;
+signal REFRESH_SLOT	: std_logic;
 signal FIFO_EN		: std_logic;
 signal FIFO_SKIP	: std_logic;
 
@@ -2314,6 +2315,14 @@ PRE_Y <= (Y + 1) & FIELD when LSM = "11" else '0' & (Y + 1);
 HV_VCNT_EXT <= Y & FIELD_LATCH when LSM = "11" else '0' & Y;
 HV8 <= HV_VCNT_EXT(8) when LSM = "11" else HV_VCNT_EXT(0);
 
+-- refresh slots during disabled display - H40 - 6 slots, H32 - 5 slots
+-- still not sure: usable slots at line -1, border and blanking area
+REFRESH_SLOT <=
+	'0' when
+	(H40 = '1' and HV_HCNT /= 500 and HV_HCNT /= 52 and HV_HCNT /= 118 and HV_HCNT /= 180 and HV_HCNT /= 244 and HV_HCNT /= 308) or
+	(H40 = '0' and HV_HCNT /= 486 and HV_HCNT /= 38 and HV_HCNT /= 102 and HV_HCNT /= 166 and HV_HCNT /= 230) else
+	'1';
+
 process( RST_N, CLK )
 begin
 	if RST_N = '0' then
@@ -2430,13 +2439,11 @@ begin
 			if IN_VBL = '1' or DE = '0'
 			then
 				-- skip refresh slots
-				if (IN_VBL = '1' and HV_HCNT /= 486 and HV_HCNT /= 38 and HV_HCNT /= 102 and HV_HCNT /= 166 and HV_HCNT /= 230) or
-				   (IN_VBL = '0' and HV_HCNT /= 58 and HV_HCNT /= 122 and HV_HCNT /= 186 and HV_HCNT /= 250)
+				if REFRESH_SLOT = '0'
 				then
 					FIFO_EN <= not HV_HCNT(0);
 				end if;
-			end if;
-			if IN_VBL = '0' and DE = '1' then
+			else
 				if (HV_HCNT(3 downto 0) = "0100" and HV_HCNT(5 downto 4) /= "11" and HV_HCNT < H_DISP_WIDTH) or
 					(H40 = '1' and (HV_HCNT = 322 or HV_HCNT = 324 or HV_HCNT = 464)) or
 					(H40 = '0' and (HV_HCNT = 290 or HV_HCNT = 486 or HV_HCNT = 258 or HV_HCNT = 260)) or
@@ -2824,6 +2831,13 @@ begin
 				if FIFO_EN = '1' then
 					FIFO_SKIP <= '0';
 				end if;
+				-- Direct color DMA hack (correct, but why?)
+				-- Skip the slot after a refresh
+				if FIFO_RD_POS /= FIFO_WR_POS and FIFO_CODE( CONV_INTEGER( FIFO_RD_POS ) ) = "0011" and
+				   DE = '0' and REFRESH_SLOT = '1' then
+					FIFO_SKIP <= '1';
+				end if;
+
 				if VRAM_SPEED = '0' or (FIFO_EN = '1' and FIFO_SKIP = '0') then
 					if FIFO_RD_POS /= FIFO_WR_POS then
 						DTC <= DTC_FIFO_RD;

@@ -147,6 +147,7 @@ constant CONF_STR : string :=
     "OFG,Mouse,Off,Port 1,Port 2;"&
     "O3,VRAM Speed,Slow,Fast;"&
     "OD,Fake EEPROM,Off,On;"&
+    "OH,PCM HiFi sound,Disable,Enable;"&
     "O4,FM Sound,Enable,Disable;"&
     "O5,PSG Sound,Enable,Disable;"&
     "T0,Reset;";
@@ -325,6 +326,8 @@ ext_sw(8) <= status(10); --3 buttons
 ext_sw(9) <= not status(3); -- VRAM speed emulation
 ext_sw(10) <= status(13); -- Fake EEPROM
 ext_sw(12 downto 11) <= status(16 downto 15); -- Mouse
+ext_sw(13) <= status(17); -- HiFi PCM
+
 
 --SDRAM_A(12)<='0';
 virtualtoplevel : entity work.Virtual_Toplevel

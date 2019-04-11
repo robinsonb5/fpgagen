@@ -109,6 +109,7 @@ entity Virtual_Toplevel is
 														  -- 9 - VRAM speed emu
 														  -- 10 - EEPROM emu (fake)
 														  -- 12-11 - Mouse
+														  -- 13 - HiFi PCM
 	);
 end entity;
 
@@ -370,6 +371,7 @@ signal FM_LEFT			: std_logic_vector(15 downto 0);
 signal FM_RIGHT		: std_logic_vector(15 downto 0);
 
 signal FM_ENABLE		: std_logic;
+signal FM_HIFI			: std_logic;
 
 -- PSG
 signal PSG_SEL			: std_logic;
@@ -823,6 +825,8 @@ port map(
 	wr_n	=> FM_RNW,
 	din		=> FM_DI,
 	dout	=> FM_DO,
+	-- Real time configuration
+	en_hifi_pcm => FM_HIFI,
 
 	snd_left  => FM_LEFT,
 	snd_right => FM_RIGHT
@@ -831,6 +835,7 @@ port map(
 -- Audio control
 PSG_ENABLE <= not SW(3);
 FM_ENABLE  <= not SW(4);
+FM_HIFI    <=     SW(13);
 
 genmix : jt12_genmix
 port map(

@@ -162,6 +162,16 @@ THB <= DATB(6) or not CTLB(6);
 TRA <= DATA(5) or not CTLA(5);
 TRB <= DATB(5) or not CTLB(5);
 
+process( CLK )
+begin
+	if rising_edge(CLK) then
+		THA_D <= THA;
+		THB_D <= THB;
+		TRA_D <= TRA;
+		TRB_D <= TRB;
+	end if;
+end process;
+
 process( RST_N, CLK )
 begin
 	if RST_N = '0' then
@@ -192,26 +202,27 @@ begin
 		JCNT2 <= 0;
 
 	elsif rising_edge(CLK) then
-		if(JTMR1 > 123000) then
-			JCNT1 <= 0;
-		elsif (DATA(6) = '1') then
-			JTMR1 <= JTMR1 + 1;
+		if J3BUT = '0' then
+			-- state reset timer for 6 button controller
+			-- about 1.5ms
+			if(JTMR1 > 90000) then
+				JCNT1 <= 0;
+			else
+				JTMR1 <= JTMR1 + 1;
+			end if;
+
+			if(JTMR2 > 90000) then
+				JCNT2 <= 0;
+			else
+				JTMR2 <= JTMR2 + 1;
+			end if;
 		end if;
 
-		if(JTMR2 > 123000) then
-			JCNT2 <= 0;
-		elsif (DATB(6) = '1') then
-			JTMR2 <= JTMR2 + 1;
-		end if;
+		if THA_D = '0' and THA = '1' then JCNT1 <= JCNT1 + 1; end if;
+		if THA_D /= THA then JTMR1 <= 0; end if;
 
-		THA_D <= DATA(6) or not CTLA(6);
-		if THA_D = '0' and THA = '1' then JTMR1 <= 0; JCNT1 <= JCNT1 + 1; end if;
-
-		THB_D <= DATB(6) or not CTLB(6);
-		if THB_D = '0' and THB = '1' then JTMR2 <= 0; JCNT2 <= JCNT2 + 1; end if;
-
-		TRA_D <= DATA(5) or not CTLA(5);
-		TRB_D <= DATB(5) or not CTLB(5);
+		if THB_D = '0' and THB = '1' then JCNT2 <= JCNT2 + 1; end if;
+		if THB_D /= THB then JTMR2 <= 0; end if;
 
 		if SEL = '0' then
 			FF_DTACK_N <= '1';

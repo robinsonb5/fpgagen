@@ -153,6 +153,7 @@ type sdrc_t is ( SDRC_IDLE,
 	SDRC_DMA, 
 	SDRC_T80);
 signal SDRC : sdrc_t;
+signal SDRC_READY : std_logic;
 
 -- SRAM
 signal sram_req : std_logic := '0';
@@ -1733,6 +1734,7 @@ begin
 		when SDRC_IDLE =>
 			--if VCLKCNT = "001" then
 				if FX68_SDRAM_SEL = '1' and FX68_SDRAM_DTACK_N = '1' then
+					SDRC_READY <= '0';
 					ram68k_req <= not ram68k_req;
 					ram68k_a <= FX68_A(15 downto 1);
 					ram68k_d <= FX68_DO;
@@ -1759,7 +1761,8 @@ begin
 			--end if;
 
 		when SDRC_FX68 =>
-			if ram68k_req = ram68k_ack then
+			if FX68_PHI1 = '1' then SDRC_READY <= '1'; end if;
+			if (FX68_PHI1 = '1' or SDRC_READY = '1') and ram68k_req = ram68k_ack then
 				FX68_SDRAM_D <= ram68k_q;
 				FX68_SDRAM_DTACK_N <= '0';
 				SDRC <= SDRC_IDLE;

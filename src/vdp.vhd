@@ -276,6 +276,7 @@ signal DT_FF_CODE	: std_logic_vector(3 downto 0);
 signal DT_FF_SEL	: std_logic;
 signal DT_FF_DTACK_N	: std_logic;
 signal DT_VBUS_SEL	: std_logic;
+signal DT_FIFO_DATA_AVAIL : std_logic;
 
 signal DT_RD_DATA	: std_logic_vector(15 downto 0);
 signal DT_RD_CODE	: std_logic_vector(3 downto 0);
@@ -291,6 +292,9 @@ signal REG_SET_ACK : std_logic;
 signal DT_DMAF_DATA	: std_logic_vector(15 downto 0);
 signal DT_DMAV_DATA	: std_logic_vector(15 downto 0);
 signal DMAF_SET_REQ	: std_logic;
+signal DT_FIFO_DIN   : std_logic_vector(15 downto 0);
+signal DT_FIFO_CODE_IN : std_logic_vector(3 downto 0);
+signal DT_FIFO_ADDR_IN : std_logic_vector(16 downto 0);
 
 signal FF_VBUS_ADDR		: std_logic_vector(23 downto 0);
 signal FF_VBUS_SEL		: std_logic;
@@ -2758,6 +2762,7 @@ begin
 
 		DT_RD_DTACK_N <= '1';
 		DT_FF_DTACK_N <= '1';
+		DT_FIFO_DATA_AVAIL <= '0';
 
 		FF_VBUS_ADDR <= (others => '0');
 		FF_VBUS_SEL	<= '0';
@@ -2801,22 +2806,32 @@ begin
 
 		CRAM_WE_A <= '0';
 
-		if DT_FF_SEL = '1' and (FIFO_WR_POS + 1 /= FIFO_RD_POS) and DT_FF_DTACK_N = '1' then
-			FIFO_ADDR( CONV_INTEGER( FIFO_WR_POS ) ) <= ADDR;
-			FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_FF_DATA;
-			FIFO_CODE( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_FF_CODE;
-			FIFO_WR_POS <= FIFO_WR_POS + 1;
-			ADDR <= ADDR + ADDR_STEP;
+		-- FIFO input
+		if (DT_FF_SEL = '1' or DT_VBUS_SEL = '1') and DT_FIFO_DATA_AVAIL = '0' and DT_FF_DTACK_N = '1' then
+			DT_FIFO_DATA_AVAIL <= '1';
 			DT_FF_DTACK_N <= '0';
-		elsif DT_VBUS_SEL = '1' and (FIFO_WR_POS + 1 /= FIFO_RD_POS) and DT_FF_DTACK_N = '1' then
-			FIFO_ADDR( CONV_INTEGER( FIFO_WR_POS ) ) <= ADDR;
-			FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_DMAV_DATA;
-			FIFO_CODE( CONV_INTEGER( FIFO_WR_POS ) ) <= CODE(3 downto 0);
-			FIFO_WR_POS <= FIFO_WR_POS + 1;
+			DT_FIFO_ADDR_IN <= ADDR;
 			ADDR <= ADDR + ADDR_STEP;
-			DT_FF_DTACK_N <= '0';
+			if DT_FF_SEL = '1' then
+				DT_FIFO_DIN <= DT_FF_DATA;
+				DT_FIFO_CODE_IN <= DT_FF_CODE;
+			end if;
+			if DT_VBUS_SEL = '1' then
+				DT_FIFO_DIN <= DT_DMAV_DATA;
+				DT_FIFO_CODE_IN <= CODE(3 downto 0);
+			end if;
 		end if;
 
+		-- FIFO write engine
+		if DT_FIFO_DATA_AVAIL = '1' and (FIFO_WR_POS + 1 /= FIFO_RD_POS) then
+			FIFO_ADDR( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_FIFO_ADDR_IN;
+			FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_FIFO_DIN;
+			FIFO_CODE( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_FIFO_CODE_IN;
+			FIFO_WR_POS <= FIFO_WR_POS + 1;
+			DT_FIFO_DATA_AVAIL <= '0';
+		end if;
+
+		-- Register set
 		if REG_SET_REQ = '1' and REG_SET_ACK = '0' and IN_DMA = '0' then
 			if (M5 = '1' or REG_LATCH(12 downto 8) <= 10) then
 				-- mask registers above 10 in Mode4

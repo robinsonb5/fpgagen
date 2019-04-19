@@ -2413,9 +2413,12 @@ begin
 					end if;
 				end if;
 
-				if HV_VCNT = "1"&x"FE" then
+			end if;
+
+			if HV_HCNT = H_INT_POS + 4 then
+				if HV_VCNT = "1"&x"FF" then
 					IN_VBL <= '0';
-				elsif HV_VCNT = V_DISP_HEIGHT - 1 then
+				elsif HV_VCNT = V_DISP_HEIGHT then
 					IN_VBL <= '1';
 				end if;
 			end if;
@@ -2442,17 +2445,14 @@ begin
 
 			if IN_VBL = '1' or DE = '0'
 			then
-				-- skip refresh slots
-				if REFRESH_SLOT = '0'
+				if REFRESH_SLOT = '0' -- skip refresh slots
 				then
 					FIFO_EN <= not HV_HCNT(0);
 				end if;
 			else
 				if (HV_HCNT(3 downto 0) = "0100" and HV_HCNT(5 downto 4) /= "11" and HV_HCNT < H_DISP_WIDTH) or
 					(H40 = '1' and (HV_HCNT = 322 or HV_HCNT = 324 or HV_HCNT = 464)) or
-					(H40 = '0' and (HV_HCNT = 290 or HV_HCNT = 486 or HV_HCNT = 258 or HV_HCNT = 260)) or
-					(H40 = '1' and HV_VCNT = '1'&x"FF" and (HV_HCNT = 330 or HV_HCNT = 332)) or
-					(H40 = '0' and HV_VCNT = '1'&x"FF" and (HV_HCNT = 266 or HV_HCNT = 268))
+					(H40 = '0' and (HV_HCNT = 290 or HV_HCNT = 486 or HV_HCNT = 258 or HV_HCNT = 260))
 				then
 					FIFO_EN <= '1';
 				end if;

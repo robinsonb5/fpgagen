@@ -300,7 +300,6 @@ signal FF_VBUS_ADDR		: std_logic_vector(23 downto 0);
 signal FF_VBUS_SEL		: std_logic;
 
 signal DMA_VBUS		: std_logic;
-signal DMA_FILL_PRE	: std_logic;
 signal DMA_FILL		: std_logic;
 signal DMA_COPY		: std_logic;
 
@@ -2768,7 +2767,6 @@ begin
 		FF_VBUS_SEL	<= '0';
 		DT_VBUS_SEL <= '0';
 		
-		DMA_FILL_PRE <= '0';
 		DMA_FILL <= '0';
 		DMAF_SET_REQ <= '0';
 		DMA_COPY <= '0';
@@ -2808,7 +2806,6 @@ begin
 
 		-- FIFO input
 		if (DT_FF_SEL = '1' or DT_VBUS_SEL = '1') and DT_FIFO_DATA_AVAIL = '0' and DT_FF_DTACK_N = '1' then
-			if DMA_FILL_PRE = '1' then DMA_FILL <= '1'; end if;
 			DT_FIFO_DATA_AVAIL <= '1';
 			DT_FF_DTACK_N <= '0';
 			DT_FIFO_ADDR_IN <= ADDR;
@@ -2833,7 +2830,7 @@ begin
 		end if;
 
 		-- Register set
-		if REG_SET_REQ = '1' and REG_SET_ACK = '0' and IN_DMA = '0' then
+		if REG_SET_REQ = '1' and REG_SET_ACK = '0' then
 			if (M5 = '1' or REG_LATCH(12 downto 8) <= 10) then
 				-- mask registers above 10 in Mode4
 				REG( CONV_INTEGER( REG_LATCH(12 downto 8)) ) <= REG_LATCH(7 downto 0);
@@ -2949,7 +2946,7 @@ begin
 				DTC <= DTC_WR_END;
 
 			when DTC_WR_END =>
-				if DMA_FILL_PRE = '1' then
+				if DMA_FILL = '1' then
 					DMAF_SET_REQ <= '1';
 				end if;
 				DTC <= DTC_IDLE;
@@ -3010,14 +3007,14 @@ begin
 ----------------------------------------------------------------
 -- DMA ENGINE
 ----------------------------------------------------------------
-			if ADDR_SET_REQ = '1' and ADDR_SET_ACK = '0' and IN_DMA = '0' then
+			if ADDR_SET_REQ = '1' and ADDR_SET_ACK = '0' then
 				ADDR <= ADDR_LATCH;
 				if CODE(5) = '1' and PENDING = '1' then
 					if REG(23)(7) = '0' then
 						DMA_VBUS <= '1';
 					else
 						if REG(23)(6) = '0' then
-							DMA_FILL_PRE <= '1';
+							DMA_FILL <= '1';
 						else
 							DMA_COPY <= '1';
 						end if;
@@ -3026,7 +3023,7 @@ begin
 				ADDR_SET_ACK <= '1';
 			end if;
 
-			if FIFO_RD_POS = FIFO_WR_POS and DMA_FILL_PRE = '1' and DMAF_SET_REQ = '1' then
+			if FIFO_RD_POS = FIFO_WR_POS and DMA_FILL = '1' and DMAF_SET_REQ = '1' then
 				if CODE(3 downto 0) = "0011" or CODE(3 downto 0) = "0101" then
 					-- CRAM, VSRAM fill gets its data from the next FIFO write position
 					DT_DMAF_DATA <= FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) );
@@ -3040,7 +3037,7 @@ begin
 			when DMA_IDLE =>
 				if DMA_VBUS = '1' then
 					DMAC <= DMA_VBUS_INIT;
-				elsif DMA_FILL = '1' then
+				elsif DMA_FILL = '1' and DMAF_SET_REQ = '1' then
 					DMAC <= DMA_FILL_INIT;
 				elsif DMA_COPY = '1' then
 					DMAC <= DMA_COPY_INIT;
@@ -3144,7 +3141,6 @@ begin
 				REG(22) <= DMA_SOURCE(15 downto 8);
 				REG(21) <= DMA_SOURCE(7 downto 0);
 				if DMA_LENGTH = 0 then
-					DMA_FILL_PRE <= '0';
 					DMA_FILL <= '0';
 					DMAC <= DMA_IDLE;
 -- synthesis translate_off

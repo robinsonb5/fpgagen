@@ -131,6 +131,7 @@ signal FIFO_FULL	: std_logic;
 signal REFRESH_SLOT	: std_logic;
 signal FIFO_EN		: std_logic;
 signal FIFO_SKIP	: std_logic;
+signal FIFO_SKIP_PRE	: std_logic;
 
 signal IN_DMA		: std_logic;
 signal IN_HBL		: std_logic;
@@ -2830,7 +2831,8 @@ begin
 			case DTC is
 			when DTC_IDLE =>
 				if FIFO_EN = '1' then
-					FIFO_SKIP <= '0';
+					FIFO_SKIP <= FIFO_SKIP_PRE;
+					FIFO_SKIP_PRE <= '0';
 				end if;
 				-- Direct color DMA hack (correct, but why?)
 				-- Skip the slot after a refresh
@@ -2872,7 +2874,7 @@ begin
 			when DTC_VRAM_WR1 =>
 				if M128 = '0' then
 					--skip next FIFO slot since we write 16 bit now instead of the original 8
-					FIFO_SKIP <= '1';
+					FIFO_SKIP_PRE <= '1';
 				end if;
 -- synthesis translate_off
 				write(L, string'("   VRAM WR ["));

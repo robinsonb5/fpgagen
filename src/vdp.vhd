@@ -978,6 +978,7 @@ begin
 					if CODE = "001000" -- CRAM Read
 					or CODE = "000100" -- VSRAM Read
 					or CODE = "000000" -- VRAM Read
+					or CODE = "001100" -- VRAM Read 8 bit
 					then
 						if DT_RD_DTACK_N = '1' then
 							DT_RD_SEL <= '1';
@@ -2962,8 +2963,17 @@ begin
 			
 			when DTC_VRAM_RD2 =>
 				if early_ack_dt='0' then
-					DT_VRAM_SEL <= '0';	
-					DT_RD_DATA <= DT_VRAM_DO;
+					DT_VRAM_SEL <= '0';
+					if DT_RD_CODE = "1100" then
+						-- VRAM 8 bit read - unused bits come from the next FIFO entry
+						if ADDR(0) = '0' then
+							DT_RD_DATA <= FIFO_DATA( CONV_INTEGER( FIFO_RD_POS ) )(15 downto 8) & DT_VRAM_DO(7 downto 0);
+						else
+							DT_RD_DATA <= FIFO_DATA( CONV_INTEGER( FIFO_RD_POS ) )(15 downto 8) & DT_VRAM_DO(15 downto 8);
+						end if;
+					else
+						DT_RD_DATA <= DT_VRAM_DO;
+					end if;
 					DT_RD_DTACK_N <= '0';
 					ADDR <= ADDR + ADDR_STEP;
 					DTC <= DTC_IDLE;

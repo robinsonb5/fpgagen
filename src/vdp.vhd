@@ -242,6 +242,7 @@ type dmac_t is (
 	DMA_FILL_VSRAM,
 	DMA_FILL_WR,
 	DMA_FILL_WR2,
+	DMA_FILL_NEXT,
 	DMA_FILL_LOOP,
 	DMA_COPY_INIT,
 	DMA_COPY_RD,
@@ -3069,8 +3070,10 @@ begin
 						DMAC <= DMA_FILL_CRAM;
 					when "0101" => -- VSRAM Write
 						DMAC <= DMA_FILL_VSRAM;
-					when others => -- VRAM Write
+					when "0001" => -- VRAM Write
 						DMAC <= DMA_FILL_WR;
+					when others => -- invalid target
+						DMAC <= DMA_FILL_NEXT;
 					end case;
 				end if;
 
@@ -3079,10 +3082,7 @@ begin
 					CRAM_WE_A <= '1';
 					CRAM_ADDR_A <= ADDR(6 downto 1);
 					CRAM_D_A <= DT_DMAF_DATA(11 downto 9) & DT_DMAF_DATA(7 downto 5) & DT_DMAF_DATA(3 downto 1);
-					ADDR <= ADDR + ADDR_STEP;
-					DMA_SOURCE <= DMA_SOURCE + ADDR_STEP;
-					DMA_LENGTH <= DMA_LENGTH - 1;
-					DMAC <= DMA_FILL_LOOP;
+					DMAC <= DMA_FILL_NEXT;
 				end if;
 
 			when DMA_FILL_VSRAM =>
@@ -3090,10 +3090,7 @@ begin
 					if ADDR(6 downto 1) < 40 then
 						VSRAM( CONV_INTEGER(ADDR(6 downto 1)) ) <= DT_DMAF_DATA(10 downto 0);
 					end if;
-					ADDR <= ADDR + ADDR_STEP;
-					DMA_SOURCE <= DMA_SOURCE + ADDR_STEP;
-					DMA_LENGTH <= DMA_LENGTH - 1;
-					DMAC <= DMA_FILL_LOOP;
+					DMAC <= DMA_FILL_NEXT;
 				end if;
 
 			when DMA_FILL_WR =>
@@ -3129,11 +3126,14 @@ begin
 			when DMA_FILL_WR2 =>
 				if early_ack_dt='0' then
 					DT_VRAM_SEL <= '0';	
-					ADDR <= ADDR + ADDR_STEP;
-					DMA_SOURCE <= DMA_SOURCE + ADDR_STEP;
-					DMA_LENGTH <= DMA_LENGTH - 1;
-					DMAC <= DMA_FILL_LOOP;
+					DMAC <= DMA_FILL_NEXT;
 				end if;
+
+			when DMA_FILL_NEXT =>
+				ADDR <= ADDR + ADDR_STEP;
+				DMA_SOURCE <= DMA_SOURCE + ADDR_STEP;
+				DMA_LENGTH <= DMA_LENGTH - 1;
+				DMAC <= DMA_FILL_LOOP;
 
 			when DMA_FILL_LOOP =>
 				REG(20) <= DMA_LENGTH(15 downto 8);

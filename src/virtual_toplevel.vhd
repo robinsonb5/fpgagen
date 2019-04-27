@@ -110,6 +110,7 @@ entity Virtual_Toplevel is
 														  -- 10 - EEPROM emu (fake)
 														  -- 12-11 - Mouse
 														  -- 13 - HiFi PCM
+														  -- 14 - CPU Turbo
 	);
 end entity;
 
@@ -447,6 +448,7 @@ signal model: std_logic;
 signal PAL_IO: std_logic;
 signal MSEL : std_logic_vector(1 downto 0);
 signal MOUSE_Y_ADJ : std_logic_vector(8 downto 0);
+signal CPU_TURBO : std_logic;
 
 -- DEBUG
 signal HEXVALUE			: std_logic_vector(15 downto 0);
@@ -534,6 +536,8 @@ MSEL <= SW(12 downto 11);
 
 MOUSE_Y_ADJ <= mouse_flags(5) & mouse_y when JOY_Y_SWAP = '0' else (not mouse_flags(5) & not mouse_y) + 1;
 JOY_Y_SWAP <= SW(7);
+
+CPU_TURBO <= SW(14);
 
 -- DIP Switches
 SW <= ext_sw;
@@ -945,13 +949,13 @@ begin
 			FCLK_EN <= '0';
 		end if;
 
-		if VCLKCNT = "011" then
+		if VCLKCNT = "011" or (CPU_TURBO = '1' and VCLKCNT = "110") then
 			FX68_PHI1 <= '1';
 		else
 			FX68_PHI1 <= '0';
 		end if;
 
-		if VCLKCNT = "001" then
+		if VCLKCNT = "001" or (CPU_TURBO = '1' and VCLKCNT = "100") then
 			FX68_PHI2 <= '1';
 		else
 			FX68_PHI2 <= '0';

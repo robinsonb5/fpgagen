@@ -147,6 +147,7 @@ constant CONF_STR : string :=
     "OFG,Mouse,Off,Port 1,Port 2;"&
     "O3,VRAM Speed,Slow,Fast;"&
     "OD,Fake EEPROM,Off,On;"&
+    "OI,CPU Turbo,Off,On;"&
     "OH,PCM HiFi sound,Disable,Enable;"&
     "O4,FM Sound,Enable,Disable;"&
     "O5,PSG Sound,Enable,Disable;"&
@@ -327,6 +328,7 @@ ext_sw(9) <= not status(3); -- VRAM speed emulation
 ext_sw(10) <= status(13); -- Fake EEPROM
 ext_sw(12 downto 11) <= status(16 downto 15); -- Mouse
 ext_sw(13) <= status(17); -- HiFi PCM
+ext_sw(14) <= status(18); -- CPU Turbo
 
 
 --SDRAM_A(12)<='0';

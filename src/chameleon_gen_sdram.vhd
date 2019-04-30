@@ -316,7 +316,18 @@ begin
 			nextLdqm <= '0';
 			nextUdqm <= '0';
 
-			if (romwr_req /= romwr_ackReg) and (currentPort /= PORT_ROMWR) then
+			if (sram_req /= sram_ackReg) and (currentPort /= PORT_SRAM) then
+				nextRamState <= RAM_READ_1;
+				if sram_we = '1' then
+					nextRamState <= RAM_WRITE_1;
+				end if;
+				nextRamPort <= PORT_SRAM;
+				nextRamBank <= sram_a(addr_bankbits);
+				nextRamRow <= sram_a(addr_rowbits);
+				nextRamCol <= sram_a(addr_colbits);
+				nextLdqm <= sram_l_n;
+				nextUdqm <= sram_u_n;
+			elsif (romwr_req /= romwr_ackReg) and (currentPort /= PORT_ROMWR) then
 				nextRamState <= RAM_READ_1;
 				if romwr_we = '1' then
 					nextRamState <= RAM_WRITE_1;
@@ -357,17 +368,6 @@ begin
 				nextRamCol <= ram68k_a(addr_colbits);
 				nextLdqm <= ram68k_l_n;
 				nextUdqm <= ram68k_u_n;
-			elsif (sram_req /= sram_ackReg) and (currentPort /= PORT_SRAM) then
-				nextRamState <= RAM_READ_1;
-				if sram_we = '1' then
-					nextRamState <= RAM_WRITE_1;
-				end if;
-				nextRamPort <= PORT_SRAM;
-				nextRamBank <= sram_a(addr_bankbits);
-				nextRamRow <= sram_a(addr_rowbits);
-				nextRamCol <= sram_a(addr_colbits);
-				nextLdqm <= sram_l_n;
-				nextUdqm <= sram_u_n;
 			end if;
 		--end if;
 	end process;

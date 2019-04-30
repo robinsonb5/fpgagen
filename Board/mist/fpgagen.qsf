@@ -178,8 +178,6 @@ set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to SDRAM_A[1]
 set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to SDRAM_A[0]
 set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to SDRAM_BA[1]
 set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to SDRAM_BA[0]
-set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to SDRAM_CKE
-set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to SDRAM_CLK
 set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to SDRAM_DQ[15]
 set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to SDRAM_DQ[14]
 set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to SDRAM_DQ[13]
@@ -199,26 +197,8 @@ set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to SDRAM_DQ[0]
 set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to SDRAM_DQMH
 set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to SDRAM_DQML
 set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to SDRAM_nCAS
-set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to SDRAM_nCS
 set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to SDRAM_nRAS
 set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to SDRAM_nWE
-set_instance_assignment -name FAST_OUTPUT_ENABLE_REGISTER ON -to SDRAM_A[12]
-set_instance_assignment -name FAST_OUTPUT_ENABLE_REGISTER ON -to SDRAM_A[11]
-set_instance_assignment -name FAST_OUTPUT_ENABLE_REGISTER ON -to SDRAM_A[10]
-set_instance_assignment -name FAST_OUTPUT_ENABLE_REGISTER ON -to SDRAM_A[9]
-set_instance_assignment -name FAST_OUTPUT_ENABLE_REGISTER ON -to SDRAM_A[8]
-set_instance_assignment -name FAST_OUTPUT_ENABLE_REGISTER ON -to SDRAM_A[7]
-set_instance_assignment -name FAST_OUTPUT_ENABLE_REGISTER ON -to SDRAM_A[6]
-set_instance_assignment -name FAST_OUTPUT_ENABLE_REGISTER ON -to SDRAM_A[5]
-set_instance_assignment -name FAST_OUTPUT_ENABLE_REGISTER ON -to SDRAM_A[4]
-set_instance_assignment -name FAST_OUTPUT_ENABLE_REGISTER ON -to SDRAM_A[3]
-set_instance_assignment -name FAST_OUTPUT_ENABLE_REGISTER ON -to SDRAM_A[2]
-set_instance_assignment -name FAST_OUTPUT_ENABLE_REGISTER ON -to SDRAM_A[1]
-set_instance_assignment -name FAST_OUTPUT_ENABLE_REGISTER ON -to SDRAM_A[0]
-set_instance_assignment -name FAST_OUTPUT_ENABLE_REGISTER ON -to SDRAM_BA[1]
-set_instance_assignment -name FAST_OUTPUT_ENABLE_REGISTER ON -to SDRAM_BA[0]
-set_instance_assignment -name FAST_OUTPUT_ENABLE_REGISTER ON -to SDRAM_CKE
-set_instance_assignment -name FAST_OUTPUT_ENABLE_REGISTER ON -to SDRAM_CLK
 set_instance_assignment -name FAST_OUTPUT_ENABLE_REGISTER ON -to SDRAM_DQ[15]
 set_instance_assignment -name FAST_OUTPUT_ENABLE_REGISTER ON -to SDRAM_DQ[14]
 set_instance_assignment -name FAST_OUTPUT_ENABLE_REGISTER ON -to SDRAM_DQ[13]
@@ -235,12 +215,6 @@ set_instance_assignment -name FAST_OUTPUT_ENABLE_REGISTER ON -to SDRAM_DQ[3]
 set_instance_assignment -name FAST_OUTPUT_ENABLE_REGISTER ON -to SDRAM_DQ[2]
 set_instance_assignment -name FAST_OUTPUT_ENABLE_REGISTER ON -to SDRAM_DQ[1]
 set_instance_assignment -name FAST_OUTPUT_ENABLE_REGISTER ON -to SDRAM_DQ[0]
-set_instance_assignment -name FAST_OUTPUT_ENABLE_REGISTER ON -to SDRAM_DQMH
-set_instance_assignment -name FAST_OUTPUT_ENABLE_REGISTER ON -to SDRAM_DQML
-set_instance_assignment -name FAST_OUTPUT_ENABLE_REGISTER ON -to SDRAM_nCAS
-set_instance_assignment -name FAST_OUTPUT_ENABLE_REGISTER ON -to SDRAM_nCS
-set_instance_assignment -name FAST_OUTPUT_ENABLE_REGISTER ON -to SDRAM_nRAS
-set_instance_assignment -name FAST_OUTPUT_ENABLE_REGISTER ON -to SDRAM_nWE
 set_instance_assignment -name FAST_INPUT_REGISTER ON -to SDRAM_DQ[15]
 set_instance_assignment -name FAST_INPUT_REGISTER ON -to SDRAM_DQ[14]
 set_instance_assignment -name FAST_INPUT_REGISTER ON -to SDRAM_DQ[13]
@@ -311,7 +285,6 @@ set_global_assignment -name ROUTER_TIMING_OPTIMIZATION_LEVEL MAXIMUM
 set_global_assignment -name ROUTER_CLOCKING_TOPOLOGY_ANALYSIS ON
 set_global_assignment -name OPTIMIZE_POWER_DURING_SYNTHESIS OFF
 set_global_assignment -name SEED 1
-set_instance_assignment -name FAST_INPUT_REGISTER ON -to SDRAM_DQ[*]
 set_location_assignment PLL_1 -to "pll:U00|altpll:altpll_component|pll_altpll:auto_generated"
 set_global_assignment -name ENABLE_CONFIGURATION_PINS OFF
 set_global_assignment -name ENABLE_NCE_PIN OFF
@@ -327,7 +300,6 @@ set_instance_assignment -name CURRENT_STRENGTH_NEW 4MA -to SPI_DO
 set_instance_assignment -name CURRENT_STRENGTH_NEW 8MA -to AUDIO_L
 set_instance_assignment -name CURRENT_STRENGTH_NEW 8MA -to AUDIO_R
 set_instance_assignment -name CURRENT_STRENGTH_NEW 8MA -to UART_TX
-set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top
 set_global_assignment -name QIP_FILE ../../jt89/hdl/jt89.qip
 set_global_assignment -name SYSTEMVERILOG_FILE ../../src/fx68k/uaddrPla.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../src/fx68k/fx68kAlu.sv
@@ -353,3 +325,4 @@ set_global_assignment -name VHDL_FILE ../../src/DualPortRAM.vhd
 set_global_assignment -name QIP_FILE ../../jt12/hdl/jt12.qip
 set_global_assignment -name SDC_FILE ../../Board/mist/constraints.sdc
 set_global_assignment -name CDF_FILE Chain1.cdf
+set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top

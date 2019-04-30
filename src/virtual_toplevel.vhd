@@ -108,6 +108,9 @@ entity Virtual_Toplevel is
 														  -- 8 - 3 Buttons only
 														  -- 9 - VRAM speed emu
 														  -- 10 - EEPROM emu (fake)
+														  -- 12-11 - Mouse
+														  -- 13 - HiFi PCM
+														  -- 14 - CPU Turbo
 	);
 end entity;
 
@@ -151,6 +154,7 @@ type sdrc_t is ( SDRC_IDLE,
 	SDRC_DMA, 
 	SDRC_T80);
 signal SDRC : sdrc_t;
+signal SDRC_READY : std_logic;
 
 -- SRAM
 signal sram_req : std_logic := '0';
@@ -369,6 +373,7 @@ signal FM_LEFT			: std_logic_vector(15 downto 0);
 signal FM_RIGHT		: std_logic_vector(15 downto 0);
 
 signal FM_ENABLE		: std_logic;
+signal FM_HIFI			: std_logic;
 
 -- PSG
 signal PSG_SEL			: std_logic;
@@ -442,6 +447,8 @@ signal PAL : std_logic;
 signal model: std_logic;
 signal PAL_IO: std_logic;
 signal MSEL : std_logic_vector(1 downto 0);
+signal MOUSE_Y_ADJ : std_logic_vector(8 downto 0);
+signal CPU_TURBO : std_logic;
 
 -- DEBUG
 signal HEXVALUE			: std_logic_vector(15 downto 0);
@@ -526,6 +533,11 @@ PAL <= SW(6);
 VDP_VRAM_SPEED <= SW(9);
 EEPROM_EN <= SW(10);
 MSEL <= SW(12 downto 11);
+
+MOUSE_Y_ADJ <= mouse_flags(5) & mouse_y when JOY_Y_SWAP = '0' else (not mouse_flags(5) & not mouse_y) + 1;
+JOY_Y_SWAP <= SW(7);
+
+CPU_TURBO <= SW(14);
 
 -- DIP Switches
 SW <= ext_sw;
@@ -732,8 +744,8 @@ port map(
 
 	MSEL		=> MSEL,
 	mouse_x		=> mouse_x,
-	mouse_y		=> mouse_y,
-	mouse_flags => mouse_flags,
+	mouse_y		=> MOUSE_Y_ADJ(7 downto 0),
+	mouse_flags => mouse_flags(7 downto 6) & MOUSE_Y_ADJ(8) & mouse_flags(4 downto 0),
 	mouse_strobe => mouse_strobe,
 
 	SEL		=> IO_SEL,
@@ -818,6 +830,8 @@ port map(
 	wr_n	=> FM_RNW,
 	din		=> FM_DI,
 	dout	=> FM_DO,
+	-- Real time configuration
+	en_hifi_pcm => FM_HIFI,
 
 	snd_left  => FM_LEFT,
 	snd_right => FM_RIGHT
@@ -826,6 +840,7 @@ port map(
 -- Audio control
 PSG_ENABLE <= not SW(3);
 FM_ENABLE  <= not SW(4);
+FM_HIFI    <=     SW(13);
 
 genmix : jt12_genmix
 port map(
@@ -934,13 +949,13 @@ begin
 			FCLK_EN <= '0';
 		end if;
 
-		if VCLKCNT = "011" then
+		if VCLKCNT = "011" or (CPU_TURBO = '1' and VCLKCNT = "110") then
 			FX68_PHI1 <= '1';
 		else
 			FX68_PHI1 <= '0';
 		end if;
 
-		if VCLKCNT = "001" then
+		if VCLKCNT = "001" or (CPU_TURBO = '1' and VCLKCNT = "100") then
 			FX68_PHI2 <= '1';
 		else
 			FX68_PHI2 <= '0';
@@ -1723,6 +1738,7 @@ begin
 		when SDRC_IDLE =>
 			--if VCLKCNT = "001" then
 				if FX68_SDRAM_SEL = '1' and FX68_SDRAM_DTACK_N = '1' then
+					SDRC_READY <= '0';
 					ram68k_req <= not ram68k_req;
 					ram68k_a <= FX68_A(15 downto 1);
 					ram68k_d <= FX68_DO;
@@ -1749,7 +1765,8 @@ begin
 			--end if;
 
 		when SDRC_FX68 =>
-			if ram68k_req = ram68k_ack then
+			if FX68_PHI1 = '1' then SDRC_READY <= '1'; end if;
+			if (FX68_PHI1 = '1' or SDRC_READY = '1') and ram68k_req = ram68k_ack then
 				FX68_SDRAM_D <= ram68k_q;
 				FX68_SDRAM_DTACK_N <= '0';
 				SDRC <= SDRC_IDLE;

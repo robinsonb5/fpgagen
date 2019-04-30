@@ -46,7 +46,7 @@ constant H_DISP_START_H32       : integer := 466; -- -46
 constant H_DISP_START_H40       : integer := 457; -- -55
 
 constant HBLANK_END_H32         : integer := 9;
-constant HBLANK_END_H40         : integer := 10;
+constant HBLANK_END_H40         : integer := 9;
 
 constant HBLANK_START_H32       : integer := 293;
 constant HBLANK_START_H40       : integer := 357;
@@ -69,7 +69,7 @@ constant H_DISP_WIDTH_H32       : integer := 256;
 constant H_DISP_WIDTH_H40       : integer := 320;
 
 constant H_INT_H32              : integer := HBLANK_END_H32 + H_DISP_WIDTH_H32; -- 265
-constant H_INT_H40              : integer := HBLANK_END_H40 + H_DISP_WIDTH_H40; -- now 330, was 329
+constant H_INT_H40              : integer := HBLANK_END_H40 + H_DISP_WIDTH_H40; -- 329
 
 constant V_DISP_START_PAL_V28   : integer := 458;
 constant V_DISP_START_NTSC_V28  : integer := 485; -- -27;

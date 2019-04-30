@@ -128,8 +128,10 @@ signal FIFO_WR_POS	: std_logic_vector(1 downto 0);
 signal FIFO_RD_POS	: std_logic_vector(1 downto 0);
 signal FIFO_EMPTY	: std_logic;
 signal FIFO_FULL	: std_logic;
+signal REFRESH_SLOT	: std_logic;
 signal FIFO_EN		: std_logic;
 signal FIFO_SKIP	: std_logic;
+signal FIFO_SKIP_PRE	: std_logic;
 
 signal IN_DMA		: std_logic;
 signal IN_HBL		: std_logic;
@@ -241,6 +243,7 @@ type dmac_t is (
 	DMA_FILL_VSRAM,
 	DMA_FILL_WR,
 	DMA_FILL_WR2,
+	DMA_FILL_NEXT,
 	DMA_FILL_LOOP,
 	DMA_COPY_INIT,
 	DMA_COPY_RD,
@@ -295,7 +298,6 @@ signal FF_VBUS_ADDR		: std_logic_vector(23 downto 0);
 signal FF_VBUS_SEL		: std_logic;
 
 signal DMA_VBUS		: std_logic;
-signal DMA_FILL_PRE	: std_logic;
 signal DMA_FILL		: std_logic;
 signal DMA_COPY		: std_logic;
 
@@ -973,6 +975,7 @@ begin
 					if CODE = "001000" -- CRAM Read
 					or CODE = "000100" -- VSRAM Read
 					or CODE = "000000" -- VRAM Read
+					or CODE = "001100" -- VRAM Read 8 bit
 					then
 						if DT_RD_DTACK_N = '1' then
 							DT_RD_SEL <= '1';
@@ -2314,6 +2317,14 @@ PRE_Y <= (Y + 1) & FIELD when LSM = "11" else '0' & (Y + 1);
 HV_VCNT_EXT <= Y & FIELD_LATCH when LSM = "11" else '0' & Y;
 HV8 <= HV_VCNT_EXT(8) when LSM = "11" else HV_VCNT_EXT(0);
 
+-- refresh slots during disabled display - H40 - 6 slots, H32 - 5 slots
+-- still not sure: usable slots at line -1, border and blanking area
+REFRESH_SLOT <=
+	'0' when
+	(H40 = '1' and HV_HCNT /= 500 and HV_HCNT /= 52 and HV_HCNT /= 118 and HV_HCNT /= 180 and HV_HCNT /= 244 and HV_HCNT /= 308) or
+	(H40 = '0' and HV_HCNT /= 486 and HV_HCNT /= 38 and HV_HCNT /= 102 and HV_HCNT /= 166 and HV_HCNT /= 230) else
+	'1';
+
 process( RST_N, CLK )
 begin
 	if RST_N = '0' then
@@ -2400,9 +2411,12 @@ begin
 					end if;
 				end if;
 
-				if HV_VCNT = "1"&x"FE" then
+			end if;
+
+			if HV_HCNT = H_INT_POS + 4 then
+				if HV_VCNT = "1"&x"FF" then
 					IN_VBL <= '0';
-				elsif HV_VCNT = V_DISP_HEIGHT - 1 then
+				elsif HV_VCNT = V_DISP_HEIGHT then
 					IN_VBL <= '1';
 				end if;
 			end if;
@@ -2429,19 +2443,14 @@ begin
 
 			if IN_VBL = '1' or DE = '0'
 			then
-				-- skip refresh slots
-				if (IN_VBL = '1' and HV_HCNT /= 486 and HV_HCNT /= 38 and HV_HCNT /= 102 and HV_HCNT /= 166 and HV_HCNT /= 230) or
-				   (IN_VBL = '0' and HV_HCNT /= 58 and HV_HCNT /= 122 and HV_HCNT /= 186 and HV_HCNT /= 250)
+				if REFRESH_SLOT = '0' -- skip refresh slots
 				then
 					FIFO_EN <= not HV_HCNT(0);
 				end if;
-			end if;
-			if IN_VBL = '0' and DE = '1' then
+			else
 				if (HV_HCNT(3 downto 0) = "0100" and HV_HCNT(5 downto 4) /= "11" and HV_HCNT < H_DISP_WIDTH) or
 					(H40 = '1' and (HV_HCNT = 322 or HV_HCNT = 324 or HV_HCNT = 464)) or
-					(H40 = '0' and (HV_HCNT = 290 or HV_HCNT = 486 or HV_HCNT = 258 or HV_HCNT = 260)) or
-					(H40 = '1' and HV_VCNT = '1'&x"FF" and (HV_HCNT = 330 or HV_HCNT = 332)) or
-					(H40 = '0' and HV_VCNT = '1'&x"FF" and (HV_HCNT = 266 or HV_HCNT = 268))
+					(H40 = '0' and (HV_HCNT = 290 or HV_HCNT = 486 or HV_HCNT = 258 or HV_HCNT = 260))
 				then
 					FIFO_EN <= '1';
 				end if;
@@ -2756,7 +2765,6 @@ begin
 		FF_VBUS_SEL	<= '0';
 		DT_VBUS_SEL <= '0';
 		
-		DMA_FILL_PRE <= '0';
 		DMA_FILL <= '0';
 		DMAF_SET_REQ <= '0';
 		DMA_COPY <= '0';
@@ -2810,7 +2818,8 @@ begin
 			DT_FF_DTACK_N <= '0';
 		end if;
 
-		if REG_SET_REQ = '1' and REG_SET_ACK = '0' and IN_DMA = '0' then
+		-- Register set
+		if REG_SET_REQ = '1' and REG_SET_ACK = '0' then
 			if (M5 = '1' or REG_LATCH(12 downto 8) <= 10) then
 				-- mask registers above 10 in Mode4
 				REG( CONV_INTEGER( REG_LATCH(12 downto 8)) ) <= REG_LATCH(7 downto 0);
@@ -2822,8 +2831,16 @@ begin
 			case DTC is
 			when DTC_IDLE =>
 				if FIFO_EN = '1' then
-					FIFO_SKIP <= '0';
+					FIFO_SKIP <= FIFO_SKIP_PRE;
+					FIFO_SKIP_PRE <= '0';
 				end if;
+				-- Direct color DMA hack (correct, but why?)
+				-- Skip the slot after a refresh
+				if FIFO_RD_POS /= FIFO_WR_POS and FIFO_CODE( CONV_INTEGER( FIFO_RD_POS ) ) = "0011" and
+				   DE = '0' and REFRESH_SLOT = '1' then
+					FIFO_SKIP <= '1';
+				end if;
+
 				if VRAM_SPEED = '0' or (FIFO_EN = '1' and FIFO_SKIP = '0') then
 					if FIFO_RD_POS /= FIFO_WR_POS then
 						DTC <= DTC_FIFO_RD;
@@ -2857,7 +2874,7 @@ begin
 			when DTC_VRAM_WR1 =>
 				if M128 = '0' then
 					--skip next FIFO slot since we write 16 bit now instead of the original 8
-					FIFO_SKIP <= '1';
+					FIFO_SKIP_PRE <= '1';
 				end if;
 -- synthesis translate_off
 				write(L, string'("   VRAM WR ["));
@@ -2919,7 +2936,7 @@ begin
 				DTC <= DTC_WR_END;
 
 			when DTC_WR_END =>
-				if DMA_FILL_PRE = '1' then
+				if DMA_FILL = '1' then
 					DMAF_SET_REQ <= '1';
 				end if;
 				DTC <= DTC_IDLE;
@@ -2934,8 +2951,17 @@ begin
 			
 			when DTC_VRAM_RD2 =>
 				if early_ack_dt='0' then
-					DT_VRAM_SEL <= '0';	
-					DT_RD_DATA <= DT_VRAM_DO;
+					DT_VRAM_SEL <= '0';
+					if DT_RD_CODE = "1100" then
+						-- VRAM 8 bit read - unused bits come from the next FIFO entry
+						if ADDR(0) = '0' then
+							DT_RD_DATA <= FIFO_DATA( CONV_INTEGER( FIFO_RD_POS ) )(15 downto 8) & DT_VRAM_DO(7 downto 0);
+						else
+							DT_RD_DATA <= FIFO_DATA( CONV_INTEGER( FIFO_RD_POS ) )(15 downto 8) & DT_VRAM_DO(15 downto 8);
+						end if;
+					else
+						DT_RD_DATA <= DT_VRAM_DO;
+					end if;
 					DT_RD_DTACK_N <= '0';
 					ADDR <= ADDR + ADDR_STEP;
 					DTC <= DTC_IDLE;
@@ -2980,14 +3006,14 @@ begin
 ----------------------------------------------------------------
 -- DMA ENGINE
 ----------------------------------------------------------------
-			if ADDR_SET_REQ = '1' and ADDR_SET_ACK = '0' and IN_DMA = '0' then
+			if ADDR_SET_REQ = '1' and ADDR_SET_ACK = '0' then
 				ADDR <= ADDR_LATCH;
 				if CODE(5) = '1' and PENDING = '1' then
 					if REG(23)(7) = '0' then
 						DMA_VBUS <= '1';
 					else
 						if REG(23)(6) = '0' then
-							DMA_FILL_PRE <= '1';
+							DMA_FILL <= '1';
 						else
 							DMA_COPY <= '1';
 						end if;
@@ -2996,14 +3022,13 @@ begin
 				ADDR_SET_ACK <= '1';
 			end if;
 
-			if DMA_FILL_PRE = '1' and DMAF_SET_REQ = '1' and FIFO_RD_POS = FIFO_WR_POS then
+			if FIFO_RD_POS = FIFO_WR_POS and DMA_FILL = '1' and DMAF_SET_REQ = '1' then
 				if CODE(3 downto 0) = "0011" or CODE(3 downto 0) = "0101" then
 					-- CRAM, VSRAM fill gets its data from the next FIFO write position
 					DT_DMAF_DATA <= FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) );
 				else -- VRAM Write
 					DT_DMAF_DATA <= DT_WR_DATA;
 				end if;
-				DMA_FILL <= '1';
 				DMAF_SET_REQ <= '0';
 			end if;
 
@@ -3011,7 +3036,7 @@ begin
 			when DMA_IDLE =>
 				if DMA_VBUS = '1' then
 					DMAC <= DMA_VBUS_INIT;
-				elsif DMA_FILL = '1' then
+				elsif DMA_FILL = '1' and DMAF_SET_REQ = '1' then
 					DMAC <= DMA_FILL_INIT;
 				elsif DMA_COPY = '1' then
 					DMAC <= DMA_COPY_INIT;
@@ -3019,7 +3044,7 @@ begin
 ----------------------------------------------------------------
 -- DMA FILL
 ----------------------------------------------------------------
-				
+
 			when DMA_FILL_INIT =>
 -- synthesis translate_off
 				write(L, string'("VDP DMA FILL SRC=["));
@@ -3029,93 +3054,97 @@ begin
 				write(L, string'("] VALUE=["));
 				hwrite(L, DT_DMAF_DATA(7 downto 0));
 				write(L, string'("]"));
-				writeline(F,L);									
+				writeline(F,L);
 -- synthesis translate_on
 				DMA_SOURCE <= REG(22) & REG(21);
 				DMA_LENGTH <= REG(20) & REG(19);
 				DMAC <= DMA_FILL_START;
 
 			when DMA_FILL_START =>
-				if FIFO_RD_POS = FIFO_WR_POS then
+				if FIFO_RD_POS = FIFO_WR_POS and DTC = DTC_IDLE and DMAF_SET_REQ = '0' then
 					-- suspend FILL if the FIFO is not empty
 					case CODE(3 downto 0) is
 					when "0011" => -- CRAM Write
 						DMAC <= DMA_FILL_CRAM;
 					when "0101" => -- VSRAM Write
 						DMAC <= DMA_FILL_VSRAM;
-					when others => -- VRAM Write
+					when "0001" => -- VRAM Write
 						DMAC <= DMA_FILL_WR;
+					when others => -- invalid target
+						DMAC <= DMA_FILL_NEXT;
 					end case;
 				end if;
 
 			when DMA_FILL_CRAM =>
-				CRAM_WE_A <= '1';
-				CRAM_ADDR_A <= ADDR(6 downto 1);
-				CRAM_D_A <= DT_DMAF_DATA(11 downto 9) & DT_DMAF_DATA(7 downto 5) & DT_DMAF_DATA(3 downto 1);
-				ADDR <= ADDR + ADDR_STEP;
-				DMA_SOURCE <= DMA_SOURCE + ADDR_STEP;
-				DMA_LENGTH <= DMA_LENGTH - 1;
-				DMAC <= DMA_FILL_LOOP;
-				
-			when DMA_FILL_VSRAM =>
-				if ADDR(6 downto 1) < 40 then
-					VSRAM( CONV_INTEGER(ADDR(6 downto 1)) ) <= DT_DMAF_DATA(10 downto 0);
+				if VRAM_SPEED = '0' or FIFO_EN = '1' then
+					CRAM_WE_A <= '1';
+					CRAM_ADDR_A <= ADDR(6 downto 1);
+					CRAM_D_A <= DT_DMAF_DATA(11 downto 9) & DT_DMAF_DATA(7 downto 5) & DT_DMAF_DATA(3 downto 1);
+					DMAC <= DMA_FILL_NEXT;
 				end if;
+
+			when DMA_FILL_VSRAM =>
+				if VRAM_SPEED = '0' or FIFO_EN = '1' then
+					if ADDR(6 downto 1) < 40 then
+						VSRAM( CONV_INTEGER(ADDR(6 downto 1)) ) <= DT_DMAF_DATA(10 downto 0);
+					end if;
+					DMAC <= DMA_FILL_NEXT;
+				end if;
+
+			when DMA_FILL_WR =>
+				if VRAM_SPEED = '0' or FIFO_EN = '1' then
+-- synthesis translate_off					
+					write(L, string'("   VRAM WR ["));
+					hwrite(L, x"00" & ADDR(15 downto 1) & '0');
+					write(L, string'("] = ["));
+					if ADDR(0) = '0' then
+						write(L, string'("  "));
+						hwrite(L, DT_DMAF_DATA(7 downto 0));
+					else
+						hwrite(L, DT_DMAF_DATA(7 downto 0));
+						write(L, string'("  "));
+					end if;
+					write(L, string'("]"));
+					writeline(F,L);
+-- synthesis translate_on					
+					DT_VRAM_SEL <= '1';
+					DT_VRAM_ADDR <= '0'&ADDR(15 downto 1);
+					DT_VRAM_RNW <= '0';
+					DT_VRAM_DI <= DT_DMAF_DATA(15 downto 8) & DT_DMAF_DATA(15 downto 8);
+					if ADDR(0) = '0' then
+						DT_VRAM_UDS_N <= '1';
+						DT_VRAM_LDS_N <= '0';
+					else
+						DT_VRAM_UDS_N <= '0';
+						DT_VRAM_LDS_N <= '1';
+					end if;
+					DMAC <= DMA_FILL_WR2;
+				end if;
+
+			when DMA_FILL_WR2 =>
+				if early_ack_dt='0' then
+					DT_VRAM_SEL <= '0';	
+					DMAC <= DMA_FILL_NEXT;
+				end if;
+
+			when DMA_FILL_NEXT =>
 				ADDR <= ADDR + ADDR_STEP;
 				DMA_SOURCE <= DMA_SOURCE + ADDR_STEP;
 				DMA_LENGTH <= DMA_LENGTH - 1;
 				DMAC <= DMA_FILL_LOOP;
 
-			when DMA_FILL_WR =>
--- synthesis translate_off					
-				write(L, string'("   VRAM WR ["));
-				hwrite(L, x"00" & ADDR(15 downto 1) & '0');
-				write(L, string'("] = ["));
-				if ADDR(0) = '0' then 
-					write(L, string'("  "));
-					hwrite(L, DT_DMAF_DATA(7 downto 0));
-				else
-					hwrite(L, DT_DMAF_DATA(7 downto 0));
-					write(L, string'("  "));
-				end if;
-				write(L, string'("]"));
-				writeline(F,L);									
--- synthesis translate_on					
-				DT_VRAM_SEL <= '1';
-				DT_VRAM_ADDR <= '0'&ADDR(15 downto 1);
-				DT_VRAM_RNW <= '0';
-				DT_VRAM_DI <= DT_DMAF_DATA(15 downto 8) & DT_DMAF_DATA(15 downto 8);
-				if ADDR(0) = '0' then
-					DT_VRAM_UDS_N <= '1';
-					DT_VRAM_LDS_N <= '0';
-				else
-					DT_VRAM_UDS_N <= '0';
-					DT_VRAM_LDS_N <= '1';									
-				end if;					
-				DMAC <= DMA_FILL_WR2;
-				
-			when DMA_FILL_WR2 =>
-				if early_ack_dt='0' then
-					DT_VRAM_SEL <= '0';	
-					ADDR <= ADDR + ADDR_STEP;
-					DMA_SOURCE <= DMA_SOURCE + ADDR_STEP;
-					DMA_LENGTH <= DMA_LENGTH - 1;
-					DMAC <= DMA_FILL_LOOP;
-				end if;
-			
 			when DMA_FILL_LOOP =>
 				REG(20) <= DMA_LENGTH(15 downto 8);
 				REG(19) <= DMA_LENGTH(7 downto 0);
 				REG(22) <= DMA_SOURCE(15 downto 8);
 				REG(21) <= DMA_SOURCE(7 downto 0);
 				if DMA_LENGTH = 0 then
-					DMA_FILL_PRE <= '0';
 					DMA_FILL <= '0';
 					DMAC <= DMA_IDLE;
--- synthesis translate_off										
-					write(L, string'("VDP DMA FILL END"));					
-					writeline(F,L);									
--- synthesis translate_on					
+-- synthesis translate_off
+					write(L, string'("VDP DMA FILL END"));
+					writeline(F,L);
+-- synthesis translate_on
 				else
 					DMAC <= DMA_FILL_START;
 				end if;

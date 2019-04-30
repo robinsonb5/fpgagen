@@ -80,7 +80,7 @@ signal vga_pr_o : std_logic_vector(5 downto 0);
 
 -- user_io
 signal buttons: std_logic_vector(1 downto 0);
-signal status:  std_logic_vector(31 downto 0);
+signal status:  std_logic_vector(31 downto 0) := (others => '0');
 signal joy_0: std_logic_vector(31 downto 0);
 signal joy_1: std_logic_vector(31 downto 0);
 signal txd:     std_logic;
@@ -135,6 +135,12 @@ signal ext_data_ack     : std_logic := '0';
 signal ext_sw           : std_logic_vector( 15 downto 0); --DIP switches
 signal core_led         : std_logic;
 
+constant CONF_DBG_STR : string := "";
+--constant CONF_DBG_STR : string :=
+--    "O3,VRAM Speed,Slow,Fast;"&
+--    "O4,FM Sound,Enable,Disable;"&
+--    "O5,PSG Sound,Enable,Disable;";
+
 constant CONF_STR : string :=
     "GENESIS;BINGENMD ;"&
     "S,SAV,Mount;"&
@@ -145,10 +151,10 @@ constant CONF_STR : string :=
     "O9,Swap Y axis,Off,On;"&
     "OA,Only 3 buttons,Off,On;"&
     "OFG,Mouse,Off,Port 1,Port 2;"&
-    "O3,VRAM Speed,Slow,Fast;"&
     "OD,Fake EEPROM,Off,On;"&
-    "O4,FM Sound,Enable,Disable;"&
-    "O5,PSG Sound,Enable,Disable;"&
+    "OI,CPU Turbo,Off,On;"&
+    "OH,PCM HiFi sound,Disable,Enable;"&
+    CONF_DBG_STR&
     "T0,Reset;";
 
 -- convert string to std_logic_vector to be given to user_io
@@ -325,6 +331,9 @@ ext_sw(8) <= status(10); --3 buttons
 ext_sw(9) <= not status(3); -- VRAM speed emulation
 ext_sw(10) <= status(13); -- Fake EEPROM
 ext_sw(12 downto 11) <= status(16 downto 15); -- Mouse
+ext_sw(13) <= status(17); -- HiFi PCM
+ext_sw(14) <= status(18); -- CPU Turbo
+
 
 --SDRAM_A(12)<='0';
 virtualtoplevel : entity work.Virtual_Toplevel

@@ -418,6 +418,7 @@ signal BGB_VRAM_DO_REG	: std_logic_vector(15 downto 0);
 signal BGB_SEL		: std_logic;
 signal BGB_DTACK_N	: std_logic;
 signal BGB_VSRAM1_LATCH : std_logic_vector(10 downto 0);
+signal BGB_VSRAM1_LAST_READ : std_logic_vector(10 downto 0);
 
 -- BACKGROUND A
 type bgac_t is (
@@ -458,6 +459,7 @@ signal BGA_VRAM_DO_REG	: std_logic_vector(15 downto 0);
 signal BGA_SEL		: std_logic;
 signal BGA_DTACK_N	: std_logic;
 signal BGA_VSRAM0_LATCH : std_logic_vector(10 downto 0);
+signal BGA_VSRAM0_LAST_READ : std_logic_vector(10 downto 0);
 
 signal WIN_V		: std_logic;
 signal WIN_H		: std_logic;
@@ -1175,6 +1177,7 @@ begin
 			when BGBC_DONE =>
 				if HV_HCNT = H_INT_POS and HV_PIXDIV = 0 and VSCR = '0' then
 					BGB_VSRAM1_LATCH <= VSRAM(1);
+					BGB_VSRAM1_LAST_READ <= VSRAM(1);
 				end if;
 				BGB_SEL <= '0';
 				BGB_COLINFO_WE_A <= '0';
@@ -1230,11 +1233,12 @@ begin
 					vscroll_index := BGB_COL(5 downto 1);
 					if vscroll_index <= 19 then
 						BGB_VSRAM1_LATCH <= VSRAM(CONV_INTEGER(vscroll_index & "1"));
+						BGB_VSRAM1_LAST_READ <= VSRAM(CONV_INTEGER(vscroll_index & "1"));
 					elsif H40 = '0' then
 						BGB_VSRAM1_LATCH <= (others => '0');
 					else
 						-- partial column gets the last read values AND'ed in H40 ("left column scroll bug")
-						BGB_VSRAM1_LATCH <= VSRAM(38) and VSRAM(39);
+						BGB_VSRAM1_LATCH <= BGB_VSRAM1_LAST_READ and BGA_VSRAM0_LAST_READ;
 						-- using VSRAM(1) sometimes looks better (Gynoug)
 						-- BGB_VSRAM1_LATCH <= VSRAM(1);
 					end if;
@@ -1430,6 +1434,7 @@ begin
 			when BGAC_DONE =>
 				if HV_HCNT = H_INT_POS and HV_PIXDIV = 0 and VSCR = '0' then
 					BGA_VSRAM0_LATCH <= VSRAM(0);
+					BGA_VSRAM0_LAST_READ <= VSRAM(0);
 				end if;
 				BGA_SEL <= '0';
 				BGA_COLINFO_ADDR_A <= (others => '0');
@@ -1498,11 +1503,12 @@ begin
 					vscroll_index := BGA_COL(5 downto 1);
 					if vscroll_index <= 19 then
 						BGA_VSRAM0_LATCH <= VSRAM(CONV_INTEGER(vscroll_index & '0'));
+						BGA_VSRAM0_LAST_READ <= VSRAM(CONV_INTEGER(vscroll_index & '0'));
 					elsif H40 = '0' then
 						BGA_VSRAM0_LATCH <= (others => '0');
 					else
 						-- partial column gets the last read values AND'ed in H40 ("left column scroll bug")
-						BGA_VSRAM0_LATCH <= VSRAM(38) and VSRAM(39);
+						BGA_VSRAM0_LATCH <= BGA_VSRAM0_LAST_READ and BGB_VSRAM1_LAST_READ;
 						-- using VSRAM(0) sometimes looks better (Gynoug)
 						-- BGA_VSRAM0_LATCH <= VSRAM(0);
 					end if;

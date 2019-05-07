@@ -2830,9 +2830,6 @@ end process;
 process( PIXOUT )
 	file F		: text open write_mode is "vdp.out";
 	variable L	: line;
-	variable R	: std_logic_vector(2 downto 0);
-	variable G	: std_logic_vector(2 downto 0);
-	variable B	: std_logic_vector(2 downto 0);
 begin
 	if rising_edge( PIXOUT ) then
 		hwrite(L, FF_R & '0' & FF_G & '0' & FF_B & '0');

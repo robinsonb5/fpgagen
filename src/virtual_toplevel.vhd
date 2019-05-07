@@ -407,7 +407,7 @@ signal VINT_FX68	: std_logic;
 signal VINT_T80		: std_logic;
 
 -- VDP VBUS DMA
-signal VBUS_ADDR	: std_logic_vector(23 downto 0);
+signal VBUS_ADDR	: std_logic_vector(23 downto 1);
 signal VBUS_DATA	: std_logic_vector(15 downto 0);		
 signal VBUS_SEL		: std_logic;
 signal VBUS_DTACK_N	: std_logic;	

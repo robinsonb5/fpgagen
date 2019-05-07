@@ -80,6 +80,13 @@ entity vdp is
 		VBUS_DTACK_N	: in std_logic;
 
 		PAL		: in std_logic := '0';
+
+		CE_PIX		: out std_logic;
+		FIELD_OUT	: out std_logic;
+		INTERLACE	: out std_logic;
+		HBL			: out std_logic;
+		VBL			: out std_logic;
+
 		R		: out std_logic_vector(3 downto 0);
 		G		: out std_logic_vector(3 downto 0);
 		B		: out std_logic_vector(3 downto 0);
@@ -351,6 +358,9 @@ signal VSYNC_HSTART    : std_logic_vector(8 downto 0);
 signal VSYNC_START     : std_logic_vector(8 downto 0);
 signal V_TOTAL_HEIGHT  : std_logic_vector(8 downto 0);
 signal V_INT_POS       : std_logic_vector(8 downto 0);
+
+signal V_DISP_HEIGHT_R : std_logic_vector(8 downto 0);
+signal V30_R           : std_logic;
 
 ----------------------------------------------------------------
 -- VRAM CONTROLLER
@@ -2773,6 +2783,45 @@ HS <= FF_HS;
 R <= FF_R;
 G <= FF_G;
 B <= FF_B;
+
+INTERLACE <= LSM(1) and LSM(0);
+
+V_DISP_HEIGHT_R <= conv_std_logic_vector(V_DISP_HEIGHT_V30, 9) when V30_R ='1'
+              else conv_std_logic_vector(V_DISP_HEIGHT_V28, 9);
+
+process( CLK )
+	variable V30prev : std_logic;
+begin
+	if rising_edge(CLK) then
+		CE_PIX <= '0';
+		if HV_PIXDIV = 0 then
+
+			if HV_HCNT = VSYNC_HSTART and HV_VCNT = VSYNC_START then
+				FIELD_OUT <= LSM(1) and LSM(0) and not FIELD_LATCH;
+			end if;
+
+			V30prev := V30prev and V30;
+			if HV_HCNT = H_INT_POS and HV_VCNT = 0 then
+				V30_R <= V30prev;
+				V30prev := '1';
+			end if;
+
+			CE_PIX <= '1';
+			if HV_HCNT = HBLANK_END + H_DISP_WIDTH + 1 then
+				HBL <= '1';
+			end if;
+			if HV_HCNT = HBLANK_END + 1 then
+				HBL <= '0';
+			end if;
+
+			if HV_VCNT < V_DISP_HEIGHT_R then
+				VBL <= '0';
+			else
+				VBL <= '1';
+			end if;
+		end if;
+	end if;
+end process;
 
 ----------------------------------------------------------------
 -- VIDEO DEBUG

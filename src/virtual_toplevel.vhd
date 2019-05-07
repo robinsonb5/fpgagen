@@ -809,7 +809,8 @@ port map(
 	HS					=> VDP_HS_N,
 	VS					=> VDP_VS_N,
 
-	VRAM_SPEED			=> VDP_VRAM_SPEED
+	VRAM_SPEED			=> VDP_VRAM_SPEED,
+	VSCROLL_BUG			=> '0'
 );
 
 -- PSG

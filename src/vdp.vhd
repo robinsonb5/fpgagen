@@ -64,11 +64,14 @@ entity vdp is
 		vram_q : in std_logic_vector(15 downto 0);
 		vram_u_n : out std_logic;
 		vram_l_n : out std_logic;
-		
+
 		HINT		: out std_logic;
 		VINT_TG68	: out std_logic;
 		VINT_T80	: out std_logic;
 		INTACK		: in std_logic;
+		BR_N		: out std_logic;
+		BG_N		: in std_logic;
+		BGACK_N		: out std_logic;
 
 		VBUS_ADDR		: out std_logic_vector(23 downto 0);
 		VBUS_DATA		: in std_logic_vector(15 downto 0);
@@ -932,9 +935,7 @@ begin
 						end if;
 						ADDR_LATCH <= DI(2 downto 0) & ADDR(13 downto 0);
 
-						-- In case of DMA VBUS request, hold the TG68 with DTACK_N
-						-- it should avoid the use of a CLKEN signal
-						if ADDR_SET_ACK = '0' or DMA_VBUS = '1' then							
+						if ADDR_SET_ACK = '0' then
 							ADDR_SET_REQ <= '1';
 						else
 							ADDR_SET_REQ <= '0';
@@ -2833,7 +2834,10 @@ begin
 		
 		DTC <= DTC_IDLE;
 		DMAC <= DMA_IDLE;
-		
+
+		BR_N <= '1';
+		BGACK_N <= '1';
+
 	elsif rising_edge(CLK) then
 
 		if FIFO_RD_POS = FIFO_WR_POS then
@@ -3070,6 +3074,7 @@ begin
 				if CODE(5) = '1' and PENDING = '1' then
 					if REG(23)(7) = '0' then
 						DMA_VBUS <= '1';
+						BR_N <= '0';
 					else
 						if REG(23)(6) = '0' then
 							DMA_FILL <= '1';
@@ -3315,22 +3320,26 @@ begin
 ----------------------------------------------------------------
 -- DMA VBUS
 ----------------------------------------------------------------
-				
+
 			when DMA_VBUS_INIT =>
+				if BG_N = '0' then
+					BGACK_N <= '0';
+					BR_N <= '1';
 -- synthesis translate_off
-				write(L, string'("VDP DMA VBUS SRC=["));
-				hwrite(L, REG(23)(6 downto 0) & REG(22) & REG(21) & '0');
-				write(L, string'("] DST=["));
-				hwrite(L, x"00" & ADDR);				
-				write(L, string'("] LEN=["));
-				hwrite(L, x"00" & REG(20) & REG(19));
-				write(L, string'("]"));
-				writeline(F,L);									
--- synthesis translate_on						
-				DMA_LENGTH <= REG(20) & REG(19);
-				DMA_SOURCE <= REG(22) & REG(21);
-				DMAC <= DMA_VBUS_RD;
-				
+					write(L, string'("VDP DMA VBUS SRC=["));
+					hwrite(L, REG(23)(6 downto 0) & REG(22) & REG(21) & '0');
+					write(L, string'("] DST=["));
+					hwrite(L, x"00" & ADDR);
+					write(L, string'("] LEN=["));
+					hwrite(L, x"00" & REG(20) & REG(19));
+					write(L, string'("]"));
+					writeline(F,L);
+-- synthesis translate_on
+					DMA_LENGTH <= REG(20) & REG(19);
+					DMA_SOURCE <= REG(22) & REG(21);
+					DMAC <= DMA_VBUS_RD;
+				end if;
+
 			when DMA_VBUS_RD =>
 				FF_VBUS_SEL <= '1';
 				FF_VBUS_ADDR <= REG(23)(6 downto 0) & DMA_SOURCE & '0';
@@ -3368,6 +3377,7 @@ begin
 					REG(21) <= DMA_SOURCE(7 downto 0);
 					if DMA_LENGTH = 0 then
 						DMA_VBUS <= '0';
+						BGACK_N <= '1';
 						DMAC <= DMA_IDLE;
 -- synthesis translate_off										
 						write(L, string'("VDP DMA VBUS END"));

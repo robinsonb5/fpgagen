@@ -228,6 +228,9 @@ signal FX68_AS_N	: std_logic;
 signal FX68_AS_N_D	: std_logic;
 signal FX68_VPA_N	: std_logic;
 signal FX68_IO_READY : std_logic;
+signal FX68_BG_N	: std_logic;
+signal FX68_BR_N	: std_logic;
+signal FX68_BGACK_N	: std_logic;
 
 -- Z80
 signal T80_RESET_N	: std_logic;
@@ -661,14 +664,14 @@ fx68k_inst: fx68k
 		FC0			=> FX68_FC(0),
 		FC1			=> FX68_FC(1),
 		FC2			=> FX68_FC(2),
-		BGn			=> open,
+		BGn			=> FX68_BG_N,
 		oRESETn		=> open,
 		oHALTEDn	=> open,
 		DTACKn		=> FX68_DTACK_N,
 		VPAn		=> FX68_VPA_N,
 		BERRn		=> '1',
-		BRn			=> '1',
-		BGACKn		=> '1',
+		BRn			=> FX68_BR_N,
+		BGACKn		=> FX68_BGACK_N,
 		IPL0n		=> FX68_IPL_N(0),
 		IPL1n		=> FX68_IPL_N(1),
 		IPL2n		=> FX68_IPL_N(2),
@@ -789,7 +792,10 @@ port map(
 	VINT_TG68		=> VINT_FX68,
 	VINT_T80			=> VINT_T80,
 	INTACK			=> FX68_INTACK,
-		
+	BR_N		=> FX68_BR_N,
+	BG_N		=> FX68_BG_N,
+	BGACK_N		=> FX68_BGACK_N,
+
 	VBUS_ADDR		=> VBUS_ADDR,
 	VBUS_DATA		=> VBUS_DATA,
 		

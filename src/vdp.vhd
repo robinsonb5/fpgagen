@@ -59,31 +59,42 @@ entity vdp is
 		vram_req : out std_logic;
 		vram_ack : in std_logic;
 		vram_we : out std_logic;
-		vram_a : buffer std_logic_vector(14 downto 0);
+		vram_a : out std_logic_vector(14 downto 0);
 		vram_d : out std_logic_vector(15 downto 0);
 		vram_q : in std_logic_vector(15 downto 0);
 		vram_u_n : out std_logic;
 		vram_l_n : out std_logic;
-		
+
 		HINT		: out std_logic;
 		VINT_TG68	: out std_logic;
 		VINT_T80	: out std_logic;
 		INTACK		: in std_logic;
+		BR_N		: out std_logic;
+		BG_N		: in std_logic;
+		BGACK_N		: out std_logic;
 
-		VBUS_ADDR		: out std_logic_vector(23 downto 0);
+		VBUS_ADDR		: out std_logic_vector(23 downto 1);
 		VBUS_DATA		: in std_logic_vector(15 downto 0);
 		
 		VBUS_SEL		: out std_logic;
 		VBUS_DTACK_N	: in std_logic;
 
 		PAL		: in std_logic := '0';
+
+		CE_PIX		: out std_logic;
+		FIELD_OUT	: out std_logic;
+		INTERLACE	: out std_logic;
+		HBL			: out std_logic;
+		VBL			: out std_logic;
+
 		R		: out std_logic_vector(3 downto 0);
 		G		: out std_logic_vector(3 downto 0);
 		B		: out std_logic_vector(3 downto 0);
 		HS		: out std_logic;
 		VS		: out std_logic;
 
-		VRAM_SPEED: in std_logic := '1' -- 0 - full speed, 1 - FIFO throttle emulation
+		VRAM_SPEED: in std_logic := '1'; -- 0 - full speed, 1 - FIFO throttle emulation
+		VSCROLL_BUG: in std_logic := '1' -- 0 - use nicer effect, 1 - HW original
 	);
 end vdp;
 
@@ -294,7 +305,7 @@ signal DT_DMAF_DATA	: std_logic_vector(15 downto 0);
 signal DT_DMAV_DATA	: std_logic_vector(15 downto 0);
 signal DMAF_SET_REQ	: std_logic;
 
-signal FF_VBUS_ADDR		: std_logic_vector(23 downto 0);
+signal FF_VBUS_ADDR		: std_logic_vector(23 downto 1);
 signal FF_VBUS_SEL		: std_logic;
 
 signal DMA_VBUS		: std_logic;
@@ -348,6 +359,9 @@ signal VSYNC_START     : std_logic_vector(8 downto 0);
 signal V_TOTAL_HEIGHT  : std_logic_vector(8 downto 0);
 signal V_INT_POS       : std_logic_vector(8 downto 0);
 
+signal V_DISP_HEIGHT_R : std_logic_vector(8 downto 0);
+signal V30_R           : std_logic;
+
 ----------------------------------------------------------------
 -- VRAM CONTROLLER
 ----------------------------------------------------------------
@@ -380,6 +394,7 @@ signal BGEN_ACTIVATE	: std_logic;
 type bgbc_t is (
 	BGBC_INIT,
 	BGBC_HS_RD,
+	BGBC_GET_VSCROLL,
 	BGBC_CALC_Y,
 	BGBC_CALC_BASE,
 	BGBC_BASE_RD,
@@ -402,6 +417,7 @@ signal BGB_COLINFO_Q_B		: std_logic_vector(6 downto 0);
 
 signal BGB_X		: std_logic_vector(9 downto 0);
 signal BGB_POS		: std_logic_vector(9 downto 0);
+signal BGB_COL		: std_logic_vector(6 downto 0);
 signal BGB_Y		: std_logic_vector(10 downto 0);
 signal T_BGB_PRI	: std_logic;
 signal T_BGB_PAL	: std_logic_vector(1 downto 0);
@@ -416,11 +432,13 @@ signal BGB_VRAM_DO_REG	: std_logic_vector(15 downto 0);
 signal BGB_SEL		: std_logic;
 signal BGB_DTACK_N	: std_logic;
 signal BGB_VSRAM1_LATCH : std_logic_vector(10 downto 0);
+signal BGB_VSRAM1_LAST_READ : std_logic_vector(10 downto 0);
 
 -- BACKGROUND A
 type bgac_t is (
 	BGAC_INIT,
 	BGAC_HS_RD,
+	BGAC_GET_VSCROLL,
 	BGAC_CALC_Y,
 	BGAC_CALC_BASE,
 	BGAC_BASE_RD,
@@ -440,6 +458,7 @@ signal BGA_COLINFO_Q_B		: std_logic_vector(6 downto 0);
 
 signal BGA_X		: std_logic_vector(9 downto 0);
 signal BGA_POS		: std_logic_vector(9 downto 0);
+signal BGA_COL		: std_logic_vector(6 downto 0);
 signal BGA_Y		: std_logic_vector(10 downto 0);
 signal T_BGA_PRI	: std_logic;
 signal T_BGA_PAL	: std_logic_vector(1 downto 0);
@@ -454,6 +473,7 @@ signal BGA_VRAM_DO_REG	: std_logic_vector(15 downto 0);
 signal BGA_SEL		: std_logic;
 signal BGA_DTACK_N	: std_logic;
 signal BGA_VSRAM0_LATCH : std_logic_vector(10 downto 0);
+signal BGA_VSRAM0_LAST_READ : std_logic_vector(10 downto 0);
 
 signal WIN_V		: std_logic;
 signal WIN_H		: std_logic;
@@ -926,9 +946,7 @@ begin
 						end if;
 						ADDR_LATCH <= DI(2 downto 0) & ADDR(13 downto 0);
 
-						-- In case of DMA VBUS request, hold the TG68 with DTACK_N
-						-- it should avoid the use of a CLKEN signal
-						if ADDR_SET_ACK = '0' or DMA_VBUS = '1' then							
+						if ADDR_SET_ACK = '0' then
 							ADDR_SET_REQ <= '1';
 						else
 							ADDR_SET_REQ <= '0';
@@ -1155,6 +1173,7 @@ variable V_BGB_BASE		: std_logic_vector(15 downto 0);
 variable vscroll_mask	: std_logic_vector(10 downto 0);
 variable hscroll_mask	: std_logic_vector(9 downto 0);
 variable vscroll_val	: std_logic_vector(10 downto 0);
+variable vscroll_index  : std_logic_vector(4 downto 0);
 variable y_cells	: std_logic_vector(6 downto 0);
 
 -- synthesis translate_off
@@ -1168,6 +1187,10 @@ begin
 	elsif rising_edge(CLK) then
 			case BGBC is
 			when BGBC_DONE =>
+				if HV_HCNT = H_INT_POS and HV_PIXDIV = 0 and VSCR = '0' then
+					BGB_VSRAM1_LATCH <= VSRAM(1);
+					BGB_VSRAM1_LAST_READ <= VSRAM(1);
+				end if;
 				BGB_SEL <= '0';
 				BGB_COLINFO_WE_A <= '0';
 				BGB_COLINFO_ADDR_A <= (others => '0');
@@ -1206,23 +1229,49 @@ begin
 				if early_ack_bgb = '0' then
 					V_BGB_XSTART := "0000000000" - BGB_VRAM_DO(9 downto 0);
 					BGB_SEL <= '0';
-					BGB_X <= ( V_BGB_XSTART(9 downto 3) & "000" ) and hscroll_mask;
-					BGB_POS <= "0000000000" - ( "0000000" & V_BGB_XSTART(2 downto 0) );
-					BGBC <= BGBC_CALC_Y;
+					BGB_X <= ( V_BGB_XSTART(9 downto 4) & "0000" ) and hscroll_mask;
+					BGB_POS <= "0000000000" - ( "000000" & V_BGB_XSTART(3 downto 0) );
+					if V_BGB_XSTART(3 downto 0) = "0000" then
+						BGB_COL <= (others => '0');
+					else
+						BGB_COL <= "1111110"; -- -2
+					end if;
+					BGBC <= BGBC_GET_VSCROLL;
 				end if;
 
-			when BGBC_CALC_Y =>
+			when BGBC_GET_VSCROLL =>
 				BGB_COLINFO_WE_A <= '0';
-				if BGB_POS(9) = '1' or VSCR = '0' then
-					if LSM = "11" then
-						vscroll_val := BGB_VSRAM1_LATCH(10 downto 0);
+				if VSCR = '1' then
+					vscroll_index := BGB_COL(5 downto 1);
+					if vscroll_index <= 19 then
+						BGB_VSRAM1_LATCH <= VSRAM(CONV_INTEGER(vscroll_index & "1"));
+						BGB_VSRAM1_LAST_READ <= VSRAM(CONV_INTEGER(vscroll_index & "1"));
+					elsif H40 = '0' then
+						BGB_VSRAM1_LATCH <= (others => '0');
+					elsif VSCROLL_BUG = '1' then
+						-- partial column gets the last read values AND'ed in H40 ("left column scroll bug")
+						BGB_VSRAM1_LATCH <= BGB_VSRAM1_LAST_READ and BGA_VSRAM0_LAST_READ;
 					else
-						vscroll_val := '0' & BGB_VSRAM1_LATCH(9 downto 0);
+						-- using VSRAM(1) sometimes looks better (Gynoug)
+						 BGB_VSRAM1_LATCH <= VSRAM(1);
 					end if;
-				elsif LSM = "11" then
-					vscroll_val := VSRAM( CONV_INTEGER(BGB_POS(8 downto 4) & "1") )(10 downto 0);
+				end if;
+				BGBC <= BGBC_CALC_Y;
+
+			when BGBC_CALC_Y =>
+-- synthesis translate_off
+				write(L, string'("BGB COL = "));
+				hwrite(L, "00" & BGB_COL);
+				write(L, string'(" BGB X = "));
+				hwrite(L, "000000" & BGB_X(9 downto 0));
+				write(L, string'(" POS="));
+				hwrite(L, "000000" & BGB_POS(9 downto 0));
+				writeline(F,L);
+-- synthesis translate_on
+				if LSM = "11" then
+					vscroll_val := BGB_VSRAM1_LATCH(10 downto 0);
 				else
-					vscroll_val := '0' & VSRAM( CONV_INTEGER(BGB_POS(8 downto 4) & "1") )(9 downto 0);
+					vscroll_val := '0' & BGB_VSRAM1_LATCH(9 downto 0);
 				end if;
 				BGB_Y <= (BG_Y + vscroll_val) and vscroll_mask;
 				BGBC <= BGBC_CALC_BASE;
@@ -1338,7 +1387,8 @@ begin
 					else
 						BGB_POS <= BGB_POS + 1;
 						if BGB_X(2 downto 0) = "111" then
-							BGBC <= BGBC_CALC_Y;
+							BGB_COL <= BGB_COL + 1;
+							BGBC <= BGBC_GET_VSCROLL;
 						else
 							BGBC <= BGBC_LOOP;							
 						end if;
@@ -1382,6 +1432,7 @@ variable V_BGA_BASE		: std_logic_vector(15 downto 0);
 variable vscroll_mask	: std_logic_vector(10 downto 0);
 variable hscroll_mask	: std_logic_vector(9 downto 0);
 variable vscroll_val    : std_logic_vector(10 downto 0);
+variable vscroll_index  : std_logic_vector(4 downto 0);
 variable y_cells    : std_logic_vector(6 downto 0);
 -- synthesis translate_off
 file F		: text open write_mode is "bga_dbg.out";
@@ -1394,6 +1445,10 @@ begin
 	elsif rising_edge(CLK) then
 			case BGAC is
 			when BGAC_DONE =>
+				if HV_HCNT = H_INT_POS and HV_PIXDIV = 0 and VSCR = '0' then
+					BGA_VSRAM0_LATCH <= VSRAM(0);
+					BGA_VSRAM0_LAST_READ <= VSRAM(0);
+				end if;
 				BGA_SEL <= '0';
 				BGA_COLINFO_ADDR_A <= (others => '0');
 				BGA_COLINFO_WE_A <= '0';
@@ -1445,31 +1500,48 @@ begin
 				if early_ack_bga='0' then
 					V_BGA_XSTART := "0000000000" - BGA_VRAM_DO(9 downto 0);
 					BGA_SEL <= '0';
-					BGA_X <= ( V_BGA_XSTART(9 downto 3) & "000" ) and hscroll_mask;
-					BGA_POS <= "0000000000" - ( "0000000" & V_BGA_XSTART(2 downto 0) );
-					BGAC <= BGAC_CALC_Y;
+					BGA_X <= ( V_BGA_XSTART(9 downto 4) & "0000" ) and hscroll_mask;
+					BGA_POS <= "0000000000" - ( "000000" & V_BGA_XSTART(3 downto 0) );
+					if V_BGA_XSTART(3 downto 0) = "0000" then
+						BGA_COL <= (others => '0');
+					else
+						BGA_COL <= "1111110"; -- -2
+					end if;
+					BGAC <= BGAC_GET_VSCROLL;
 				end if;
 
-			when BGAC_CALC_Y =>
+			when BGAC_GET_VSCROLL =>
 				BGA_COLINFO_WE_A <= '0';
+				if VSCR = '1' then
+					vscroll_index := BGA_COL(5 downto 1);
+					if vscroll_index <= 19 then
+						BGA_VSRAM0_LATCH <= VSRAM(CONV_INTEGER(vscroll_index & '0'));
+						BGA_VSRAM0_LAST_READ <= VSRAM(CONV_INTEGER(vscroll_index & '0'));
+					elsif H40 = '0' then
+						BGA_VSRAM0_LATCH <= (others => '0');
+					elsif VSCROLL_BUG = '1' then
+						-- partial column gets the last read values AND'ed in H40 ("left column scroll bug")
+						BGA_VSRAM0_LATCH <= BGA_VSRAM0_LAST_READ and BGB_VSRAM1_LAST_READ;
+					else
+						-- using VSRAM(0) sometimes looks better (Gynoug)
+						BGA_VSRAM0_LATCH <= VSRAM(0);
+					end if;
+				end if;
+				BGAC <= BGAC_CALC_Y;
+
+			when BGAC_CALC_Y =>
 				if WIN_H = '1' or WIN_V = '1' then
 					BGA_Y <= "00" & BG_Y;
 				else
-					if BGA_POS(9) = '1' or VSCR = '0' then
-						if LSM = "11" then
-							vscroll_val := BGA_VSRAM0_LATCH(10 downto 0);
-						else
-							vscroll_val := '0' & BGA_VSRAM0_LATCH(9 downto 0);
-						end if;
-					elsif LSM = "11" then
-						vscroll_val := VSRAM( CONV_INTEGER(BGA_POS(8 downto 4) & "0") )(10 downto 0);
+					if LSM = "11" then
+						vscroll_val := BGA_VSRAM0_LATCH(10 downto 0);
 					else
-						vscroll_val := '0' & VSRAM( CONV_INTEGER(BGA_POS(8 downto 4) & "0") )(9 downto 0);
+						vscroll_val := '0' & BGA_VSRAM0_LATCH(9 downto 0);
 					end if;
 					BGA_Y <= (BG_Y + vscroll_val) and vscroll_mask;
 				end if;
 				BGAC <= BGAC_CALC_BASE;
-				
+
 			when BGAC_CALC_BASE =>
 				if LSM = "11" then
 					y_cells := BGA_Y(10 downto 4);
@@ -1542,14 +1614,14 @@ begin
 					and BGA_POS(3 downto 0) = "0000" and BGA_POS(8 downto 4) = WHP 
 				then
 					WIN_H <= not WIN_H;
-					BGAC <= BGAC_CALC_Y;				
+					BGAC <= BGAC_GET_VSCROLL;
 				elsif BGA_POS(9) = '0' and WIN_H = '1' and WRIGT = '0' 
 				--	and BGA_POS(3 downto 0) = "0000" and BGA_POS(8 downto 4) = WHP
 					and BGA_X(2 downto 0) = "000" and BGA_POS(8 downto 4) = WHP
 				then
 					WIN_H <= not WIN_H;
 					if WIN_V = '0' then
-						BGAC <= BGAC_CALC_Y;
+						BGAC <= BGAC_GET_VSCROLL;
 					end if;
 				elsif BGA_POS(1 downto 0) = "00" and BGA_SEL = '0' and (WIN_H = '1' or WIN_V = '1') then
 					BGA_COLINFO_WE_A <= '0';
@@ -1650,10 +1722,13 @@ begin
 						BGAC <= BGAC_DONE;
 					else
 						BGA_POS <= BGA_POS + 1;
+						if BGA_X(2 downto 0) = "111" then
+							BGA_COL <= BGA_COL + 1;
+						end if;
 						if BGA_X(2 downto 0) = "111" and (WIN_H = '0' and WIN_V = '0') then
-							BGAC <= BGAC_CALC_Y;
+							BGAC <= BGAC_GET_VSCROLL;
 						elsif BGA_POS(2 downto 0) = "111" and (WIN_H = '1' or WIN_V = '1') then
-							BGAC <= BGAC_CALC_Y;
+							BGAC <= BGAC_GET_VSCROLL;
 						else
 							BGAC <= BGAC_LOOP;							
 						end if;
@@ -2385,8 +2460,6 @@ begin
 				else
 					HV_VCNT <= HV_VCNT + 1;
 				end if;
-				BGB_VSRAM1_LATCH <= VSRAM(1);
-				BGA_VSRAM0_LATCH <= VSRAM(0);
 
 				if HV_VCNT = "1"&x"FF" then
 					-- FIELD changes at VINT, but the HV_COUNTER reflects the current field from line 0-0
@@ -2711,6 +2784,45 @@ R <= FF_R;
 G <= FF_G;
 B <= FF_B;
 
+INTERLACE <= LSM(1) and LSM(0);
+
+V_DISP_HEIGHT_R <= conv_std_logic_vector(V_DISP_HEIGHT_V30, 9) when V30_R ='1'
+              else conv_std_logic_vector(V_DISP_HEIGHT_V28, 9);
+
+process( CLK )
+	variable V30prev : std_logic;
+begin
+	if rising_edge(CLK) then
+		CE_PIX <= '0';
+		if HV_PIXDIV = 0 then
+
+			if HV_HCNT = VSYNC_HSTART and HV_VCNT = VSYNC_START then
+				FIELD_OUT <= LSM(1) and LSM(0) and not FIELD_LATCH;
+			end if;
+
+			V30prev := V30prev and V30;
+			if HV_HCNT = H_INT_POS and HV_VCNT = 0 then
+				V30_R <= V30prev;
+				V30prev := '1';
+			end if;
+
+			CE_PIX <= '1';
+			if HV_HCNT = HBLANK_END + H_DISP_WIDTH + 1 then
+				HBL <= '1';
+			end if;
+			if HV_HCNT = HBLANK_END + 1 then
+				HBL <= '0';
+			end if;
+
+			if HV_VCNT < V_DISP_HEIGHT_R then
+				VBL <= '0';
+			else
+				VBL <= '1';
+			end if;
+		end if;
+	end if;
+end process;
+
 ----------------------------------------------------------------
 -- VIDEO DEBUG
 ----------------------------------------------------------------
@@ -2718,9 +2830,6 @@ B <= FF_B;
 process( PIXOUT )
 	file F		: text open write_mode is "vdp.out";
 	variable L	: line;
-	variable R	: std_logic_vector(2 downto 0);
-	variable G	: std_logic_vector(2 downto 0);
-	variable B	: std_logic_vector(2 downto 0);
 begin
 	if rising_edge( PIXOUT ) then
 		hwrite(L, FF_R & '0' & FF_G & '0' & FF_B & '0');
@@ -2774,7 +2883,10 @@ begin
 		
 		DTC <= DTC_IDLE;
 		DMAC <= DMA_IDLE;
-		
+
+		BR_N <= '1';
+		BGACK_N <= '1';
+
 	elsif rising_edge(CLK) then
 
 		if FIFO_RD_POS = FIFO_WR_POS then
@@ -3011,6 +3123,7 @@ begin
 				if CODE(5) = '1' and PENDING = '1' then
 					if REG(23)(7) = '0' then
 						DMA_VBUS <= '1';
+						BR_N <= '0';
 					else
 						if REG(23)(6) = '0' then
 							DMA_FILL <= '1';
@@ -3256,25 +3369,29 @@ begin
 ----------------------------------------------------------------
 -- DMA VBUS
 ----------------------------------------------------------------
-				
+
 			when DMA_VBUS_INIT =>
+				if BG_N = '0' then
+					BGACK_N <= '0';
+					BR_N <= '1';
 -- synthesis translate_off
-				write(L, string'("VDP DMA VBUS SRC=["));
-				hwrite(L, REG(23)(6 downto 0) & REG(22) & REG(21) & '0');
-				write(L, string'("] DST=["));
-				hwrite(L, x"00" & ADDR);				
-				write(L, string'("] LEN=["));
-				hwrite(L, x"00" & REG(20) & REG(19));
-				write(L, string'("]"));
-				writeline(F,L);									
--- synthesis translate_on						
-				DMA_LENGTH <= REG(20) & REG(19);
-				DMA_SOURCE <= REG(22) & REG(21);
-				DMAC <= DMA_VBUS_RD;
-				
+					write(L, string'("VDP DMA VBUS SRC=["));
+					hwrite(L, REG(23)(6 downto 0) & REG(22) & REG(21) & '0');
+					write(L, string'("] DST=["));
+					hwrite(L, x"00" & ADDR);
+					write(L, string'("] LEN=["));
+					hwrite(L, x"00" & REG(20) & REG(19));
+					write(L, string'("]"));
+					writeline(F,L);
+-- synthesis translate_on
+					DMA_LENGTH <= REG(20) & REG(19);
+					DMA_SOURCE <= REG(22) & REG(21);
+					DMAC <= DMA_VBUS_RD;
+				end if;
+
 			when DMA_VBUS_RD =>
 				FF_VBUS_SEL <= '1';
-				FF_VBUS_ADDR <= REG(23)(6 downto 0) & DMA_SOURCE & '0';
+				FF_VBUS_ADDR <= REG(23)(6 downto 0) & DMA_SOURCE;
 				DMAC <= DMA_VBUS_RD2;
 
 			when DMA_VBUS_RD2 =>
@@ -3309,6 +3426,7 @@ begin
 					REG(21) <= DMA_SOURCE(7 downto 0);
 					if DMA_LENGTH = 0 then
 						DMA_VBUS <= '0';
+						BGACK_N <= '1';
 						DMAC <= DMA_IDLE;
 -- synthesis translate_off										
 						write(L, string'("VDP DMA VBUS END"));

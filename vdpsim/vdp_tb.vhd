@@ -31,7 +31,7 @@ component vdp
                 vram_req : out std_logic;
                 vram_ack : in std_logic;
                 vram_we : out std_logic;
-                vram_a : buffer std_logic_vector(14 downto 0);
+                vram_a : out std_logic_vector(14 downto 0);
                 vram_d : out std_logic_vector(15 downto 0);
                 vram_q : in std_logic_vector(15 downto 0);
                 vram_u_n : out std_logic;
@@ -39,22 +39,35 @@ component vdp
 
                 HINT            : out std_logic;
                 INTACK          : in std_logic;
+                BR_N            : out std_logic;
+                BG_N            : in std_logic;
+                BGACK_N         : out std_logic;
 
                 VINT_TG68       : out std_logic;
                 VINT_T80        : out std_logic;
 
-                VBUS_ADDR               : out std_logic_vector(23 downto 0);
+                VBUS_ADDR               : out std_logic_vector(23 downto 1);
                 VBUS_DATA               : in std_logic_vector(15 downto 0);
 
                 VBUS_SEL                : out std_logic;
                 VBUS_DTACK_N    : in std_logic;
 
                 PAL             : in std_logic := '0';
+
+                CE_PIX          : out std_logic;
+                FIELD_OUT       : out std_logic;
+                INTERLACE       : out std_logic;
+                HBL             : out std_logic;
+                VBL             : out std_logic;
+
                 R               : out std_logic_vector(3 downto 0);
                 G               : out std_logic_vector(3 downto 0);
                 B               : out std_logic_vector(3 downto 0);
                 HS              : out std_logic;
-                VS              : out std_logic
+                VS              : out std_logic;
+
+                VRAM_SPEED      : in std_logic := '1';
+                VSCROLL_BUG     : in std_logic := '0'
         );
 end component ;
 
@@ -104,6 +117,7 @@ begin
       vram_d => vram_d,
 
       INTACK => '0',
+      BG_N => '0',
 
       VBUS_DATA => "0000000000000000",
 

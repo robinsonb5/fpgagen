@@ -338,17 +338,6 @@ begin
 				nextRamCol <= romwr_a(addr_colbits);
 				nextLdqm <= '0';
 				nextUdqm <= '0';
-			elsif (vram_req /= vram_ackReg) and (currentPort /= PORT_VRAM) and (vram_we = '1' or cache_sdram_req = '1') then
-				nextRamState <= RAM_READ_1;
-				if vram_we = '1' then
-					nextRamState <= RAM_WRITE_1;
-				end if;
-				nextRamPort <= PORT_VRAM;
-				nextRamBank <= vram_a(addr_bankbits);
-				nextRamRow <= vram_a(addr_rowbits);
-				nextRamCol <= vram_a(addr_colbits);
-				nextLdqm <= vram_l_n;
-				nextUdqm <= vram_u_n;
 			elsif (romrd_req /= romrd_ackReg) and (currentPort /= PORT_ROMRD) then
 				nextRamState <= RAM_READ_1;
 				nextRamPort <= PORT_ROMRD;
@@ -368,6 +357,17 @@ begin
 				nextRamCol <= ram68k_a(addr_colbits);
 				nextLdqm <= ram68k_l_n;
 				nextUdqm <= ram68k_u_n;
+			elsif (vram_req /= vram_ackReg) and (currentPort /= PORT_VRAM) and (vram_we = '1' or cache_sdram_req = '1') then
+				nextRamState <= RAM_READ_1;
+				if vram_we = '1' then
+					nextRamState <= RAM_WRITE_1;
+				end if;
+				nextRamPort <= PORT_VRAM;
+				nextRamBank <= vram_a(addr_bankbits);
+				nextRamRow <= vram_a(addr_rowbits);
+				nextRamCol <= vram_a(addr_colbits);
+				nextLdqm <= vram_l_n;
+				nextUdqm <= vram_u_n;
 			end if;
 		--end if;
 	end process;

@@ -1348,47 +1348,45 @@ begin
 					BGB_SEL <= '1';
 					BGBC <= BGBC_TILE_RD;
 				else
-					if BGB_POS(9) = '0' then
-						BGB_COLINFO_ADDR_A <= BGB_POS(8 downto 0);
-						BGB_COLINFO_WE_A <= '1';
-						case BGB_X(1 downto 0) is
-						when "00" =>
-							if BGB_HF = '1' then
-								BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM_DO(3 downto 0);
-							else
-								BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM_DO(15 downto 12);
-							end if;
-						when "01" =>
-							if BGB_HF = '1' then
-								BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM_DO(7 downto 4);
-							else
-								BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM_DO(11 downto 8);
-							end if;						
-						when "10" =>
-							if BGB_HF = '1' then
-								BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM_DO(11 downto 8);
-							else
-								BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM_DO(7 downto 4);
-							end if;						
-						when others =>
-							if BGB_HF = '1' then
-								BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM_DO(15 downto 12);
-							else
-								BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM_DO(3 downto 0);
-							end if;						
-						end case;					
-					end if;
-					BGB_X <= (BGB_X + 1) and hscroll_mask;
-					if BGB_POS = H_DISP_WIDTH - 1 then
-						BGBC <= BGBC_DONE;
-					else
-						BGB_POS <= BGB_POS + 1;
-						if BGB_X(2 downto 0) = "111" then
-							BGB_COL <= BGB_COL + 1;
-							BGBC <= BGBC_GET_VSCROLL;
+					BGB_COLINFO_ADDR_A <= BGB_POS(8 downto 0);
+					BGB_COLINFO_WE_A <= '1';
+					case BGB_X(1 downto 0) is
+					when "00" =>
+						if BGB_HF = '1' then
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM_DO(3 downto 0);
 						else
-							BGBC <= BGBC_LOOP;							
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM_DO(15 downto 12);
 						end if;
+					when "01" =>
+						if BGB_HF = '1' then
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM_DO(7 downto 4);
+						else
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM_DO(11 downto 8);
+						end if;
+					when "10" =>
+						if BGB_HF = '1' then
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM_DO(11 downto 8);
+						else
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM_DO(7 downto 4);
+						end if;
+					when others =>
+						if BGB_HF = '1' then
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM_DO(15 downto 12);
+						else
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM_DO(3 downto 0);
+						end if;
+					end case;
+					BGB_X <= (BGB_X + 1) and hscroll_mask;
+					BGB_POS <= BGB_POS + 1;
+					if BGB_X(2 downto 0) = "111" then
+						BGB_COL <= BGB_COL + 1;
+						if (H40 = '0' and BGB_COL = 31) or (H40 = '1' and BGB_COL = 39) then
+							BGBC <= BGBC_DONE;
+						else
+							BGBC <= BGBC_GET_VSCROLL;
+						end if;
+					else
+						BGBC <= BGBC_LOOP;
 					end if;
 					BGB_SEL <= '0';					
 				end if;
@@ -1656,81 +1654,79 @@ begin
 					BGA_SEL <= '1';
 					BGAC <= BGAC_TILE_RD;
 				else
-					if BGA_POS(9) = '0' then
-						BGA_COLINFO_WE_A <= '1';					
-						BGA_COLINFO_ADDR_A <= BGA_POS(8 downto 0);
-						if WIN_H = '1' or WIN_V = '1' then
-							case BGA_POS(1 downto 0) is
-							when "00" =>
-								if BGA_HF = '1' then
-									BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(3 downto 0);
-								else
-									BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(15 downto 12);
-								end if;
-							when "01" =>
-								if BGA_HF = '1' then
-									BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(7 downto 4);
-								else
-									BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(11 downto 8);
-								end if;						
-							when "10" =>
-								if BGA_HF = '1' then
-									BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(11 downto 8);
-								else
-									BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(7 downto 4);
-								end if;						
-							when others =>
-								if BGA_HF = '1' then
-									BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(15 downto 12);
-								else
-									BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(3 downto 0);
-								end if;						
-							end case;											
-						else
-							case BGA_X(1 downto 0) is
-							when "00" =>
-								if BGA_HF = '1' then
-									BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(3 downto 0);
-								else
-									BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(15 downto 12);
-								end if;
-							when "01" =>
-								if BGA_HF = '1' then
-									BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(7 downto 4);
-								else
-									BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(11 downto 8);
-								end if;						
-							when "10" =>
-								if BGA_HF = '1' then
-									BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(11 downto 8);
-								else
-									BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(7 downto 4);
-								end if;						
-							when others =>
-								if BGA_HF = '1' then
-									BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(15 downto 12);
-								else
-									BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(3 downto 0);
-								end if;						
-							end case;					
-						end if;
-					end if;
-					BGA_X <= (BGA_X + 1) and hscroll_mask;
-					if BGA_POS = H_DISP_WIDTH - 1 then
-						BGAC <= BGAC_DONE;
+					BGA_COLINFO_WE_A <= '1';
+					BGA_COLINFO_ADDR_A <= BGA_POS(8 downto 0);
+					if WIN_H = '1' or WIN_V = '1' then
+						case BGA_POS(1 downto 0) is
+						when "00" =>
+							if BGA_HF = '1' then
+								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(3 downto 0);
+							else
+								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(15 downto 12);
+							end if;
+						when "01" =>
+							if BGA_HF = '1' then
+								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(7 downto 4);
+							else
+								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(11 downto 8);
+							end if;
+						when "10" =>
+							if BGA_HF = '1' then
+								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(11 downto 8);
+							else
+								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(7 downto 4);
+							end if;
+						when others =>
+							if BGA_HF = '1' then
+								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(15 downto 12);
+							else
+								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(3 downto 0);
+							end if;
+						end case;
 					else
-						BGA_POS <= BGA_POS + 1;
-						if BGA_X(2 downto 0) = "111" then
-							BGA_COL <= BGA_COL + 1;
-						end if;
-						if BGA_X(2 downto 0) = "111" and (WIN_H = '0' and WIN_V = '0') then
-							BGAC <= BGAC_GET_VSCROLL;
-						elsif BGA_POS(2 downto 0) = "111" and (WIN_H = '1' or WIN_V = '1') then
-							BGAC <= BGAC_GET_VSCROLL;
+						case BGA_X(1 downto 0) is
+						when "00" =>
+							if BGA_HF = '1' then
+								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(3 downto 0);
+							else
+								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(15 downto 12);
+							end if;
+						when "01" =>
+							if BGA_HF = '1' then
+								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(7 downto 4);
+							else
+								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(11 downto 8);
+							end if;
+						when "10" =>
+							if BGA_HF = '1' then
+								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(11 downto 8);
+							else
+								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(7 downto 4);
+							end if;
+						when others =>
+							if BGA_HF = '1' then
+								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(15 downto 12);
+							else
+								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM_DO(3 downto 0);
+							end if;
+						end case;
+					end if;
+
+					BGA_X <= (BGA_X + 1) and hscroll_mask;
+					BGA_POS <= BGA_POS + 1;
+					if BGA_X(2 downto 0) = "111" then
+						BGA_COL <= BGA_COL + 1;
+					end if;
+					if (BGA_X(2 downto 0) = "111" and (WIN_H = '0' and WIN_V = '0')) or
+					   (BGA_POS(2 downto 0) = "111" and (WIN_H = '1' or WIN_V = '1')) then
+						if (H40 = '0' and BGA_COL = 31) or (H40 = '1' and BGA_COL = 39) then
+							BGAC <= BGAC_DONE;
 						else
-							BGAC <= BGAC_LOOP;							
+							BGAC <= BGAC_GET_VSCROLL;
 						end if;
-					end if;					
+					else
+						BGAC <= BGAC_LOOP;
+					end if;
 					BGA_SEL <= '0';
 				end if;
 			when BGAC_TILE_RD =>

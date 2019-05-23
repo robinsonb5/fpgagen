@@ -1224,14 +1224,15 @@ begin
 			when BGBC_HS_RD =>
 				if early_ack_bgb = '0' then
 					V_BGB_XSTART := "0000000000" - BGB_VRAM_DO(9 downto 0);
+					if V_BGB_XSTART(3 downto 0) = "0000" then
+						V_BGB_XSTART := V_BGB_XSTART - 16;
+						BGB_POS <= "1111110000";
+					else
+						BGB_POS <= "0000000000" - ( "000000" & V_BGB_XSTART(3 downto 0) );
+					end if;
 					BGB_SEL <= '0';
 					BGB_X <= ( V_BGB_XSTART(9 downto 4) & "0000" ) and hscroll_mask;
-					BGB_POS <= "0000000000" - ( "000000" & V_BGB_XSTART(3 downto 0) );
-					if V_BGB_XSTART(3 downto 0) = "0000" then
-						BGB_COL <= (others => '0');
-					else
-						BGB_COL <= "1111110"; -- -2
-					end if;
+					BGB_COL <= "1111110"; -- -2
 					BGBC <= BGBC_GET_VSCROLL;
 				end if;
 
@@ -1495,14 +1496,15 @@ begin
 			when BGAC_HS_RD =>
 				if early_ack_bga='0' then
 					V_BGA_XSTART := "0000000000" - BGA_VRAM_DO(9 downto 0);
+					if V_BGA_XSTART(3 downto 0) = "0000" then
+						V_BGA_XSTART := V_BGA_XSTART - 16;
+						BGA_POS <= "1111110000";
+					else
+						BGA_POS <= "0000000000" - ( "000000" & V_BGA_XSTART(3 downto 0) );
+					end if;
 					BGA_SEL <= '0';
 					BGA_X <= ( V_BGA_XSTART(9 downto 4) & "0000" ) and hscroll_mask;
-					BGA_POS <= "0000000000" - ( "000000" & V_BGA_XSTART(3 downto 0) );
-					if V_BGA_XSTART(3 downto 0) = "0000" then
-						BGA_COL <= (others => '0');
-					else
-						BGA_COL <= "1111110"; -- -2
-					end if;
+					BGA_COL <= "1111110"; -- -2
 					BGAC <= BGAC_GET_VSCROLL;
 				end if;
 

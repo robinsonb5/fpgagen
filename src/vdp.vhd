@@ -146,7 +146,8 @@ signal FIFO_SKIP_PRE	: std_logic;
 
 signal IN_DMA		: std_logic;
 signal IN_HBL		: std_logic;
-signal IN_VBL		: std_logic;
+signal IN_VBL		: std_logic; -- VBL flag to the CPU
+signal VBL_AREA		: std_logic; -- outside of borders
 
 signal SOVR			: std_logic;
 signal SP1_SOVR_SET	: std_logic;
@@ -329,7 +330,6 @@ signal FIELD		: std_logic;
 signal FIELD_LATCH	: std_logic;
 
 signal DISP_ACTIVE	: std_logic;
-signal DISP_ACTIVE_LAST_COLUMN	: std_logic;
 
 -- HV COUNTERS
 signal HV_PIXDIV	: std_logic_vector(3 downto 0);
@@ -353,6 +353,8 @@ signal V_DISP_START    : std_logic_vector(8 downto 0);
 signal V_DISP_HEIGHT   : std_logic_vector(8 downto 0);
 signal VSYNC_HSTART    : std_logic_vector(8 downto 0);
 signal VSYNC_START     : std_logic_vector(8 downto 0);
+signal VBORDER_START   : std_logic_vector(8 downto 0);
+signal VBORDER_END     : std_logic_vector(8 downto 0);
 signal V_TOTAL_HEIGHT  : std_logic_vector(8 downto 0);
 signal V_INT_POS       : std_logic_vector(8 downto 0);
 
@@ -2367,6 +2369,14 @@ VSYNC_START     <= conv_std_logic_vector(VSYNC_START_PAL_V30, 9) when V30='1' an
               else conv_std_logic_vector(VSYNC_START_PAL_V28, 9) when V30='0' and PAL='1'
               else conv_std_logic_vector(VSYNC_START_NTSC_V30, 9) when V30='1' and PAL='0'
               else conv_std_logic_vector(VSYNC_START_NTSC_V28, 9);
+VBORDER_START   <= conv_std_logic_vector(VBORDER_START_PAL_V30, 9) when V30='1' and PAL='1'
+              else conv_std_logic_vector(VBORDER_START_PAL_V28, 9) when V30='0' and PAL='1'
+              else conv_std_logic_vector(VBORDER_START_NTSC_V30, 9) when V30='1' and PAL='0'
+              else conv_std_logic_vector(VBORDER_START_NTSC_V28, 9);
+VBORDER_END     <= conv_std_logic_vector(VBORDER_END_PAL_V30, 9) when V30='1' and PAL='1'
+              else conv_std_logic_vector(VBORDER_END_PAL_V28, 9) when V30='0' and PAL='1'
+              else conv_std_logic_vector(VBORDER_END_NTSC_V30, 9) when V30='1' and PAL='0'
+              else conv_std_logic_vector(VBORDER_END_NTSC_V28, 9);
 V_DISP_START    <= conv_std_logic_vector(V_DISP_START_V30, 9) when V30='1'
               else conv_std_logic_vector(V_DISP_START_PAL_V28, 9) when PAL='1'
 			  else conv_std_logic_vector(V_DISP_START_NTSC_V28, 9);
@@ -2380,10 +2390,10 @@ V_INT_POS       <= conv_std_logic_vector(V_INT_V30, 9) when V30='1'
 -- COUNTERS AND INTERRUPTS
 
 Y <= HV_VCNT(7 downto 0);
-BG_Y <= Y & FIELD when LSM = "11" else '0' & Y;
-PRE_Y <= (Y + 1) & FIELD when LSM = "11" else '0' & (Y + 1);
+BG_Y <= Y & FIELD when LSM = "11" else HV_VCNT;
+PRE_Y <= (Y + 1) & FIELD when LSM = "11" else HV_VCNT + 1;
 
-HV_VCNT_EXT <= Y & FIELD_LATCH when LSM = "11" else '0' & Y;
+HV_VCNT_EXT <= Y & FIELD_LATCH when LSM = "11" else HV_VCNT;
 HV8 <= HV_VCNT_EXT(8) when LSM = "11" else HV_VCNT_EXT(0);
 
 -- refresh slots during disabled display - H40 - 6 slots, H32 - 5 slots
@@ -2411,6 +2421,7 @@ begin
 
 		IN_HBL <= '0';
 		IN_VBL <= '1';
+		VBL_AREA <= '1';
 
 		FIFO_EN <= '0';
 
@@ -2478,6 +2489,19 @@ begin
 					end if;
 				end if;
 
+				if HV_VCNT = "1"&x"FE" then
+					PRE_V_ACTIVE <= '1';
+				elsif HV_VCNT = "1"&x"FF" then
+					V_ACTIVE <= '1';
+				end if;
+			end if;
+
+			if HV_HCNT = H_INT_POS + 1 then
+				if HV_VCNT = V_DISP_HEIGHT - 1 then
+					PRE_V_ACTIVE <= '0';
+				elsif HV_VCNT = V_DISP_HEIGHT then
+					V_ACTIVE <= '0';
+				end if;
 			end if;
 
 			if HV_HCNT = H_INT_POS + 4 then
@@ -2485,6 +2509,13 @@ begin
 					IN_VBL <= '0';
 				elsif HV_VCNT = V_DISP_HEIGHT then
 					IN_VBL <= '1';
+				end if;
+
+				if HV_VCNT = VBORDER_START then
+					VBL_AREA <= '0';
+				end if;
+				if HV_VCNT = VBORDER_END then
+					VBL_AREA <= '1';
 				end if;
 			end if;
 
@@ -2533,12 +2564,7 @@ begin
 end process;
 
 -- TIMING MANAGEMENT
-PRE_V_ACTIVE <= '1' when HV_VCNT = "1"&x"FF" or HV_VCNT < V_DISP_HEIGHT - 1 else '0';
-V_ACTIVE <= '1' when HV_VCNT < V_DISP_HEIGHT else '0';
 DISP_ACTIVE <= '1' when V_ACTIVE = '1' and HV_HCNT > HBLANK_END and HV_HCNT <= HBLANK_END + H_DISP_WIDTH else '0';
--- pixel output does not start immediately when DISP_ACTIVE becomes '1'. Thus
--- the last pixel column needs some extra time after DISP_ACTIVE becomes '0' to display
-DISP_ACTIVE_LAST_COLUMN	<= '1' when HV_HCNT = HBLANK_END + H_DISP_WIDTH + 1 else '0';
 -- Background generation runs during active display.
 -- It starts with reading the horizontal scroll values from the VRAM
 BGEN_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = HSCROLL_READ else '0';
@@ -2562,8 +2588,8 @@ process( RST_N, CLK )
 begin
 	OBJ_COLINFO_D_REND <= (others => '0');
 	if rising_edge(CLK) then
-		if DISP_ACTIVE = '0' and DISP_ACTIVE_LAST_COLUMN = '0' then
-			
+		if DISP_ACTIVE = '0' or VBL_AREA = '1' then
+
 			FF_R <= (others => '0');
 			FF_G <= (others => '0');
 			FF_B <= (others => '0');
@@ -2648,12 +2674,7 @@ begin
 				CRAM_ADDR_B <= col;
 
 			when "0101" =>
-				if DISP_ACTIVE_LAST_COLUMN = '1' then
-					FF_R <= (others => '0');
-					FF_G <= (others => '0');
-					FF_B <= (others => '0');
-				else
-					case PIX_MODE is
+				case PIX_MODE is
 					when PIX_SHADOW =>
 						-- half brightness
 						FF_B <= '0' & CRAM_Q_B(8 downto 6);
@@ -2671,8 +2692,7 @@ begin
 						FF_B <= '0' & CRAM_Q_B(8 downto 6) + 7;
 						FF_G <= '0' & CRAM_Q_B(5 downto 3) + 7;
 						FF_R <= '0' & CRAM_Q_B(2 downto 0) + 7;
-					end case;
-				end if;
+				end case;
 				OBJ_COLINFO_WE_REND <= '1';
 
 			when "0111" =>

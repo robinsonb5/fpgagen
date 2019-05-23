@@ -81,7 +81,7 @@ entity vdp is
 
 		PAL		: in std_logic := '0';
 
-		CE_PIX		: out std_logic;
+		CE_PIX		: buffer std_logic;
 		FIELD_OUT	: out std_logic;
 		INTERLACE	: out std_logic;
 		HBL			: out std_logic;
@@ -327,9 +327,6 @@ signal PRE_Y		: std_logic_vector(8 downto 0);
 
 signal FIELD		: std_logic;
 signal FIELD_LATCH	: std_logic;
-
-signal X			: std_logic_vector(8 downto 0);
-signal PIXDIV		: std_logic_vector(3 downto 0);
 
 signal DISP_ACTIVE	: std_logic;
 signal DISP_ACTIVE_LAST_COLUMN	: std_logic;
@@ -644,7 +641,6 @@ signal FF_G			: std_logic_vector(3 downto 0);
 signal FF_B			: std_logic_vector(3 downto 0);
 signal FF_VS		: std_logic;
 signal FF_HS		: std_logic;
-signal PIXOUT		: std_logic;
 
 begin
 
@@ -2564,18 +2560,11 @@ DT_ACTIVE <= '1';
 process( RST_N, CLK )
 	variable col : std_logic_vector(5 downto 0);
 	variable cold: std_logic_vector(5 downto 0);
+	variable x   : std_logic_vector(8 downto 0);
 begin
 	OBJ_COLINFO_D_REND <= (others => '0');
-	if RST_N = '0' then
-		X <= (others => '0');
-		PIXDIV <= (others => '0');
-		PIXOUT <= '0';
-		
-	elsif rising_edge(CLK) then
+	if rising_edge(CLK) then
 		if DISP_ACTIVE = '0' and DISP_ACTIVE_LAST_COLUMN = '0' then
-			X <= (others => '0');
-			PIXDIV <= (others => '0');
-			PIXOUT <= '0';
 			
 			FF_R <= (others => '0');
 			FF_G <= (others => '0');
@@ -2585,14 +2574,13 @@ begin
 			BGA_COLINFO_ADDR_B <= (others => '0');
 			OBJ_COLINFO_WE_REND <= '0';
 		else
-			PIXDIV <= PIXDIV + 1;
-
-			case PIXDIV is
+			case HV_PIXDIV is
 			when "0000" =>
-				BGB_COLINFO_ADDR_B <= X;
-				BGA_COLINFO_ADDR_B <= X;
-				OBJ_COLINFO_ADDR_RD_REND <= X;
-				OBJ_COLINFO_ADDR_WR_REND <= X;
+				x := HV_HCNT - HBLANK_END - 1;
+				BGB_COLINFO_ADDR_B <= x;
+				BGA_COLINFO_ADDR_B <= x;
+				OBJ_COLINFO_ADDR_RD_REND <= x;
+				OBJ_COLINFO_ADDR_WR_REND <= x;
 				OBJ_COLINFO_WE_REND <= '0';
 
 			when "0010" =>
@@ -2695,15 +2683,6 @@ begin
 			when others => null;
 			end case;
 
-			if (H40 = '1' and PIXDIV = 8-1) or
-			   (H40 = '0' and RS0 = '0' and PIXDIV = 10-1) or
-			   (H40 = '0' and RS0 = '1' and PIXDIV = 8-1) then
-				PIXDIV <= (others => '0');
-				X <= X + 1;
-				PIXOUT <= '1';
-			else
-				PIXOUT <= '0';
-			end if;
 		end if;
 
 	end if;
@@ -2827,11 +2806,11 @@ end process;
 -- VIDEO DEBUG
 ----------------------------------------------------------------
 -- synthesis translate_off
-process( PIXOUT )
+process( CE_PIX )
 	file F		: text open write_mode is "vdp.out";
 	variable L	: line;
 begin
-	if rising_edge( PIXOUT ) then
+	if rising_edge( CE_PIX ) then
 		hwrite(L, FF_R & '0' & FF_G & '0' & FF_B & '0');
 		writeline(F,L);
 	end if;

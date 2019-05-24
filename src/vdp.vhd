@@ -1,4 +1,7 @@
 -- Copyright (c) 2010 Gregory Estrade (greg@torlus.com)
+-- Copyright (c) 2018 Till Harbaum
+-- Copyright (c) 2018-2019 Alexey Melnikov
+-- Copyright (c) 2018-2019 György Szombathelyi
 --
 -- All rights reserved
 --

@@ -96,8 +96,9 @@ entity vdp is
 		HS		: out std_logic;
 		VS		: out std_logic;
 
-		VRAM_SPEED: in std_logic := '1'; -- 0 - full speed, 1 - FIFO throttle emulation
-		VSCROLL_BUG: in std_logic := '1' -- 0 - use nicer effect, 1 - HW original
+		VRAM_SPEED  : in std_logic := '1'; -- 0 - full speed, 1 - FIFO throttle emulation
+		VSCROLL_BUG : in std_logic := '1'; -- 0 - use nicer effect, 1 - HW original
+		BORDER_EN   : in std_logic := '1'  -- Enable border
 	);
 end vdp;
 
@@ -150,6 +151,7 @@ signal FIFO_SKIP_PRE	: std_logic;
 signal IN_DMA		: std_logic;
 signal IN_HBL		: std_logic;
 signal IN_VBL		: std_logic; -- VBL flag to the CPU
+signal HBL_AREA		: std_logic;
 signal VBL_AREA		: std_logic; -- outside of borders
 
 signal SOVR			: std_logic;
@@ -322,6 +324,7 @@ signal DMA_SOURCE	: std_logic_vector(15 downto 0);
 ----------------------------------------------------------------
 -- VIDEO COUNTING
 ----------------------------------------------------------------
+signal H_ACTIVE		: std_logic;
 signal V_ACTIVE		: std_logic;
 signal Y			: std_logic_vector(7 downto 0);
 signal BG_Y		: std_logic_vector(8 downto 0);
@@ -2427,6 +2430,7 @@ begin
 		IN_HBL <= '0';
 		IN_VBL <= '1';
 		VBL_AREA <= '1';
+		HBL_AREA <= '1';
 
 		FIFO_EN <= '0';
 
@@ -2533,6 +2537,12 @@ begin
 			end if;
 
 			if HV_HCNT = 0 then
+				HBL_AREA <= '0';
+			elsif HV_HCNT = HBLANK_END + H_DISP_WIDTH + 9 then
+				HBL_AREA <= '1';
+			end if;
+
+			if HV_HCNT = 0 then
 				if HV_VCNT = V_INT_POS
 				then
 					FIELD <= not FIELD;
@@ -2569,7 +2579,10 @@ begin
 end process;
 
 -- TIMING MANAGEMENT
-DISP_ACTIVE <= '1' when V_ACTIVE = '1' and HV_HCNT > HBLANK_END and HV_HCNT <= HBLANK_END + H_DISP_WIDTH else '0';
+H_ACTIVE <= '1' when HV_HCNT > HBLANK_END and HV_HCNT <= HBLANK_END + H_DISP_WIDTH else
+            --'1' when HBL_AREA = '0' and DBG(8) = '1' else -- open side borders (not working well yet)
+			'0';
+DISP_ACTIVE <= '1' when V_ACTIVE = '1' and H_ACTIVE = '1' else '0';
 -- Background generation runs during active display.
 -- It starts with reading the horizontal scroll values from the VRAM
 BGEN_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = HSCROLL_READ else '0';
@@ -2593,11 +2606,23 @@ process( RST_N, CLK )
 begin
 	OBJ_COLINFO_D_REND <= (others => '0');
 	if rising_edge(CLK) then
-		if DISP_ACTIVE = '0' or VBL_AREA = '1' then
+		if DISP_ACTIVE = '0' then
 
-			FF_R <= (others => '0');
-			FF_G <= (others => '0');
-			FF_B <= (others => '0');
+			if HBL_AREA = '1' or VBL_AREA = '1' or BORDER_EN = '0' then
+				FF_R <= (others => '0');
+				FF_G <= (others => '0');
+				FF_B <= (others => '0');
+			else
+				case HV_PIXDIV is
+				when "0000" =>
+					CRAM_ADDR_B <= BGCOL;
+				when "0101" =>
+					FF_B <= CRAM_Q_B(8 downto 6) & '0';
+					FF_G <= CRAM_Q_B(5 downto 3) & '0';
+					FF_R <= CRAM_Q_B(2 downto 0) & '0';
+				when others => null;
+				end case;
+			end if;
 
 			BGB_COLINFO_ADDR_B <= (others => '0');
 			BGA_COLINFO_ADDR_B <= (others => '0');

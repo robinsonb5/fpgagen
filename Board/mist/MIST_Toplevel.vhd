@@ -154,6 +154,7 @@ constant CONF_STR : string :=
     "OD,Fake EEPROM,Off,On;"&
     "OI,CPU Turbo,Off,On;"&
     "OH,PCM HiFi sound,Disable,Enable;"&
+    "OJ,Border,Disable,Enable;"&
     CONF_DBG_STR&
     "T0,Reset;";
 
@@ -333,7 +334,7 @@ ext_sw(10) <= status(13); -- Fake EEPROM
 ext_sw(12 downto 11) <= status(16 downto 15); -- Mouse
 ext_sw(13) <= status(17); -- HiFi PCM
 ext_sw(14) <= status(18); -- CPU Turbo
-
+ext_sw(15) <= status(19); -- Border
 
 --SDRAM_A(12)<='0';
 virtualtoplevel : entity work.Virtual_Toplevel

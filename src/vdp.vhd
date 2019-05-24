@@ -2450,8 +2450,8 @@ begin
 
 		HV_PIXDIV <= HV_PIXDIV + 1;
 		if (RS0 = '1' and H40 = '1' and 
-			((HV_PIXDIV = 8-1 and (HV_HCNT >= H_INT_POS + 30 or HV_HCNT < H_INT_POS)) or
-			(HV_PIXDIV = 10-1 and HV_HCNT >= H_INT_POS and HV_HCNT < H_INT_POS + 30))) or --normal H40 - 30*10+390*8=3420 cycles
+			((HV_PIXDIV = 8-1 and (HV_HCNT < 335 or HV_HCNT >= H_DISP_START)) or --335-364 - 30
+			(HV_PIXDIV = 10-1 and HV_HCNT >= 335 and HV_HCNT < H_DISP_START))) or --normal H40 - 30*10+390*8=3420 cycles
 		   (RS0 = '0' and H40 = '1' and HV_PIXDIV = 8-1) or --fast H40
 		   (RS0 = '0' and H40 = '0' and HV_PIXDIV = 10-1) or --normal H32
 		   (RS0 = '1' and H40 = '0' and HV_PIXDIV = 8-1) then --fast H32

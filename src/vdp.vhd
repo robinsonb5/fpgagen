@@ -1263,7 +1263,7 @@ begin
 			when BGBC_CALC_Y =>
 -- synthesis translate_off
 				write(L, string'("BGB COL = "));
-				hwrite(L, "00" & BGB_COL);
+				hwrite(L, "0" & BGB_COL);
 				write(L, string'(" BGB X = "));
 				hwrite(L, "000000" & BGB_X(9 downto 0));
 				write(L, string'(" POS="));
@@ -2414,7 +2414,9 @@ begin
 
 		HV_PIXDIV <= (others => '0');
 		HV_HCNT <= (others => '0');
-		HV_VCNT <= (others => '0');
+		-- Start the VCounter after VSYNC,
+		-- thus various latches can be activated in VDPsim for the 1st frame
+		HV_VCNT <= "111100101"; -- 485
 
 		HINT_EN <= '0';
 		HINT_PENDING_SET <= '0';

@@ -2607,11 +2607,12 @@ begin
 	OBJ_COLINFO_D_REND <= (others => '0');
 	if rising_edge(CLK) then
 		if DISP_ACTIVE = '0' then
-
 			if HBL_AREA = '1' or VBL_AREA = '1' or BORDER_EN = '0' then
-				FF_R <= (others => '0');
-				FF_G <= (others => '0');
-				FF_B <= (others => '0');
+				if HV_PIXDIV = "0101" then
+					FF_R <= (others => '0');
+					FF_G <= (others => '0');
+					FF_B <= (others => '0');
+				end if;
 			else
 				case HV_PIXDIV is
 				when "0000" =>
@@ -2821,7 +2822,7 @@ process( CLK )
 begin
 	if rising_edge(CLK) then
 		CE_PIX <= '0';
-		if HV_PIXDIV = 0 then
+		if HV_PIXDIV = "0101" then
 
 			if HV_HCNT = VSYNC_HSTART and HV_VCNT = VSYNC_START then
 				FIELD_OUT <= LSM(1) and LSM(0) and not FIELD_LATCH;

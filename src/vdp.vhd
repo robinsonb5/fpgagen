@@ -1721,18 +1721,17 @@ begin
 
 					BGA_X <= (BGA_X + 1) and hscroll_mask;
 					BGA_POS <= BGA_POS + 1;
-					if BGA_X(2 downto 0) = "111" then
-						BGA_COL <= BGA_COL + 1;
-					end if;
 					if (BGA_X(2 downto 0) = "111" and (WIN_H = '0' and WIN_V = '0')) or
 					   (BGA_POS(2 downto 0) = "111" and (WIN_H = '1' or WIN_V = '1')) then
-						if (H40 = '0' and BGA_COL = 31) or (H40 = '1' and BGA_COL = 39) then
-							BGAC <= BGAC_DONE;
-						else
-							BGAC <= BGAC_GET_VSCROLL;
-						end if;
+						BGAC <= BGAC_GET_VSCROLL;
 					else
 						BGAC <= BGAC_LOOP;
+					end if;
+					if BGA_X(2 downto 0) = "111" then
+						BGA_COL <= BGA_COL + 1;
+						if (H40 = '0' and BGA_COL = 31) or (H40 = '1' and BGA_COL = 39) then
+							BGAC <= BGAC_DONE;
+						end if;
 					end if;
 					BGA_SEL <= '0';
 				end if;

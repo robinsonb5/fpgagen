@@ -1472,13 +1472,12 @@ begin
 					vscroll_mask := vscroll_mask(9 downto 0) & '1';
 				end if;
 
-				if Y(2 downto 0) = "000" then
-					if Y(7 downto 3) < WVP then
-						WIN_V <= not WDOWN;
-					else
-						WIN_V <= WDOWN;
-					end if;
+				if Y(7 downto 3) < WVP then
+					WIN_V <= not WDOWN;
+				else
+					WIN_V <= WDOWN;
 				end if;
+
 				if WHP = "00000" then
 					WIN_H <= WRIGT;
 				else

@@ -1,6 +1,7 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.numeric_std.ALL;
+use work.mist.ALL;
  
 entity MIST_Toplevel is
 	port
@@ -60,36 +61,15 @@ signal gen_blue     : std_logic_vector(3 downto 0);
 signal gen_hs		: std_logic;
 signal gen_vs		: std_logic;
 
-signal sd_r         : std_logic_vector(5 downto 0);
-signal sd_g         : std_logic_vector(5 downto 0);
-signal sd_b         : std_logic_vector(5 downto 0);
-signal sd_hs		: std_logic;
-signal sd_vs		: std_logic;
--- 
-signal osd_red_i    : std_logic_vector(5 downto 0);
-signal osd_green_i  : std_logic_vector(5 downto 0);
-signal osd_blue_i   : std_logic_vector(5 downto 0);
-signal osd_vs_i     : std_logic;
-signal osd_hs_i     : std_logic;
-signal osd_red_o : std_logic_vector(5 downto 0);
-signal osd_green_o : std_logic_vector(5 downto 0);
-signal osd_blue_o : std_logic_vector(5 downto 0);
-signal vga_y_o : std_logic_vector(5 downto 0);
-signal vga_pb_o : std_logic_vector(5 downto 0);
-signal vga_pr_o : std_logic_vector(5 downto 0);
-
 -- user_io
 signal buttons: std_logic_vector(1 downto 0);
 signal status:  std_logic_vector(31 downto 0) := (others => '0');
 signal joy_0: std_logic_vector(31 downto 0);
 signal joy_1: std_logic_vector(31 downto 0);
-signal txd:     std_logic;
-signal par_out_data: std_logic_vector(7 downto 0);
-signal par_out_strobe: std_logic;
 signal ypbpr: std_logic;
 signal scandoubler_disable: std_logic;
-signal mouse_x: std_logic_vector(7 downto 0);
-signal mouse_y: std_logic_vector(7 downto 0);
+signal mouse_x: signed(8 downto 0);
+signal mouse_y: signed(8 downto 0);
 signal mouse_flags: std_logic_vector(7 downto 0);
 signal mouse_strobe: std_logic;
 
@@ -184,62 +164,6 @@ COMPONENT hybrid_pwm_sd
 	);
 END COMPONENT;
 
--- 
-COMPONENT rgb2ypbpr
-	PORT
-	(
-        red     :	 IN std_logic_vector(5 DOWNTO 0);
-        green   :	 IN std_logic_vector(5 DOWNTO 0);
-        blue    :	 IN std_logic_vector(5 DOWNTO 0);
-        y       :	 OUT std_logic_vector(5 DOWNTO 0);
-        pb      :	 OUT std_logic_vector(5 DOWNTO 0);
-        pr      :	 OUT std_logic_vector(5 DOWNTO 0)
-	);
-END COMPONENT;
-
-component user_io 
-	generic ( STRLEN : integer := 0 );
-   port (
-        clk_sys : in std_logic;
-        clk_sd  : in std_logic;
-        SPI_CLK, SPI_SS_IO, SPI_MOSI :in std_logic;
-        SPI_MISO : out std_logic;
-        conf_str : in std_logic_vector(8*STRLEN-1 downto 0);
-        joystick_0 : out std_logic_vector(31 downto 0);
-        joystick_1 : out std_logic_vector(31 downto 0);
-        joystick_analog_0 : out std_logic_vector(15 downto 0);
-        joystick_analog_1 : out std_logic_vector(15 downto 0);
-        status: out std_logic_vector(31 downto 0);
-        switches : out std_logic_vector(1 downto 0);
-        buttons : out std_logic_vector(1 downto 0);
-        scandoubler_disable: out std_logic;
-        ypbpr: out std_logic;
-        sd_lba : in std_logic_vector(31 downto 0);
-        sd_rd : in std_logic;
-        sd_wr : in std_logic;
-        sd_ack : out std_logic;
-        sd_conf : in std_logic;
-        sd_sdhc : in std_logic;
-        sd_dout : out std_logic_vector(7 downto 0);
-        sd_dout_strobe : out std_logic;
-        sd_din : in std_logic_vector(7 downto 0);
-        sd_din_strobe : out std_logic;
-        sd_buff_addr : out std_logic_vector(8 downto 0);
-        img_mounted : out std_logic;
-        img_size : out std_logic_vector(31 downto 0);
-        ps2_kbd_clk : out std_logic;
-        ps2_kbd_data : out std_logic;
-        ps2_mouse_clk : out std_logic;
-        ps2_mouse_data : out std_logic;
-        mouse_x: out std_logic_vector(7 downto 0);
-        mouse_y: out std_logic_vector(7 downto 0);
-        mouse_flags: out std_logic_vector(7 downto 0);
-        mouse_strobe: out std_logic;
-        serial_data : in std_logic_vector(7 downto 0);
-        serial_strobe : in std_logic
-      );
-  end component user_io;
-
 component data_io
     port (  clk         : in std_logic;
             clkref      : in std_logic;
@@ -255,45 +179,6 @@ component data_io
         );
     end component data_io;
 
-component scandoubler
-    port (
-            clk_sys     : in std_logic;
-            scanlines   : in std_logic_vector(1 downto 0);
-
-            hs_in       : in std_logic;
-            vs_in       : in std_logic;
-            r_in        : in std_logic_vector(3 downto 0);
-            g_in        : in std_logic_vector(3 downto 0);
-            b_in        : in std_logic_vector(3 downto 0);
-
-            hs_out      : out std_logic;
-            vs_out      : out std_logic;
-            r_out       : out std_logic_vector(5 downto 0);
-            g_out       : out std_logic_vector(5 downto 0);
-            b_out       : out std_logic_vector(5 downto 0)
-        );
-end component scandoubler;
-
-component osd
- 	 generic ( OSD_COLOR : integer := 1 );  -- blue
-    port (  clk_sys     : in std_logic;
-
-            R_in        : in std_logic_vector(5 downto 0);
-            G_in        : in std_logic_vector(5 downto 0);
-            B_in        : in std_logic_vector(5 downto 0);
-            HSync       : in std_logic;
-            VSync       : in std_logic;
-
-            R_out       : out std_logic_vector(5 downto 0);
-            G_out       : out std_logic_vector(5 downto 0);
-            B_out       : out std_logic_vector(5 downto 0);
-
-            SPI_SCK     : in std_logic;
-            SPI_SS3     : in std_logic;
-            SPI_DI      : in std_logic
-        );
-    end component osd;
-	
 begin
 
 LED <= not core_led and not downloading and not bk_ena;
@@ -317,7 +202,7 @@ U00 : entity work.pll
 process(MCLK)
 begin
 	if rising_edge(MCLK) then
-		reset_d<=not (status(0) or status(2) or buttons(1)) and pll_locked;
+		reset_d<=not (status(0) or buttons(1)) and pll_locked;
 		reset<=reset_d;
 	end if;
 end process;
@@ -366,8 +251,8 @@ virtualtoplevel : entity work.Virtual_Toplevel
 	joyb => joy_0(11 downto 0),
 
     -- Mouse
-    mouse_x => mouse_x,
-    mouse_y => mouse_y,
+    mouse_x => std_logic_vector(mouse_x)(7 downto 0),
+    mouse_y => std_logic_vector(mouse_y)(7 downto 0),
     mouse_flags => mouse_flags,
     mouse_strobe => mouse_strobe,
 
@@ -442,9 +327,7 @@ user_io_inst : user_io
         mouse_x => mouse_x,
         mouse_y => mouse_y,
         mouse_flags => mouse_flags,
-        mouse_strobe => mouse_strobe,
-        serial_data => par_out_data,
-        serial_strobe => par_out_strobe
+        mouse_strobe => mouse_strobe
  );
 
 process (MCLK) begin
@@ -551,67 +434,35 @@ begin
     end if;
 end process;
 
-scandoubler_inst: scandoubler
+mist_video : work.mist.mist_video
+    generic map (
+        SD_HCNT_WIDTH => 10,
+		COLOR_DEPTH => 4,
+		OSD_COLOR => "001" --blue
+    )
     port map (
         clk_sys     => MCLK,
         scanlines   => status(12 downto 11),
-
-        hs_in       => gen_hs,
-        vs_in       => gen_vs,
-        r_in        => gen_red,
-        g_in        => gen_green,
-        b_in        => gen_blue,
-
-        hs_out      => sd_hs,
-        vs_out      => sd_vs,
-        r_out       => sd_r,
-        g_out       => sd_g,
-        b_out       => sd_b
-    );
-
-osd_inst: osd
-    port map (
-        clk_sys     => MCLK,
+        scandoubler_disable => scandoubler_disable,
+        ypbpr       => ypbpr,
+        rotate      => "00",
 
         SPI_SCK     => SPI_SCK,
         SPI_SS3     => SPI_SS3,
         SPI_DI      => SPI_DI,
 
-        R_in        => osd_red_i,
-        G_in        => osd_green_i,
-        B_in        => osd_blue_i,
-        HSync       => osd_hs_i,
-        VSync       => osd_vs_i,
+        HSync       => gen_hs,
+        VSync       => gen_vs,
+        R           => gen_red,
+        G           => gen_green,
+        B           => gen_blue,
 
-        R_out       => osd_red_o,
-        G_out       => osd_green_o,
-        B_out       => osd_blue_o
+        VGA_HS      => VGA_HS,
+        VGA_VS      => VGA_VS,
+        VGA_R       => VGA_R,
+        VGA_G       => VGA_G,
+        VGA_B       => VGA_B
     );
-
---
-rgb2component: component rgb2ypbpr
-	port map
-	(
-	   red => osd_red_o,
-	   green => osd_green_o,
-	   blue => osd_blue_o,
-	   y => vga_y_o,
-	   pb => vga_pb_o,
-	   pr => vga_pr_o
-	);
-
-osd_red_i   <= gen_red & gen_red(3 downto 2) when scandoubler_disable = '1' else sd_r;
-osd_green_i <= gen_green & gen_green(3 downto 2) when scandoubler_disable = '1' else sd_g;
-osd_blue_i  <= gen_blue & gen_blue(3 downto 2) when scandoubler_disable = '1' else sd_b;
-osd_hs_i    <= gen_hs when scandoubler_disable = '1' else sd_hs;
-osd_vs_i    <= gen_vs when scandoubler_disable = '1' else sd_vs;
- 
- -- If 15kHz Video - composite sync to VGA_HS and VGA_VS high for MiST RGB cable
-VGA_HS <= not (gen_hs xor gen_vs) when scandoubler_disable='1' else not (sd_hs xor sd_vs) when ypbpr='1' else sd_hs;
-VGA_VS <= '1' when scandoubler_disable='1' or ypbpr='1' else sd_vs;
-VGA_R <= vga_pr_o when ypbpr='1' else osd_red_o;
-VGA_G <= vga_y_o  when ypbpr='1' else osd_green_o;
-VGA_B <= vga_pb_o when ypbpr='1' else osd_blue_o;
 
 -- Do we have audio?  If so, instantiate a two DAC channels.
 leftsd: component hybrid_pwm_sd

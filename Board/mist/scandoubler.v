@@ -29,9 +29,9 @@ module scandoubler
 	// shifter video interface
 	input            hs_in,
 	input            vs_in,
-	input      [3:0] r_in,
-	input      [3:0] g_in,
-	input      [3:0] b_in,
+	input      [COLOR_DEPTH-1:0] r_in,
+	input      [COLOR_DEPTH-1:0] g_in,
+	input      [COLOR_DEPTH-1:0] b_in,
 
 	// output interface
 	output reg       hs_out,
@@ -40,6 +40,9 @@ module scandoubler
 	output reg [5:0] g_out,
 	output reg [5:0] b_out
 );
+
+parameter HCNT_WIDTH = 9;
+parameter COLOR_DEPTH = 6;
 
 // try to detect changes in input signal and lock input clock gate
 // it
@@ -62,6 +65,30 @@ end
 // --------------------- create output signals -----------------
 // latch everything once more to make it glitch free and apply scanline effect
 reg scanline;
+reg [5:0] r;
+reg [5:0] g;
+reg [5:0] b;
+
+always @(*) begin
+	if (COLOR_DEPTH == 6) begin
+		b = sd_out[5:0];
+		g = sd_out[11:6];
+		r = sd_out[17:12];
+	end else if (COLOR_DEPTH == 2) begin
+		b = {3{sd_out[1:0]}};
+		g = {3{sd_out[3:2]}};
+		r = {3{sd_out[5:4]}};
+	end else if (COLOR_DEPTH == 1) begin
+		b = {6{sd_out[0]}};
+		g = {6{sd_out[1]}};
+		r = {6{sd_out[2]}};
+	end else begin
+		b = { sd_out[COLOR_DEPTH-1:0], sd_out[COLOR_DEPTH-1 -:(6-COLOR_DEPTH)] };
+		g = { sd_out[COLOR_DEPTH*2-1:COLOR_DEPTH], sd_out[COLOR_DEPTH*2-1 -:(6-COLOR_DEPTH)] };
+		r = { sd_out[COLOR_DEPTH*3-1:COLOR_DEPTH*2], sd_out[COLOR_DEPTH*3-1 -:(6-COLOR_DEPTH)] };
+	end
+end
+
 always @(posedge clk_sys) begin
 	if(ce_x2) begin
 		hs_out <= hs_sd;
@@ -75,27 +102,27 @@ always @(posedge clk_sys) begin
 
 		// if no scanlines or not a scanline
 		if(!scanline || !scanlines) begin
-			r_out <= { sd_out[11:8], 2'b00 };
-			g_out <= { sd_out[7:4], 2'b00 };
-			b_out <= { sd_out[3:0], 2'b00 };
+			r_out <= r;
+			g_out <= g;
+			b_out <= b;
 		end else begin
 			case(scanlines)
 				1: begin // reduce 25% = 1/2 + 1/4
-					r_out <= {1'b0, sd_out[11:8], 1'b0} + {2'b00, sd_out[11:8]};
-					g_out <= {1'b0, sd_out[7:4],  1'b0} + {2'b00, sd_out[7:4] };
-					b_out <= {1'b0, sd_out[3:0],  1'b0} + {2'b00, sd_out[3:0]  };
+					r_out <= {1'b0, r[5:1]} + {2'b00, r[5:2] };
+					g_out <= {1'b0, g[5:1]} + {2'b00, g[5:2] };
+					b_out <= {1'b0, b[5:1]} + {2'b00, b[5:2] };
 				end
 
 				2: begin // reduce 50% = 1/2
-					r_out <= {1'b0, sd_out[11:8], 1'b0};
-					g_out <= {1'b0, sd_out[7:4],  1'b0};
-					b_out <= {1'b0, sd_out[3:0],  1'b0};
+					r_out <= {1'b0, r[5:1]};
+					g_out <= {1'b0, g[5:1]};
+					b_out <= {1'b0, b[5:1]};
 				end
 
 				3: begin // reduce 75% = 1/4
-					r_out <= {2'b00, sd_out[11:8]};
-					g_out <= {2'b00, sd_out[7:4]};
-					b_out <= {2'b00, sd_out[3:0]};
+					r_out <= {2'b00, r[5:2]};
+					g_out <= {2'b00, g[5:2]};
+					b_out <= {2'b00, b[5:2]};
 				end
 			endcase
 		end
@@ -103,22 +130,22 @@ always @(posedge clk_sys) begin
 end
 
 // scan doubler output register
-reg [11:0] sd_out;
+reg [COLOR_DEPTH*3-1:0] sd_out;
 
 // ==================================================================
 // ======================== the line buffers ========================
 // ==================================================================
 
-// 2 lines of 512 pixels 3*4 bit RGB
-(* ramstyle = "no_rw_check" *) reg [11:0] sd_buffer[2048];
+// 2 lines of 2**HCNT_WIDTH pixels 3*COLOR_DEPTH bit RGB
+(* ramstyle = "no_rw_check" *) reg [COLOR_DEPTH*3-1:0] sd_buffer[2*2**HCNT_WIDTH];
 
 // use alternating sd_buffers when storing/reading data   
 reg        line_toggle;
 
 // total hsync time (in 16MHz cycles), hs_total reaches 1024
-reg  [9:0] hs_max;
-reg  [9:0] hs_rise;
-reg  [9:0] hcnt;
+reg  [HCNT_WIDTH-1:0] hs_max;
+reg  [HCNT_WIDTH-1:0] hs_rise;
+reg  [HCNT_WIDTH-1:0] hcnt;
 
 always @(posedge clk_sys) begin
 	reg hsD, vsD;
@@ -151,7 +178,7 @@ end
 // ==================== output timing generation ====================
 // ==================================================================
 
-reg  [9:0] sd_hcnt;
+reg  [HCNT_WIDTH-1:0] sd_hcnt;
 reg        hs_sd;
 
 // timing generation runs 32 MHz (twice the input signal analysis speed)

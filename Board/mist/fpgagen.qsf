@@ -47,7 +47,7 @@ set_global_assignment -name MAX_CORE_JUNCTION_TEMP 85
 set_global_assignment -name DEVICE_FILTER_PIN_COUNT 144
 set_global_assignment -name ERROR_CHECK_FREQUENCY_DIVISOR 1
 set_global_assignment -name ENABLE_SIGNALTAP OFF
-set_global_assignment -name USE_SIGNALTAP_FILE ../../syn/mist/mouse.stp
+set_global_assignment -name USE_SIGNALTAP_FILE ../../syn/mist/winh.stp
 set_location_assignment PIN_54 -to CLOCK_27[0]
 set_location_assignment PIN_55 -to CLOCK_27[1]
 set_location_assignment PIN_135 -to VGA_R[0]
@@ -300,6 +300,7 @@ set_instance_assignment -name CURRENT_STRENGTH_NEW 4MA -to SPI_DO
 set_instance_assignment -name CURRENT_STRENGTH_NEW 8MA -to AUDIO_L
 set_instance_assignment -name CURRENT_STRENGTH_NEW 8MA -to AUDIO_R
 set_instance_assignment -name CURRENT_STRENGTH_NEW 8MA -to UART_TX
+set_global_assignment -name QIP_FILE mist.qip
 set_global_assignment -name QIP_FILE ../../jt89/hdl/jt89.qip
 set_global_assignment -name SYSTEMVERILOG_FILE ../../src/fx68k/uaddrPla.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../src/fx68k/fx68kAlu.sv
@@ -325,4 +326,5 @@ set_global_assignment -name VHDL_FILE ../../src/DualPortRAM.vhd
 set_global_assignment -name QIP_FILE ../../jt12/hdl/jt12.qip
 set_global_assignment -name SDC_FILE ../../Board/mist/constraints.sdc
 set_global_assignment -name CDF_FILE Chain1.cdf
+set_global_assignment -name SIGNALTAP_FILE ../../syn/mist/winh.stp
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top

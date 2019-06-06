@@ -151,7 +151,6 @@ signal FIFO_SKIP_PRE	: std_logic;
 signal IN_DMA		: std_logic;
 signal IN_HBL		: std_logic;
 signal IN_VBL		: std_logic; -- VBL flag to the CPU
-signal HBL_AREA		: std_logic;
 signal VBL_AREA		: std_logic; -- outside of borders
 
 signal SOVR			: std_logic;
@@ -324,8 +323,8 @@ signal DMA_SOURCE	: std_logic_vector(15 downto 0);
 ----------------------------------------------------------------
 -- VIDEO COUNTING
 ----------------------------------------------------------------
-signal H_ACTIVE		: std_logic;
-signal V_ACTIVE		: std_logic;
+signal V_ACTIVE      : std_logic; -- V_ACTIVE right after line change
+signal V_ACTIVE_DISP : std_logic; -- V_ACTIVE after HBLANK_START
 signal Y			: std_logic_vector(7 downto 0);
 signal BG_Y		: std_logic_vector(8 downto 0);
 
@@ -334,8 +333,6 @@ signal PRE_Y		: std_logic_vector(8 downto 0);
 
 signal FIELD		: std_logic;
 signal FIELD_LATCH	: std_logic;
-
-signal DISP_ACTIVE	: std_logic;
 
 -- HV COUNTERS
 signal HV_PIXDIV	: std_logic_vector(3 downto 0);
@@ -2419,6 +2416,10 @@ begin
 		-- thus various latches can be activated in VDPsim for the 1st frame
 		HV_VCNT <= "111100101"; -- 485
 
+		PRE_V_ACTIVE <= '0';
+		V_ACTIVE <= '0';
+		V_ACTIVE_DISP <= '0';
+
 		HINT_EN <= '0';
 		HINT_PENDING_SET <= '0';
 		VINT_TG68_PENDING_SET <= '0';
@@ -2428,7 +2429,6 @@ begin
 		IN_HBL <= '0';
 		IN_VBL <= '1';
 		VBL_AREA <= '1';
-		HBL_AREA <= '1';
 
 		FIFO_EN <= '0';
 
@@ -2452,14 +2452,14 @@ begin
 
 		HV_PIXDIV <= HV_PIXDIV + 1;
 		if (RS0 = '1' and H40 = '1' and 
-			((HV_PIXDIV = 8-1 and (HV_HCNT < 335 or HV_HCNT >= H_DISP_START)) or --335-364 - 30
-			(HV_PIXDIV = 10-1 and HV_HCNT >= 335 and HV_HCNT < H_DISP_START))) or --normal H40 - 30*10+390*8=3420 cycles
+			((HV_PIXDIV = 8-1 and (HV_HCNT < 336 or HV_HCNT >= H_DISP_START)) or --336-365 - 30
+			(HV_PIXDIV = 10-1 and HV_HCNT >= 336 and HV_HCNT < H_DISP_START))) or --normal H40 - 30*10+390*8=3420 cycles
 		   (RS0 = '0' and H40 = '1' and HV_PIXDIV = 8-1) or --fast H40
 		   (RS0 = '0' and H40 = '0' and HV_PIXDIV = 10-1) or --normal H32
 		   (RS0 = '1' and H40 = '0' and HV_PIXDIV = 8-1) then --fast H32
 			HV_PIXDIV <= (others => '0');
 			if HV_HCNT = H_DISP_START + H_TOTAL_WIDTH - 1 then
-				-- we're just after HSYNC
+				-- counter reset, originally HSYNC begins here
 				HV_HCNT <= H_DISP_START;
 			else
 				HV_HCNT <= HV_HCNT + 1;
@@ -2500,22 +2500,18 @@ begin
 					PRE_V_ACTIVE <= '1';
 				elsif HV_VCNT = "1"&x"FF" then
 					V_ACTIVE <= '1';
-				end if;
-			end if;
-
-			if HV_HCNT = H_INT_POS + 1 then
-				if HV_VCNT = V_DISP_HEIGHT - 1 then
+				elsif HV_VCNT = V_DISP_HEIGHT - 2 then
 					PRE_V_ACTIVE <= '0';
-				elsif HV_VCNT = V_DISP_HEIGHT then
+				elsif HV_VCNT = V_DISP_HEIGHT - 1 then
 					V_ACTIVE <= '0';
 				end if;
 			end if;
 
-			if HV_HCNT = H_INT_POS + 4 then
-				if HV_VCNT = "1"&x"FF" then
-					IN_VBL <= '0';
+			if HV_HCNT = HBLANK_START then
+				if HV_VCNT = 0 then
+					V_ACTIVE_DISP <= '1';
 				elsif HV_VCNT = V_DISP_HEIGHT then
-					IN_VBL <= '1';
+					V_ACTIVE_DISP <= '0';
 				end if;
 
 				if HV_VCNT = VBORDER_START then
@@ -2526,18 +2522,20 @@ begin
 				end if;
 			end if;
 
+			if HV_HCNT = H_INT_POS + 4 then
+				if HV_VCNT = "1"&x"FF" then
+					IN_VBL <= '0';
+				elsif HV_VCNT = V_DISP_HEIGHT then
+					IN_VBL <= '1';
+				end if;
+			end if;
+
 			if HV_HCNT = HBLANK_END then --active display
 				IN_HBL <= '0';
 			end if;
 
 			if HV_HCNT = HBLANK_START then -- blanking
 				IN_HBL <= '1';
-			end if;
-
-			if HV_HCNT = 0 then
-				HBL_AREA <= '0';
-			elsif HV_HCNT = HBLANK_END + H_DISP_WIDTH + 9 then
-				HBL_AREA <= '1';
 			end if;
 
 			if HV_HCNT = 0 then
@@ -2577,10 +2575,6 @@ begin
 end process;
 
 -- TIMING MANAGEMENT
-H_ACTIVE <= '1' when HV_HCNT > HBLANK_END and HV_HCNT <= HBLANK_END + H_DISP_WIDTH else
-            --'1' when HBL_AREA = '0' and DBG(8) = '1' else -- open side borders (not working well yet)
-			'0';
-DISP_ACTIVE <= '1' when V_ACTIVE = '1' and H_ACTIVE = '1' else '0';
 -- Background generation runs during active display.
 -- It starts with reading the horizontal scroll values from the VRAM
 BGEN_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = HSCROLL_READ else '0';
@@ -2592,7 +2586,7 @@ SP1E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = H_INT_POS + 1 else '0
 -- Stage 2 - runs in the active area
 SP2E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = HBLANK_END else '0';
 -- Stage 3 runs during HBLANK, just after the active display
-SP3E_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = HBLANK_END + H_DISP_WIDTH + 2 else '0';
+SP3E_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = HBLANK_END + HBORDER_LEFT + H_DISP_WIDTH else '0';
 DT_ACTIVE <= '1';
 
 -- PIXEL COUNTER AND OUTPUT
@@ -2604,32 +2598,19 @@ process( RST_N, CLK )
 begin
 	OBJ_COLINFO_D_REND <= (others => '0');
 	if rising_edge(CLK) then
-		if DISP_ACTIVE = '0' then
-			if HBL_AREA = '1' or VBL_AREA = '1' or BORDER_EN = '0' then
+		if IN_HBL = '1' or VBL_AREA = '1' then
+				BGB_COLINFO_ADDR_B <= (others => '0');
+				BGA_COLINFO_ADDR_B <= (others => '0');
+				OBJ_COLINFO_WE_REND <= '0';
 				if HV_PIXDIV = "0101" then
 					FF_R <= (others => '0');
 					FF_G <= (others => '0');
 					FF_B <= (others => '0');
 				end if;
-			else
-				case HV_PIXDIV is
-				when "0000" =>
-					CRAM_ADDR_B <= BGCOL;
-				when "0101" =>
-					FF_B <= CRAM_Q_B(8 downto 6) & '0';
-					FF_G <= CRAM_Q_B(5 downto 3) & '0';
-					FF_R <= CRAM_Q_B(2 downto 0) & '0';
-				when others => null;
-				end case;
-			end if;
-
-			BGB_COLINFO_ADDR_B <= (others => '0');
-			BGA_COLINFO_ADDR_B <= (others => '0');
-			OBJ_COLINFO_WE_REND <= '0';
 		else
 			case HV_PIXDIV is
 			when "0000" =>
-				x := HV_HCNT - HBLANK_END - 1;
+				x := HV_HCNT - HBLANK_END - HBORDER_LEFT;
 				BGB_COLINFO_ADDR_B <= x;
 				BGA_COLINFO_ADDR_B <= x;
 				OBJ_COLINFO_ADDR_RD_REND <= x;
@@ -2700,10 +2681,21 @@ begin
 					col := col and cold;
 				end if;
 
+				if x >= H_DISP_WIDTH or V_ACTIVE_DISP = '0' then
+					-- border area
+					col := BGCOL;
+					PIX_MODE <= PIX_NORMAL;
+				end if;
+
 				CRAM_ADDR_B <= col;
 
 			when "0101" =>
-				case PIX_MODE is
+				if (x >= H_DISP_WIDTH or V_ACTIVE_DISP = '0') and BORDER_EN = '0' then
+					-- disabled border
+					FF_B <= (others => '0');
+					FF_G <= (others => '0');
+					FF_R <= (others => '0');
+				else case PIX_MODE is
 					when PIX_SHADOW =>
 						-- half brightness
 						FF_B <= '0' & CRAM_Q_B(8 downto 6);
@@ -2721,7 +2713,8 @@ begin
 						FF_B <= '0' & CRAM_Q_B(8 downto 6) + 7;
 						FF_G <= '0' & CRAM_Q_B(5 downto 3) + 7;
 						FF_R <= '0' & CRAM_Q_B(2 downto 0) + 7;
-				end case;
+					end case;
+				end if;
 				OBJ_COLINFO_WE_REND <= '1';
 
 			when "0111" =>

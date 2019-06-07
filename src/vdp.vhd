@@ -380,7 +380,6 @@ type vmc_t is (
 	VMC_IDLE,
 	VMC_BGB,
 	VMC_BGA,
-	VMC_SP3,
 	VMC_DT
 );
 signal VMC	: vmc_t := VMC_IDLE;
@@ -388,7 +387,6 @@ signal VMC_NEXT : vmc_t := VMC_IDLE;
 
 signal early_ack_bga : std_logic;
 signal early_ack_bgb : std_logic;
-signal early_ack_sp3 : std_logic;
 signal early_ack_dt : std_logic;
 signal early_ack : std_logic;
 
@@ -623,11 +621,10 @@ type sp3c_t is (
 signal SP3C		: SP3C_t;
 
 signal SP3_VRAM_ADDR	: std_logic_vector(15 downto 1);
-signal SP3_VRAM_DO	: std_logic_vector(15 downto 0);
-signal SP3_VRAM_DO_SAVE	: std_logic_vector(15 downto 0);
-signal SP3_VRAM_DO_REG	: std_logic_vector(15 downto 0);
-signal SP3_SEL		: std_logic;
-signal SP3_DTACK_N	: std_logic;
+signal SP3_VRAM32_DO    : std_logic_vector(31 downto 0);
+signal SP3_VRAM32_DO_REG: std_logic_vector(31 downto 0);
+signal SP3_VRAM32_ACK   : std_logic;
+signal SP3_SEL          : std_logic;
 
 signal OBJ_PIX			: std_logic_vector(8 downto 0);
 signal OBJ_NO			: std_logic_vector(4 downto 0);
@@ -1048,10 +1045,13 @@ vram32_req <= vram32_req_reg;
 
 -- Get the ack and data one cycle earlier
 SP2_VRAM32_DO <= vram32_q when VMC32 = VMC32_SP2 else SP2_VRAM32_DO_REG;
+SP3_VRAM32_DO <= vram32_q when VMC32 = VMC32_SP3 else SP3_VRAM32_DO_REG;
 
 SP2_VRAM32_ACK <= '1' when VMC32 = VMC32_SP2 and vram32_req_reg = vram32_ack and RAM_REQ_PROGRESS = '1' else '0';
+SP3_VRAM32_ACK <= '1' when VMC32 = VMC32_SP3 and vram32_req_reg = vram32_ack and RAM_REQ_PROGRESS = '1' else '0';
 
-VMC32_NEXT <= VMC32_SP2 when SP2_SEL = '1' else
+VMC32_NEXT <= VMC32_SP3 when SP3_SEL = '1' else
+              VMC32_SP2 when SP2_SEL = '1' else
               VMC32_IDLE;
 
 process( RST_N, CLK)
@@ -1072,6 +1072,8 @@ begin
 					null;
 				when VMC32_SP2 =>
 					vram32_a <= SP2_VRAM_ADDR;
+				when VMC32_SP3 =>
+					vram32_a <= SP3_VRAM_ADDR;
 				when others => null;
 				end case;
 				if VMC32_NEXT /= VMC32_IDLE then
@@ -1084,6 +1086,8 @@ begin
 					null;
 				when VMC32_SP2 =>
 					SP2_VRAM32_DO_REG <= vram32_q;
+				when VMC32_SP3 =>
+					SP3_VRAM32_DO_REG <= vram32_q;
 				when others => null;
 				end case;
 				RAM_REQ_PROGRESS <= '0';
@@ -1091,8 +1095,6 @@ begin
 		end if;
 	end if;
 end process;
-
-
 
 
 vram_req <= vram_req_reg;
@@ -1105,19 +1107,17 @@ vram_a <= vram_a_reg(15 downto 1) when M128 = '0' else vram_a_reg(16 downto 11) 
 
 early_ack_bga <= '0' when VMC=VMC_BGA and vram_req_reg=vram_ack else '1';
 early_ack_bgb <= '0' when VMC=VMC_BGB and vram_req_reg=vram_ack else '1';
-early_ack_sp3 <= '0' when VMC=VMC_SP3 and vram_req_reg=vram_ack else '1';
 early_ack_dt <= '0' when VMC=VMC_DT and vram_req_reg=vram_ack else '1';
 
 BGA_VRAM_DO <= vram_q when early_ack_bga='0' and BGA_DTACK_N = '1' else BGA_VRAM_DO_REG;
 BGB_VRAM_DO <= vram_q when early_ack_bgb='0' and BGB_DTACK_N = '1' else BGB_VRAM_DO_REG;
-SP3_VRAM_DO <= vram_q when early_ack_sp3='0' and SP3_DTACK_N = '1' else SP3_VRAM_DO_REG;
 DT_VRAM_DO <= vram_q when early_ack_dt='0' and DT_VRAM_DTACK_N = '1' else DT_VRAM_DO_REG;
 
 
 process( RST_N, CLK,
 	BGA_SEL, BGA_DTACK_N, BGB_SEL, BGB_DTACK_N,
-	SP3_SEL, SP3_DTACK_N, DT_VRAM_SEL, DT_VRAM_DTACK_N,
-	early_ack_bga, early_ack_bgb, early_ack_sp3, early_ack_dt)
+	DT_VRAM_SEL, DT_VRAM_DTACK_N,
+	early_ack_bga, early_ack_bgb, early_ack_dt)
 -- synthesis translate_off
 file F		: text open write_mode is "vram_dbg.out";
 variable L	: line;
@@ -1127,7 +1127,6 @@ begin
 		
 		BGB_DTACK_N <= '1';
 		BGA_DTACK_N <= '1';
-		SP3_DTACK_N <= '1';
 		DT_VRAM_DTACK_N <= '1';
 
 		vram_req_reg <= '0';
@@ -1138,9 +1137,7 @@ begin
 
 		-- Priority encoder for next port...
 		VMC_NEXT<=VMC_IDLE;
-		if SP3_SEL = '1' and SP3_DTACK_N = '1' and early_ack_sp3='1' then
-			VMC_NEXT <= VMC_SP3;
-		elsif BGB_SEL = '1' and BGB_DTACK_N = '1' and early_ack_bgb='1' then
+		if BGB_SEL = '1' and BGB_DTACK_N = '1' and early_ack_bgb='1' then
 			VMC_NEXT <= VMC_BGB;
 		elsif BGA_SEL = '1' and BGA_DTACK_N = '1' and early_ack_bga='1' then
 			VMC_NEXT <= VMC_BGA;
@@ -1156,9 +1153,6 @@ begin
 		if BGA_SEL = '0' then 
 			BGA_DTACK_N <= '1';
 		end if;
---		if SP3_SEL = '0' then 
-			SP3_DTACK_N <= '1';
---		end if;
 		if DT_VRAM_SEL = '0' then 
 			DT_VRAM_DTACK_N <= '1';
 		end if;
@@ -1172,8 +1166,6 @@ begin
 					vram_a_reg <= '0'&BGA_VRAM_ADDR;
 				when VMC_BGB =>
 					vram_a_reg <= '0'&BGB_VRAM_ADDR;
-				when VMC_SP3 =>
-					vram_a_reg <= '0'&SP3_VRAM_ADDR;
 				when VMC_DT =>
 					vram_a_reg <= DT_VRAM_ADDR;
 			end case;
@@ -1195,12 +1187,6 @@ begin
 			if vram_req_reg = vram_ack then
 				BGA_VRAM_DO_REG <= vram_q;
 				BGA_DTACK_N <= '0';
-			end if;
-
-		when VMC_SP3 =>		-- SPRITE ENGINE PART 3
-			if vram_req_reg = vram_ack then
-				SP3_VRAM_DO_REG <= vram_q;
-				SP3_DTACK_N <= '0';
 			end if;
 
 		when VMC_DT =>		-- DATA TRANSFER
@@ -2237,41 +2223,41 @@ begin
 				if LSM = "11" then
 					case OBJ_VS is
 					when "00" =>	-- 2*8 pixels
-						SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "0000" & OBJ_X_OFS(2));
+						SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "00000");
 					when "01" =>	-- 2*16 pixels
-						SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "00000" & OBJ_X_OFS(2));
+						SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "000000");
 					when "11" =>	-- 2*32 pixels
-						SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "000000" & OBJ_X_OFS(2));
+						SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "0000000");
 					when others =>	-- 2*24 pixels
 						case OBJ_X_OFS(4 downto 3) is
 						when "00" =>
-							SP3_VRAM_ADDR <= OBJ_TILEBASE + OBJ_X_OFS(2);
+							SP3_VRAM_ADDR <= OBJ_TILEBASE;
 						when "01" =>
-							SP3_VRAM_ADDR <= OBJ_TILEBASE + ("00110000" & OBJ_X_OFS(2));
+							SP3_VRAM_ADDR <= OBJ_TILEBASE + "001100000";
 						when "11" =>
-							SP3_VRAM_ADDR <= OBJ_TILEBASE + ("10010000" & OBJ_X_OFS(2));
+							SP3_VRAM_ADDR <= OBJ_TILEBASE + "100100000";
 						when others =>
-							SP3_VRAM_ADDR <= OBJ_TILEBASE + ("01100000" & OBJ_X_OFS(2));
+							SP3_VRAM_ADDR <= OBJ_TILEBASE + "011000000";
 						end case;
 					end case;
 				else
 					case OBJ_VS is
 					when "00" =>	-- 8 pixels
-						SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "000" & OBJ_X_OFS(2));
+						SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "0000");
 					when "01" =>	-- 16 pixels
-						SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "0000" & OBJ_X_OFS(2));
+						SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "00000");
 					when "11" =>	-- 32 pixels
-						SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "00000" & OBJ_X_OFS(2));
+						SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "000000");
 					when others =>	-- 24 pixels
 						case OBJ_X_OFS(4 downto 3) is
 						when "00" =>
-							SP3_VRAM_ADDR <= OBJ_TILEBASE + OBJ_X_OFS(2);
+							SP3_VRAM_ADDR <= OBJ_TILEBASE;
 						when "01" =>
-							SP3_VRAM_ADDR <= OBJ_TILEBASE + ("0011000" & OBJ_X_OFS(2));
+							SP3_VRAM_ADDR <= OBJ_TILEBASE + "00110000";
 						when "11" =>
-							SP3_VRAM_ADDR <= OBJ_TILEBASE + ("1001000" & OBJ_X_OFS(2));
+							SP3_VRAM_ADDR <= OBJ_TILEBASE + "10010000";
 						when others =>
-							SP3_VRAM_ADDR <= OBJ_TILEBASE + ("0110000" & OBJ_X_OFS(2));
+							SP3_VRAM_ADDR <= OBJ_TILEBASE + "01100000";
 						end case;
 					end case;
 				end if;
@@ -2279,38 +2265,32 @@ begin
 				SP3_SEL <= '1';
 				SP3C <= SP3C_TILE_RD;
 
+			when SP3C_TILE_RD =>
+				if SP3_VRAM32_ACK = '1' then
+					SP3_SEL <= '0';
+					SP3C <= SP3C_PLOT;
+				end if;
+
 			-- loop over all sprite pixels on the current line
 			when SP3C_PLOT =>
-			  if ((OBJ_X_OFS(2 downto 0) = "011" and OBJ_HF = '0') or
-				  (OBJ_X_OFS(2 downto 0) = "100" and OBJ_HF = '1')) and early_ack_sp3 /= '0'
-			  then
-				null; --wait for the pre-fetched value
-			  else
-				-- pre-fetch the 2nd word of the tile
-				if (OBJ_X_OFS(2 downto 0) = "000" and OBJ_HF = '0') then
-					SP3_VRAM_ADDR <= SP3_VRAM_ADDR + 1;
-					SP3_SEL <= '1';
-				elsif (OBJ_X_OFS(2 downto 0) = "111" and OBJ_HF = '1') then
-					SP3_VRAM_ADDR <= SP3_VRAM_ADDR - 1;
-					SP3_SEL <= '1';
-				end if;
-
-				-- prepare to use the pre-fetched value for the next 4 pixels
-				if (OBJ_X_OFS(2 downto 0) = "011" and OBJ_HF = '0') or
-				   (OBJ_X_OFS(2 downto 0) = "100" and OBJ_HF = '1') then
-					SP3_SEL <= '0';
-					SP3_VRAM_DO_SAVE <= SP3_VRAM_DO;
-				end if;
-
-				case OBJ_X_OFS(1 downto 0) is
-				when "00" =>
-					obj_color := SP3_VRAM_DO_SAVE(15 downto 12);
-				when "01" =>
-					obj_color := SP3_VRAM_DO_SAVE(11 downto 8);
-				when "10" =>
-					obj_color := SP3_VRAM_DO_SAVE(7 downto 4);
-				when others =>
-					obj_color := SP3_VRAM_DO_SAVE(3 downto 0);
+				case OBJ_X_OFS(2 downto 0) is
+				when "100" =>
+					obj_color := SP3_VRAM32_DO(31 downto 28);
+				when "101" =>
+					obj_color := SP3_VRAM32_DO(27 downto 24);
+				when "110" =>
+					obj_color := SP3_VRAM32_DO(23 downto 20);
+				when "111" =>
+					obj_color := SP3_VRAM32_DO(19 downto 16);
+				when "000" =>
+					obj_color := SP3_VRAM32_DO(15 downto 12);
+				when "001" =>
+					obj_color := SP3_VRAM32_DO(11 downto  8);
+				when "010" =>
+					obj_color := SP3_VRAM32_DO( 7 downto  4);
+				when "011" =>
+					obj_color := SP3_VRAM32_DO( 3 downto  0);
+				when others => null;
 				end case;
 
 				OBJ_COLINFO_WE_SP3 <= '0';
@@ -2364,14 +2344,6 @@ begin
 					OBJ_DOT_OVERFLOW <= '1';
 					SP3C <= SP3C_DONE;
 					SP3_SOVR_SET <= '1';
-				end if;
-			  end if;
-
-			when SP3C_TILE_RD =>
-				if early_ack_sp3='0' then
-					SP3_SEL <= '0';
-					SP3C <= SP3C_PLOT;
-					SP3_VRAM_DO_SAVE <= SP3_VRAM_DO;
 				end if;
 
 			when others => -- SP3C_DONE

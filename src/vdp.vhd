@@ -198,7 +198,9 @@ signal VSCR 		: std_logic;
 signal WVP			: std_logic_vector(4 downto 0);
 signal WDOWN		: std_logic;
 signal WHP			: std_logic_vector(4 downto 0);
+signal WHP_LATCH    : std_logic_vector(4 downto 0);
 signal WRIGT		: std_logic;
+signal WRIGT_LATCH  : std_logic;
 
 signal BGCOL		: std_logic_vector(5 downto 0);
 
@@ -1445,9 +1447,13 @@ begin
 	elsif rising_edge(CLK) then
 			case BGAC is
 			when BGAC_DONE =>
-				if HV_HCNT = H_INT_POS and HV_PIXDIV = 0 and VSCR = '0' then
-					BGA_VSRAM0_LATCH <= VSRAM(0);
-					BGA_VSRAM0_LAST_READ <= VSRAM(0);
+				if HV_HCNT = H_INT_POS and HV_PIXDIV = 0 then
+					if VSCR = '0' then
+						BGA_VSRAM0_LATCH <= VSRAM(0);
+						BGA_VSRAM0_LAST_READ <= VSRAM(0);
+					end if;
+					WRIGT_LATCH <= WRIGT;
+					WHP_LATCH <= WHP;
 				end if;
 				BGA_SEL <= '0';
 				BGA_COLINFO_ADDR_A <= (others => '0');
@@ -1475,10 +1481,10 @@ begin
 					WIN_V <= WDOWN;
 				end if;
 
-				if WHP = "00000" then
-					WIN_H <= WRIGT;
+				if WHP_LATCH = "00000" then
+					WIN_H <= WRIGT_LATCH;
 				else
-					WIN_H <= not(WRIGT);
+					WIN_H <= not(WRIGT_LATCH);
 				end if;
 
 			case HSCR is -- Horizontal scroll mode
@@ -1610,17 +1616,19 @@ begin
 				end if;
 
 			when BGAC_LOOP =>
-				if BGA_POS(9) = '0' and WIN_H = '0' and WRIGT = '1' 
-					and BGA_POS(3 downto 0) = "0000" and BGA_POS(8 downto 4) = WHP 
+				if BGA_POS(9) = '0' and WIN_H = '0' and WRIGT_LATCH = '1' 
+					and BGA_POS(3 downto 0) = "0000" and BGA_POS(8 downto 4) = WHP_LATCH
 				then
+					BGA_SEL <= '0';
 					WIN_H <= not WIN_H;
 					BGAC <= BGAC_GET_VSCROLL;
-				elsif BGA_POS(9) = '0' and WIN_H = '1' and WRIGT = '0' 
+				elsif BGA_POS(9) = '0' and WIN_H = '1' and WRIGT_LATCH = '0' 
 				--	and BGA_POS(3 downto 0) = "0000" and BGA_POS(8 downto 4) = WHP
-					and BGA_X(2 downto 0) = "000" and BGA_POS(8 downto 4) = WHP
+					and BGA_X(2 downto 0) = "000" and BGA_POS(8 downto 4) = WHP_LATCH
 				then
 					WIN_H <= not WIN_H;
 					if WIN_V = '0' then
+						BGA_SEL <= '0';
 						BGAC <= BGAC_GET_VSCROLL;
 					end if;
 				elsif BGA_POS(1 downto 0) = "00" and BGA_SEL = '0' and (WIN_H = '1' or WIN_V = '1') then

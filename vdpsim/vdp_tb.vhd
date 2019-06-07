@@ -54,7 +54,7 @@ component vdp
 
                 PAL             : in std_logic := '0';
 
-                CE_PIX          : out std_logic;
+                CE_PIX          : buffer std_logic;
                 FIELD_OUT       : out std_logic;
                 INTERLACE       : out std_logic;
                 HBL             : out std_logic;

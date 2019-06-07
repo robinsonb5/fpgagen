@@ -111,6 +111,7 @@ entity Virtual_Toplevel is
 														  -- 12-11 - Mouse
 														  -- 13 - HiFi PCM
 														  -- 14 - CPU Turbo
+														  -- 15 - Border
 	);
 end entity;
 
@@ -452,6 +453,7 @@ signal PAL_IO: std_logic;
 signal MSEL : std_logic_vector(1 downto 0);
 signal MOUSE_Y_ADJ : std_logic_vector(8 downto 0);
 signal CPU_TURBO : std_logic;
+signal BORDER : std_logic;
 
 -- DEBUG
 signal HEXVALUE			: std_logic_vector(15 downto 0);
@@ -541,6 +543,7 @@ MOUSE_Y_ADJ <= mouse_flags(5) & mouse_y when JOY_Y_SWAP = '0' else (not mouse_fl
 JOY_Y_SWAP <= SW(7);
 
 CPU_TURBO <= SW(14);
+BORDER <= SW(15);
 
 -- DIP Switches
 SW <= ext_sw;
@@ -810,7 +813,8 @@ port map(
 	VS					=> VDP_VS_N,
 
 	VRAM_SPEED			=> VDP_VRAM_SPEED,
-	VSCROLL_BUG			=> '0'
+	VSCROLL_BUG			=> '0',
+	BORDER_EN			=> BORDER
 );
 
 -- PSG

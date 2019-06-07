@@ -69,9 +69,15 @@ module user_io #(parameter STRLEN=0, parameter PS2DIV=100) (
 	output              ps2_mouse_clk,
 	output reg          ps2_mouse_data,
 
+	// keyboard data
+	output reg          key_pressed,  // 1-make (pressed), 0-break (released)
+	output reg          key_extended, // extended code
+	output reg    [7:0] key_code,     // key scan code
+	output reg          key_strobe,   // key data valid
+
 	// mouse data
-	output reg    [7:0] mouse_x,
-	output reg    [7:0] mouse_y,
+	output reg    [8:0] mouse_x,
+	output reg    [8:0] mouse_y,
 	output reg    [7:0] mouse_flags,  // YOvfl, XOvfl, dy8, dx8, 1, mbtn, rbtn, lbtn
 	output reg          mouse_strobe, // mouse data is valid on mouse_strobe
 
@@ -383,12 +389,16 @@ always @(posedge clk_sys) begin
 	reg [7:0] mouse_flags_r;
 	reg [7:0] mouse_x_r;
 
+	reg       key_pressed_r;
+	reg       key_extended_r;
+
 	//synchronize between SPI and sys clock domains
 	spi_receiver_strobeD <= spi_receiver_strobe_r;
 	spi_receiver_strobe <= spi_receiver_strobeD;
 	spi_transfer_endD	<= spi_transfer_end_r;
 	spi_transfer_end	<= spi_transfer_endD;
 
+	key_strobe <= 0;
 	mouse_strobe <= 0;
 
 	if (~spi_transfer_endD & spi_transfer_end) begin
@@ -416,9 +426,10 @@ always @(posedge clk_sys) begin
 					if (abyte_cnt == 1) mouse_flags_r <= spi_byte_in;
 					else if (abyte_cnt == 2) mouse_x_r <= spi_byte_in;
 					else if (abyte_cnt == 3) begin
+						// flags: YOvfl, XOvfl, dy8, dx8, 1, mbtn, rbtn, lbtn
 						mouse_flags <= mouse_flags_r;
-						mouse_x <= mouse_x_r;
-						mouse_y <= spi_byte_in;
+						mouse_x <= { mouse_flags_r[4], mouse_x_r };
+						mouse_y <= { mouse_flags_r[5], spi_byte_in };
 						mouse_strobe <= 1;
 					end
 				end
@@ -426,6 +437,18 @@ always @(posedge clk_sys) begin
 					// store incoming ps2 keyboard bytes 
 					ps2_kbd_fifo[ps2_kbd_wptr] <= spi_byte_in;
 					ps2_kbd_wptr <= ps2_kbd_wptr + 1'd1;
+					if (abyte_cnt == 1) begin
+						key_extended_r <= 0;
+						key_pressed_r <= 1;
+					end
+					if (spi_byte_in == 8'he0) key_extended_r <= 1'b1;
+					else if (spi_byte_in == 8'hf0) key_pressed_r <= 1'b0;
+					else begin
+						key_extended <= key_extended_r;
+						key_pressed <= key_pressed_r || abyte_cnt == 1;
+						key_code <= spi_byte_in;
+						key_strobe <= 1'b1;
+					end
 				end
 
 				// joystick analog

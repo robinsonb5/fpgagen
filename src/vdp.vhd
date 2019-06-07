@@ -378,7 +378,6 @@ signal V30_R           : std_logic;
 
 type vmc_t is (
 	VMC_IDLE,
-	VMC_BGB,
 	VMC_BGA,
 	VMC_DT
 );
@@ -422,15 +421,13 @@ signal BGEN_ACTIVATE	: std_logic;
 -- BACKGROUND B
 type bgbc_t is (
 	BGBC_INIT,
-	BGBC_HS_RD,
 	BGBC_GET_VSCROLL,
 	BGBC_CALC_Y,
 	BGBC_CALC_BASE,
 	BGBC_BASE_RD,
-	BGBC_LOOP,
-	BGBC_LOOP_WR,
-	BGBC_SYNC_HCOUNT,
 	BGBC_TILE_RD,
+	BGBC_TILE_RD2,
+	BGBC_LOOP,
 	BGBC_DONE
 );
 signal BGBC		: bgbc_t;
@@ -452,15 +449,15 @@ signal T_BGB_PRI	: std_logic;
 signal T_BGB_PAL	: std_logic_vector(1 downto 0);
 signal T_BGB_COLNO	: std_logic_vector(3 downto 0);
 signal BGB_BASE		: std_logic_vector(15 downto 0);
-signal BGB_TILEBASE	: std_logic_vector(15 downto 0);
 signal BGB_HF		: std_logic;
 
-signal BGB_VRAM_ADDR	: std_logic_vector(15 downto 1);
-signal BGB_VRAM_DO	: std_logic_vector(15 downto 0);
-signal BGB_VRAM_DO_REG	: std_logic_vector(15 downto 0);
-signal BGB_SEL		: std_logic;
-signal BGB_DTACK_N	: std_logic;
-signal BGB_VSRAM1_LATCH : std_logic_vector(10 downto 0);
+signal BGB_NAMETABLE_ITEMS  : std_logic_vector(31 downto 0);
+signal BGB_VRAM_ADDR        : std_logic_vector(15 downto 1);
+signal BGB_VRAM32_DO        : std_logic_vector(31 downto 0);
+signal BGB_VRAM32_DO_REG    : std_logic_vector(31 downto 0);
+signal BGB_VRAM32_ACK       : std_logic;
+signal BGB_SEL		        : std_logic;
+signal BGB_VSRAM1_LATCH     : std_logic_vector(10 downto 0);
 signal BGB_VSRAM1_LAST_READ : std_logic_vector(10 downto 0);
 
 -- BACKGROUND A
@@ -1058,14 +1055,17 @@ vram32_req <= vram32_req_reg;
 SP2_VRAM32_DO <= vram32_q when VMC32 = VMC32_SP2 else SP2_VRAM32_DO_REG;
 SP3_VRAM32_DO <= vram32_q when VMC32 = VMC32_SP3 else SP3_VRAM32_DO_REG;
 HSC_VRAM32_DO <= vram32_q when VMC32 = VMC32_HSC else HSC_VRAM32_DO_REG;
+BGB_VRAM32_DO <= vram32_q when VMC32 = VMC32_BGB else BGB_VRAM32_DO_REG;
 
 SP2_VRAM32_ACK <= '1' when VMC32 = VMC32_SP2 and vram32_req_reg = vram32_ack and RAM_REQ_PROGRESS = '1' else '0';
 SP3_VRAM32_ACK <= '1' when VMC32 = VMC32_SP3 and vram32_req_reg = vram32_ack and RAM_REQ_PROGRESS = '1' else '0';
-HSC_VRAM32_ACK <= '1' when VMC32 = VMC32_SP3 and vram32_req_reg = vram32_ack and RAM_REQ_PROGRESS = '1' else '0';
+HSC_VRAM32_ACK <= '1' when VMC32 = VMC32_HSC and vram32_req_reg = vram32_ack and RAM_REQ_PROGRESS = '1' else '0';
+BGB_VRAM32_ACK <= '1' when VMC32 = VMC32_BGB and vram32_req_reg = vram32_ack and RAM_REQ_PROGRESS = '1' else '0';
 
 VMC32_NEXT <= VMC32_SP3 when SP3_SEL = '1' else
               VMC32_SP2 when SP2_SEL = '1' else
               VMC32_HSC when HSC_SEL = '1' else
+              VMC32_BGB when BGB_SEL = '1' else
               VMC32_IDLE;
 
 process( RST_N, CLK)
@@ -1090,6 +1090,8 @@ begin
 					vram32_a <= SP3_VRAM_ADDR;
 				when VMC32_HSC =>
 					vram32_a <= HSC_VRAM_ADDR;
+				when VMC32_BGB =>
+					vram32_a <= BGB_VRAM_ADDR;
 				when others => null;
 				end case;
 				if VMC32_NEXT /= VMC32_IDLE then
@@ -1106,6 +1108,8 @@ begin
 					SP3_VRAM32_DO_REG <= vram32_q;
 				when VMC32_HSC =>
 					HSC_VRAM32_DO_REG <= vram32_q;
+				when VMC32_BGB =>
+					BGB_VRAM32_DO_REG <= vram32_q;
 				when others => null;
 				end case;
 				RAM_REQ_PROGRESS <= '0';
@@ -1124,18 +1128,16 @@ vram_l_n <= (DT_VRAM_LDS_N or M128) and (vram_a_reg(1) or not M128) when VMC=VMC
 vram_a <= vram_a_reg(15 downto 1) when M128 = '0' else vram_a_reg(16 downto 11) & vram_a_reg(9 downto 2) & vram_a_reg(10);
 
 early_ack_bga <= '0' when VMC=VMC_BGA and vram_req_reg=vram_ack else '1';
-early_ack_bgb <= '0' when VMC=VMC_BGB and vram_req_reg=vram_ack else '1';
 early_ack_dt <= '0' when VMC=VMC_DT and vram_req_reg=vram_ack else '1';
 
 BGA_VRAM_DO <= vram_q when early_ack_bga='0' and BGA_DTACK_N = '1' else BGA_VRAM_DO_REG;
-BGB_VRAM_DO <= vram_q when early_ack_bgb='0' and BGB_DTACK_N = '1' else BGB_VRAM_DO_REG;
 DT_VRAM_DO <= vram_q when early_ack_dt='0' and DT_VRAM_DTACK_N = '1' else DT_VRAM_DO_REG;
 
 
 process( RST_N, CLK,
-	BGA_SEL, BGA_DTACK_N, BGB_SEL, BGB_DTACK_N,
+	BGA_SEL, BGA_DTACK_N,
 	DT_VRAM_SEL, DT_VRAM_DTACK_N,
-	early_ack_bga, early_ack_bgb, early_ack_dt)
+	early_ack_bga, early_ack_dt)
 -- synthesis translate_off
 file F		: text open write_mode is "vram_dbg.out";
 variable L	: line;
@@ -1143,7 +1145,6 @@ variable L	: line;
 begin
 	if RST_N = '0' then
 		
-		BGB_DTACK_N <= '1';
 		BGA_DTACK_N <= '1';
 		DT_VRAM_DTACK_N <= '1';
 
@@ -1155,9 +1156,7 @@ begin
 
 		-- Priority encoder for next port...
 		VMC_NEXT<=VMC_IDLE;
-		if BGB_SEL = '1' and BGB_DTACK_N = '1' and early_ack_bgb='1' then
-			VMC_NEXT <= VMC_BGB;
-		elsif BGA_SEL = '1' and BGA_DTACK_N = '1' and early_ack_bga='1' then
+		if BGA_SEL = '1' and BGA_DTACK_N = '1' and early_ack_bga='1' then
 			VMC_NEXT <= VMC_BGA;
 		elsif DT_VRAM_SEL = '1' and DT_VRAM_DTACK_N = '1' and early_ack_dt='1' then
 			VMC_NEXT <= VMC_DT;
@@ -1165,9 +1164,6 @@ begin
 
 	if rising_edge(CLK) then
 	
-		if BGB_SEL = '0' then 
-			BGB_DTACK_N <= '1';
-		end if;
 		if BGA_SEL = '0' then 
 			BGA_DTACK_N <= '1';
 		end if;
@@ -1182,8 +1178,6 @@ begin
 					null;
 				when VMC_BGA =>
 					vram_a_reg <= '0'&BGA_VRAM_ADDR;
-				when VMC_BGB =>
-					vram_a_reg <= '0'&BGB_VRAM_ADDR;
 				when VMC_DT =>
 					vram_a_reg <= DT_VRAM_ADDR;
 			end case;
@@ -1196,11 +1190,6 @@ begin
 		when VMC_IDLE =>
 			null;
 
-		when VMC_BGB =>		-- BACKGROUND B
-			if vram_req_reg = vram_ack then
-				BGB_VRAM_DO_REG <= vram_q;
-				BGB_DTACK_N <= '0';
-			end if;
 		when VMC_BGA =>		-- BACKGROUND A
 			if vram_req_reg = vram_ack then
 				BGA_VRAM_DO_REG <= vram_q;
@@ -1252,6 +1241,7 @@ end process;
 process( RST_N, CLK )
 variable V_BGB_XSTART	: std_logic_vector(9 downto 0);
 variable V_BGB_BASE		: std_logic_vector(15 downto 0);
+variable bgb_nametable_item : std_logic_vector(15 downto 0);
 variable vscroll_mask	: std_logic_vector(10 downto 0);
 variable hscroll_mask	: std_logic_vector(9 downto 0);
 variable vscroll_val	: std_logic_vector(10 downto 0);
@@ -1343,6 +1333,7 @@ begin
 				BGBC <= BGBC_CALC_BASE;
 
 			when BGBC_CALC_BASE =>
+				-- BGB mapping slot
 				if LSM = "11" then
 					y_cells := BGB_Y(10 downto 4);
 				else
@@ -1360,9 +1351,9 @@ begin
 				BGB_VRAM_ADDR <= V_BGB_BASE(15 downto 1);
 				BGB_SEL <= '1';
 				BGBC <= BGBC_BASE_RD;
-				
+
 			when BGBC_BASE_RD =>
-				if early_ack_bgb='0' then
+				if BGB_VRAM32_ACK = '1' then
 -- synthesis translate_off					
 					write(L, string'("BGB BASE_RD Y="));
 					hwrite(L, "000000" & BGB_Y(9 downto 0));
@@ -1376,73 +1367,113 @@ begin
 					hwrite(L, BGB_VRAM_DO);
 					write(L, string'("]"));
 					writeline(F,L);									
--- synthesis translate_on											
+-- synthesis translate_on
 					BGB_SEL <= '0';
-					T_BGB_PRI <= BGB_VRAM_DO(15);
-					T_BGB_PAL <= BGB_VRAM_DO(14 downto 13);
-					BGB_HF <= BGB_VRAM_DO(11);
-					if LSM = "11" then
-						if BGB_VRAM_DO(12) = '1' then	-- VF
-							BGB_TILEBASE <= BGB_VRAM_DO(9 downto 0) & not(BGB_Y(3 downto 0)) & "00";
-						else
-							BGB_TILEBASE <= BGB_VRAM_DO(9 downto 0) & BGB_Y(3 downto 0) & "00";
-						end if;
-					else
-						if BGB_VRAM_DO(12) = '1' then	-- VF
-							BGB_TILEBASE <= BGB_VRAM_DO(10 downto 0) & not(BGB_Y(2 downto 0)) & "00";
-						else
-							BGB_TILEBASE <= BGB_VRAM_DO(10 downto 0) & BGB_Y(2 downto 0) & "00";
-						end if;
-					end if;
+					BGB_NAMETABLE_ITEMS <= BGB_VRAM32_DO;
+					BGBC <= BGBC_TILE_RD;
+				end if;
 
+			when BGBC_TILE_RD =>
+				-- BGB pattern slot
+				BGB_COLINFO_WE_A <= '0';
+
+				if BGB_X(3) = '0' then
+					bgb_nametable_item := BGB_NAMETABLE_ITEMS(15 downto 0);
+				else
+					bgb_nametable_item := BGB_NAMETABLE_ITEMS(31 downto 16);
+				end if;
+				T_BGB_PRI <= bgb_nametable_item(15);
+				T_BGB_PAL <= bgb_nametable_item(14 downto 13);
+				BGB_HF <= bgb_nametable_item(11);
+				if LSM = "11" then
+					if bgb_nametable_item(12) = '1' then	-- VF
+						BGB_VRAM_ADDR <= bgb_nametable_item(9 downto 0) & not(BGB_Y(3 downto 0)) & "0";
+					else
+						BGB_VRAM_ADDR <= bgb_nametable_item(9 downto 0) & BGB_Y(3 downto 0) & "0";
+					end if;
+				else
+					if bgb_nametable_item(12) = '1' then	-- VF
+						BGB_VRAM_ADDR <= bgb_nametable_item(10 downto 0) & not(BGB_Y(2 downto 0)) & "0";
+					else
+						BGB_VRAM_ADDR <= bgb_nametable_item(10 downto 0) & BGB_Y(2 downto 0) & "0";
+					end if;
+				end if;
+
+				BGB_SEL <= '1';
+				BGBC <= BGBC_TILE_RD2;
+
+			when BGBC_TILE_RD2 =>
+				if BGB_VRAM32_ACK = '1' then
+-- synthesis translate_off
+					write(L, string'("BGB TILE_RD Y="));
+					hwrite(L, "000000" & BGB_Y(9 downto 0));
+					write(L, string'(" X="));
+					hwrite(L, "000000" & BGB_X(9 downto 0));
+					write(L, string'(" POS="));
+					hwrite(L, "000000" & BGB_POS(9 downto 0));
+					write(L, string'(" TILE_RD ["));
+					hwrite(L, BGB_VRAM_ADDR & '0');
+					write(L, string'("] = ["));
+					hwrite(L, BGB_VRAM32_DO);
+					write(L, string'("]"));
+					writeline(F,L);
+-- synthesis translate_on
+					BGB_SEL <= '0';
 					BGBC <= BGBC_LOOP;
 				end if;
 
 			when BGBC_LOOP =>
-				if BGB_X(1 downto 0) = "00" and BGB_SEL = '0' then
-					BGB_COLINFO_WE_A <= '0';
-					if BGB_X(2) = '0' then
-						if BGB_HF = '1' then
-							BGB_VRAM_ADDR <= BGB_TILEBASE(15 downto 2) & "1";
-						else
-							BGB_VRAM_ADDR <= BGB_TILEBASE(15 downto 2) & "0";
-						end if;
-					else
-						if BGB_HF = '1' then
-							BGB_VRAM_ADDR <= BGB_TILEBASE(15 downto 2) & "0";
-						else
-							BGB_VRAM_ADDR <= BGB_TILEBASE(15 downto 2) & "1";
-						end if;					
-					end if;
-					BGB_SEL <= '1';
-					BGBC <= BGBC_TILE_RD;
-				else
+
 					BGB_COLINFO_ADDR_A <= BGB_POS(8 downto 0);
 					BGB_COLINFO_WE_A <= '1';
-					case BGB_X(1 downto 0) is
-					when "00" =>
+					case BGB_X(2 downto 0) is
+					when "100" =>
 						if BGB_HF = '1' then
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM_DO(3 downto 0);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO( 3 downto  0);
 						else
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM_DO(15 downto 12);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(31 downto 28);
 						end if;
-					when "01" =>
+					when "101" =>
 						if BGB_HF = '1' then
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM_DO(7 downto 4);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO( 7 downto  4);
 						else
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM_DO(11 downto 8);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(27 downto 24);
 						end if;
-					when "10" =>
+					when "110" =>
 						if BGB_HF = '1' then
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM_DO(11 downto 8);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(11 downto  8);
 						else
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM_DO(7 downto 4);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(23 downto 20);
 						end if;
-					when others =>
+					when "111" =>
 						if BGB_HF = '1' then
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM_DO(15 downto 12);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(15 downto 12);
 						else
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM_DO(3 downto 0);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(19 downto 16);
+						end if;
+					when "000" =>
+						if BGB_HF = '1' then
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(19 downto 16);
+						else
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(15 downto 12);
+						end if;
+					when "001" =>
+						if BGB_HF = '1' then
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(23 downto 20);
+						else
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(11 downto  8);
+						end if;
+					when "010" =>
+						if BGB_HF = '1' then
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(27 downto 24);
+						else
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO( 7 downto  4);
+						end if;
+					when "011" =>
+						if BGB_HF = '1' then
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(31 downto 28);
+						else
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO( 3 downto  0);
 						end if;
 					end case;
 					BGB_X <= (BGB_X + 1) and hscroll_mask;
@@ -1451,33 +1482,15 @@ begin
 						BGB_COL <= BGB_COL + 1;
 						if (H40 = '0' and BGB_COL = 31) or (H40 = '1' and BGB_COL = 39) then
 							BGBC <= BGBC_DONE;
+						elsif BGB_X(3) = '0' then
+							BGBC <= BGBC_TILE_RD;
 						else
 							BGBC <= BGBC_GET_VSCROLL;
 						end if;
 					else
 						BGBC <= BGBC_LOOP;
 					end if;
-					BGB_SEL <= '0';					
-				end if;
-			when BGBC_TILE_RD =>
-				if early_ack_bgb = '0' then
--- synthesis translate_off					
-					write(L, string'("BGB TILE_RD Y="));
-					hwrite(L, "000000" & BGB_Y(9 downto 0));
-					write(L, string'(" X="));
-					hwrite(L, "000000" & BGB_X(9 downto 0));
-					write(L, string'(" POS="));
-					hwrite(L, "000000" & BGB_POS(9 downto 0));				
-					write(L, string'(" TILE_RD ["));
-					hwrite(L, BGB_VRAM_ADDR & '0');					
-					write(L, string'("] = ["));
-					hwrite(L, BGB_VRAM_DO);
-					write(L, string'("]"));
-					writeline(F,L);									
--- synthesis translate_on											
-					BGBC <= BGBC_LOOP;
-				end if;
-			
+
 			when others =>	-- BGBC_DONE
 				BGB_SEL <= '0';
 				BGB_COLINFO_WE_A <= '0';

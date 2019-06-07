@@ -102,8 +102,8 @@ constant VBORDER_START_NTSC_V30 : integer := 493;
 constant NTSC_LINES             : integer := 262;
 constant PAL_LINES              : integer := 313;
 
-constant HSCROLL_READ_H32       : integer := 502;
-constant HSCROLL_READ_H40       : integer := 502;
+constant HSCROLL_READ_H32       : integer := 488;
+constant HSCROLL_READ_H40       : integer := 488;
 
 constant OBJ_MAX_FRAME_H32      : integer := 64;
 constant OBJ_MAX_FRAME_H40      : integer := 80;

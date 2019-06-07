@@ -392,6 +392,7 @@ signal early_ack : std_logic;
 
 type vmc32_t is (
 	VMC32_IDLE,
+	VMC32_HSC,
 	VMC32_BGB,
 	VMC32_BGA,
 	VMC32_SP2,
@@ -401,6 +402,16 @@ type vmc32_t is (
 signal VMC32	: vmc32_t := VMC32_IDLE;
 signal VMC32_NEXT : vmc32_t := VMC32_IDLE;
 signal RAM_REQ_PROGRESS : std_logic;
+
+----------------------------------------------------------------
+-- HSCROLL READING
+----------------------------------------------------------------
+
+signal HSC_VRAM_ADDR    : std_logic_vector(15 downto 1);
+signal HSC_VRAM32_DO    : std_logic_vector(31 downto 0);
+signal HSC_VRAM32_DO_REG: std_logic_vector(31 downto 0);
+signal HSC_VRAM32_ACK   : std_logic;
+signal HSC_SEL          : std_logic;
 
 ----------------------------------------------------------------
 -- BACKGROUND RENDERING
@@ -1046,12 +1057,15 @@ vram32_req <= vram32_req_reg;
 -- Get the ack and data one cycle earlier
 SP2_VRAM32_DO <= vram32_q when VMC32 = VMC32_SP2 else SP2_VRAM32_DO_REG;
 SP3_VRAM32_DO <= vram32_q when VMC32 = VMC32_SP3 else SP3_VRAM32_DO_REG;
+HSC_VRAM32_DO <= vram32_q when VMC32 = VMC32_HSC else HSC_VRAM32_DO_REG;
 
 SP2_VRAM32_ACK <= '1' when VMC32 = VMC32_SP2 and vram32_req_reg = vram32_ack and RAM_REQ_PROGRESS = '1' else '0';
 SP3_VRAM32_ACK <= '1' when VMC32 = VMC32_SP3 and vram32_req_reg = vram32_ack and RAM_REQ_PROGRESS = '1' else '0';
+HSC_VRAM32_ACK <= '1' when VMC32 = VMC32_SP3 and vram32_req_reg = vram32_ack and RAM_REQ_PROGRESS = '1' else '0';
 
 VMC32_NEXT <= VMC32_SP3 when SP3_SEL = '1' else
               VMC32_SP2 when SP2_SEL = '1' else
+              VMC32_HSC when HSC_SEL = '1' else
               VMC32_IDLE;
 
 process( RST_N, CLK)
@@ -1074,6 +1088,8 @@ begin
 					vram32_a <= SP2_VRAM_ADDR;
 				when VMC32_SP3 =>
 					vram32_a <= SP3_VRAM_ADDR;
+				when VMC32_HSC =>
+					vram32_a <= HSC_VRAM_ADDR;
 				when others => null;
 				end case;
 				if VMC32_NEXT /= VMC32_IDLE then
@@ -1088,6 +1104,8 @@ begin
 					SP2_VRAM32_DO_REG <= vram32_q;
 				when VMC32_SP3 =>
 					SP3_VRAM32_DO_REG <= vram32_q;
+				when VMC32_HSC =>
+					HSC_VRAM32_DO_REG <= vram32_q;
 				when others => null;
 				end case;
 				RAM_REQ_PROGRESS <= '0';
@@ -1201,6 +1219,32 @@ begin
 	end if;
 end process;
 
+----------------------------------------------------------------
+-- HSCROLL READ
+----------------------------------------------------------------
+process (RST_N, CLK) begin
+	if RST_N = '0' then
+		HSC_SEL <= '0';
+	elsif rising_edge(CLK) then
+		if V_ACTIVE = '1' and HV_HCNT = HSCROLL_READ and HV_PIXDIV = 0 then
+
+			case HSCR is -- Horizontal scroll mode
+				when "00" =>
+					HSC_VRAM_ADDR <= HSCB & "000000000";
+				when "01" =>
+					HSC_VRAM_ADDR <= HSCB & "00000" & Y(2 downto 0) & '0';
+				when "10" =>
+					HSC_VRAM_ADDR <= HSCB & Y(7 downto 3) & "0000";
+				when "11" =>
+					HSC_VRAM_ADDR <= HSCB & Y & '0';
+				when others => null;
+			end case;
+			HSC_SEL <= '1';
+		elsif HSC_VRAM32_ACK = '1' then
+			HSC_SEL <= '0';
+		end if;
+	end if;
+end process;
 
 ----------------------------------------------------------------
 -- BACKGROUND B RENDERING
@@ -1235,6 +1279,7 @@ begin
 				if BGEN_ACTIVATE = '1' then
 					BGBC <= BGBC_INIT;
 				end if;
+
 			when BGBC_INIT =>
 				if HSIZE = "10" then
 					-- illegal mode, 32x1
@@ -1249,34 +1294,16 @@ begin
 					vscroll_mask := vscroll_mask(9 downto 0) & '1';
 				end if;
 
-				case HSCR is -- Horizontal scroll mode
-				when "00" =>
-					BGB_VRAM_ADDR <= HSCB & "000000001";
-				when "01" =>
-					BGB_VRAM_ADDR <= HSCB & "00000" & Y(2 downto 0) & '1';
-				when "10" =>
-					BGB_VRAM_ADDR <= HSCB & Y(7 downto 3) & "0001";
-				when "11" =>
-					BGB_VRAM_ADDR <= HSCB & Y & '1';
-				when others => null;
-				end case;
-				BGB_SEL <= '1';
-				BGBC <= BGBC_HS_RD;
-
-			when BGBC_HS_RD =>
-				if early_ack_bgb = '0' then
-					V_BGB_XSTART := "0000000000" - BGB_VRAM_DO(9 downto 0);
-					if V_BGB_XSTART(3 downto 0) = "0000" then
-						V_BGB_XSTART := V_BGB_XSTART - 16;
-						BGB_POS <= "1111110000";
-					else
-						BGB_POS <= "0000000000" - ( "000000" & V_BGB_XSTART(3 downto 0) );
-					end if;
-					BGB_SEL <= '0';
-					BGB_X <= ( V_BGB_XSTART(9 downto 4) & "0000" ) and hscroll_mask;
-					BGB_COL <= "1111110"; -- -2
-					BGBC <= BGBC_GET_VSCROLL;
+				V_BGB_XSTART := "0000000000" - HSC_VRAM32_DO(25 downto 16);
+				if V_BGB_XSTART(3 downto 0) = "0000" then
+					V_BGB_XSTART := V_BGB_XSTART - 16;
+					BGB_POS <= "1111110000";
+				else
+					BGB_POS <= "0000000000" - ( "000000" & V_BGB_XSTART(3 downto 0) );
 				end if;
+				BGB_X <= ( V_BGB_XSTART(9 downto 4) & "0000" ) and hscroll_mask;
+				BGB_COL <= "1111110"; -- -2
+				BGBC <= BGBC_GET_VSCROLL;
 
 			when BGBC_GET_VSCROLL =>
 				BGB_COLINFO_WE_A <= '0';
@@ -1522,34 +1549,17 @@ begin
 					WIN_H <= not(WRIGT_LATCH);
 				end if;
 
-			case HSCR is -- Horizontal scroll mode
-				when "00" =>
-					BGA_VRAM_ADDR <= HSCB & "000000000";
-				when "01" =>
-					BGA_VRAM_ADDR <= HSCB & "00000" & Y(2 downto 0) & '0';
-				when "10" =>
-					BGA_VRAM_ADDR <= HSCB & Y(7 downto 3) & "0000";
-				when "11" =>
-					BGA_VRAM_ADDR <= HSCB & Y & '0';
-				when others => null;
-				end case;
-				BGA_SEL <= '1';
-				BGAC <= BGAC_HS_RD;
-
-			when BGAC_HS_RD =>
-				if early_ack_bga='0' then
-					V_BGA_XSTART := "0000000000" - BGA_VRAM_DO(9 downto 0);
-					if V_BGA_XSTART(3 downto 0) = "0000" then
-						V_BGA_XSTART := V_BGA_XSTART - 16;
-						BGA_POS <= "1111110000";
-					else
-						BGA_POS <= "0000000000" - ( "000000" & V_BGA_XSTART(3 downto 0) );
-					end if;
-					BGA_SEL <= '0';
-					BGA_X <= ( V_BGA_XSTART(9 downto 4) & "0000" ) and hscroll_mask;
-					BGA_COL <= "1111110"; -- -2
-					BGAC <= BGAC_GET_VSCROLL;
+				V_BGA_XSTART := "0000000000" - HSC_VRAM32_DO(9 downto 0);
+				if V_BGA_XSTART(3 downto 0) = "0000" then
+					V_BGA_XSTART := V_BGA_XSTART - 16;
+					BGA_POS <= "1111110000";
+				else
+					BGA_POS <= "0000000000" - ( "000000" & V_BGA_XSTART(3 downto 0) );
 				end if;
+
+				BGA_X <= ( V_BGA_XSTART(9 downto 4) & "0000" ) and hscroll_mask;
+				BGA_COL <= "1111110"; -- -2
+				BGAC <= BGAC_GET_VSCROLL;
 
 			when BGAC_GET_VSCROLL =>
 				BGA_COLINFO_WE_A <= '0';
@@ -2597,7 +2607,7 @@ end process;
 -- TIMING MANAGEMENT
 -- Background generation runs during active display.
 -- It starts with reading the horizontal scroll values from the VRAM
-BGEN_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = HSCROLL_READ else '0';
+BGEN_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = HSCROLL_READ + 8 else '0';
 
 -- Stage 1 - runs after the vcounter incremented
 -- Carefully choosing the starting position avoids the

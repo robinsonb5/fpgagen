@@ -68,6 +68,11 @@ entity vdp is
 		vram_u_n : out std_logic;
 		vram_l_n : out std_logic;
 
+		vram32_req : out std_logic;
+		vram32_ack : in  std_logic;
+		vram32_a   : out std_logic_vector(15 downto 1);
+		vram32_q   : in  std_logic_vector(31 downto 0);
+
 		HINT		: out std_logic;
 		VINT_TG68	: out std_logic;
 		VINT_T80	: out std_logic;
@@ -107,6 +112,7 @@ architecture rtl of vdp is
 signal vram_req_reg : std_logic;
 signal vram_a_reg	: std_logic_vector(16 downto 1);
 
+signal vram32_req_reg : std_logic;
 ----------------------------------------------------------------
 -- ON-CHIP RAMS
 ----------------------------------------------------------------
@@ -374,7 +380,6 @@ type vmc_t is (
 	VMC_IDLE,
 	VMC_BGB,
 	VMC_BGA,
-	VMC_SP2,
 	VMC_SP3,
 	VMC_DT
 );
@@ -383,10 +388,21 @@ signal VMC_NEXT : vmc_t := VMC_IDLE;
 
 signal early_ack_bga : std_logic;
 signal early_ack_bgb : std_logic;
-signal early_ack_sp2 : std_logic;
 signal early_ack_sp3 : std_logic;
 signal early_ack_dt : std_logic;
 signal early_ack : std_logic;
+
+type vmc32_t is (
+	VMC32_IDLE,
+	VMC32_BGB,
+	VMC32_BGA,
+	VMC32_SP2,
+	VMC32_SP3,
+	VMC32_DT
+);
+signal VMC32	: vmc32_t := VMC32_IDLE;
+signal VMC32_NEXT : vmc32_t := VMC32_IDLE;
+signal RAM_REQ_PROGRESS : std_logic;
 
 ----------------------------------------------------------------
 -- BACKGROUND RENDERING
@@ -576,9 +592,7 @@ type sp2c_t is (
 	SP2C_Y_RD2,
 	SP2C_Y_RD3,
 	SP2C_Y_RD4,
-	SP2C_X_RD,
-	SP2C_X_TST,
-	SP2C_TDEF_RD,
+	SP2C_RD,
 	SP2C_NEXT,
 	SP2C_DONE
 );
@@ -586,10 +600,10 @@ signal SP2C	: SP2C_t;
 signal SP2_Y			: std_logic_vector(8 downto 0);
 signal SP2_EN			: std_logic;
 signal SP2_VRAM_ADDR	: std_logic_vector(15 downto 1);
-signal SP2_VRAM_DO		: std_logic_vector(15 downto 0);
-signal SP2_VRAM_DO_REG	: std_logic_vector(15 downto 0);
+signal SP2_VRAM32_DO     : std_logic_vector(31 downto 0);
+signal SP2_VRAM32_DO_REG : std_logic_vector(31 downto 0);
+signal SP2_VRAM32_ACK    : std_logic;
 signal SP2_SEL			: std_logic;
-signal SP2_DTACK_N		: std_logic;
 
 signal OBJ_IDX			: std_logic_vector(4 downto 0);
 
@@ -1030,6 +1044,57 @@ end process;
 ----------------------------------------------------------------
 -- VRAM CONTROLLER
 ----------------------------------------------------------------
+vram32_req <= vram32_req_reg;
+
+-- Get the ack and data one cycle earlier
+SP2_VRAM32_DO <= vram32_q when VMC32 = VMC32_SP2 else SP2_VRAM32_DO_REG;
+
+SP2_VRAM32_ACK <= '1' when VMC32 = VMC32_SP2 and vram32_req_reg = vram32_ack and RAM_REQ_PROGRESS = '1' else '0';
+
+VMC32_NEXT <= VMC32_SP2 when SP2_SEL = '1' else
+              VMC32_IDLE;
+
+process( RST_N, CLK)
+begin
+	if RST_N = '0' then
+
+		vram32_req_reg <= '0';
+
+		VMC32 <= VMC32_IDLE;
+		RAM_REQ_PROGRESS <= '0';
+	elsif rising_edge(CLK) then
+
+		if vram32_req_reg = vram32_ack then
+			if RAM_REQ_PROGRESS = '0' then
+				VMC32 <= VMC32_NEXT;
+				case VMC32_NEXT is
+				when VMC32_IDLE =>
+					null;
+				when VMC32_SP2 =>
+					vram32_a <= SP2_VRAM_ADDR;
+				when others => null;
+				end case;
+				if VMC32_NEXT /= VMC32_IDLE then
+					vram32_req_reg <= not vram32_req_reg;
+					RAM_REQ_PROGRESS <= '1';
+				end if;
+			else
+				case VMC32 is
+				when VMC32_IDLE =>
+					null;
+				when VMC32_SP2 =>
+					SP2_VRAM32_DO_REG <= vram32_q;
+				when others => null;
+				end case;
+				RAM_REQ_PROGRESS <= '0';
+			end if;
+		end if;
+	end if;
+end process;
+
+
+
+
 vram_req <= vram_req_reg;
 
 vram_d <= DT_VRAM_DI when M128 = '0' else DT_VRAM_DI(7 downto 0) & DT_VRAM_DI(7 downto 0);
@@ -1040,21 +1105,19 @@ vram_a <= vram_a_reg(15 downto 1) when M128 = '0' else vram_a_reg(16 downto 11) 
 
 early_ack_bga <= '0' when VMC=VMC_BGA and vram_req_reg=vram_ack else '1';
 early_ack_bgb <= '0' when VMC=VMC_BGB and vram_req_reg=vram_ack else '1';
-early_ack_sp2 <= '0' when VMC=VMC_SP2 and vram_req_reg=vram_ack else '1';
 early_ack_sp3 <= '0' when VMC=VMC_SP3 and vram_req_reg=vram_ack else '1';
 early_ack_dt <= '0' when VMC=VMC_DT and vram_req_reg=vram_ack else '1';
 
 BGA_VRAM_DO <= vram_q when early_ack_bga='0' and BGA_DTACK_N = '1' else BGA_VRAM_DO_REG;
 BGB_VRAM_DO <= vram_q when early_ack_bgb='0' and BGB_DTACK_N = '1' else BGB_VRAM_DO_REG;
-SP2_VRAM_DO <= vram_q when early_ack_sp2='0' and SP2_DTACK_N = '1' else SP2_VRAM_DO_REG;
 SP3_VRAM_DO <= vram_q when early_ack_sp3='0' and SP3_DTACK_N = '1' else SP3_VRAM_DO_REG;
 DT_VRAM_DO <= vram_q when early_ack_dt='0' and DT_VRAM_DTACK_N = '1' else DT_VRAM_DO_REG;
 
 
 process( RST_N, CLK,
 	BGA_SEL, BGA_DTACK_N, BGB_SEL, BGB_DTACK_N,
-	SP2_SEL, SP2_DTACK_N, SP3_SEL, SP3_DTACK_N, DT_VRAM_SEL, DT_VRAM_DTACK_N,
-	early_ack_bga, early_ack_bgb, early_ack_sp2, early_ack_sp3, early_ack_dt)
+	SP3_SEL, SP3_DTACK_N, DT_VRAM_SEL, DT_VRAM_DTACK_N,
+	early_ack_bga, early_ack_bgb, early_ack_sp3, early_ack_dt)
 -- synthesis translate_off
 file F		: text open write_mode is "vram_dbg.out";
 variable L	: line;
@@ -1064,7 +1127,6 @@ begin
 		
 		BGB_DTACK_N <= '1';
 		BGA_DTACK_N <= '1';
-		SP2_DTACK_N <= '1';
 		SP3_DTACK_N <= '1';
 		DT_VRAM_DTACK_N <= '1';
 
@@ -1082,8 +1144,6 @@ begin
 			VMC_NEXT <= VMC_BGB;
 		elsif BGA_SEL = '1' and BGA_DTACK_N = '1' and early_ack_bga='1' then
 			VMC_NEXT <= VMC_BGA;
-		elsif SP2_SEL = '1' and SP2_DTACK_N = '1' and early_ack_sp2='1' then
-			VMC_NEXT <= VMC_SP2;
 		elsif DT_VRAM_SEL = '1' and DT_VRAM_DTACK_N = '1' and early_ack_dt='1' then
 			VMC_NEXT <= VMC_DT;
 		end if;
@@ -1096,9 +1156,6 @@ begin
 		if BGA_SEL = '0' then 
 			BGA_DTACK_N <= '1';
 		end if;
---		if SP2_SEL = '0' then 
-			SP2_DTACK_N <= '1';
---		end if;
 --		if SP3_SEL = '0' then 
 			SP3_DTACK_N <= '1';
 --		end if;
@@ -1115,8 +1172,6 @@ begin
 					vram_a_reg <= '0'&BGA_VRAM_ADDR;
 				when VMC_BGB =>
 					vram_a_reg <= '0'&BGB_VRAM_ADDR;
-				when VMC_SP2 =>
-					vram_a_reg <= '0'&SP2_VRAM_ADDR;
 				when VMC_SP3 =>
 					vram_a_reg <= '0'&SP3_VRAM_ADDR;
 				when VMC_DT =>
@@ -1140,12 +1195,6 @@ begin
 			if vram_req_reg = vram_ack then
 				BGA_VRAM_DO_REG <= vram_q;
 				BGA_DTACK_N <= '0';
-			end if;
-
-		when VMC_SP2 =>		-- SPRITE ENGINE PART 2
-			if vram_req_reg = vram_ack then
-				SP2_VRAM_DO_REG <= vram_q;
-				SP2_DTACK_N <= '0';
 			end if;
 
 		when VMC_SP3 =>		-- SPRITE ENGINE PART 3
@@ -2003,30 +2052,21 @@ begin
 				OBJ_SPINFO_D(5 downto 0) <= y_offset(5 downto 0); --Y offset
 				OBJ_SPINFO_D(7 downto 6) <= OBJ_CACHE_SL_Q(9 downto 8); --VS
 				OBJ_SPINFO_D(9 downto 8) <= OBJ_CACHE_SL_Q(11 downto 10); --HS
-				SP2_VRAM_ADDR <= (SATB(6 downto 0) & "00000000") + (OBJ_VISINFO_Q(6 downto 0) & "11");
-				SP2_SEL <= '1';
-				SP2C <= SP2C_X_RD;
 
-			when SP2C_X_RD =>
-				if early_ack_sp2='0' then
-					SP2_SEL <= '0';
-					OBJ_SPINFO_D(18 downto 10) <= SP2_VRAM_DO(8 downto 0); --X
-					SP2C <= SP2C_X_TST;
-				end if;
-
-			when SP2C_X_TST =>
 				SP2_VRAM_ADDR <= (SATB(6 downto 0) & "00000000") + (OBJ_VISINFO_Q(6 downto 0) & "10");
 				SP2_SEL <= '1';
-				SP2C <= SP2C_TDEF_RD;
 
-			when SP2C_TDEF_RD =>
-				if early_ack_sp2='0' then
+				SP2C <= SP2C_RD;
+
+			when SP2C_RD =>
+				if SP2_VRAM32_ACK = '1' then
 					SP2_SEL <= '0';
-					OBJ_SPINFO_D(34) <= SP2_VRAM_DO(15); --PRI
-					OBJ_SPINFO_D(33 downto 32) <= SP2_VRAM_DO(14 downto 13); --PAL
-					OBJ_SPINFO_D(31) <= SP2_VRAM_DO(12); --VF
-					OBJ_SPINFO_D(30) <= SP2_VRAM_DO(11); --HF
-					OBJ_SPINFO_D(29 downto 19) <= SP2_VRAM_DO(10 downto 0); --PAT
+					OBJ_SPINFO_D(34) <= SP2_VRAM32_DO(15); --PRI
+					OBJ_SPINFO_D(33 downto 32) <= SP2_VRAM32_DO(14 downto 13); --PAL
+					OBJ_SPINFO_D(31) <= SP2_VRAM32_DO(12); --VF
+					OBJ_SPINFO_D(30) <= SP2_VRAM32_DO(11); --HF
+					OBJ_SPINFO_D(29 downto 19) <= SP2_VRAM32_DO(10 downto 0); --PAT
+					OBJ_SPINFO_D(18 downto 10) <= SP2_VRAM32_DO(24 downto 16); --X
 					OBJ_SPINFO_ADDR_WR <= OBJ_IDX;
 					OBJ_SPINFO_WE <= '1';
 					SP2C <= SP2C_NEXT;

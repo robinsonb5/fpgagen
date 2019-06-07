@@ -100,6 +100,11 @@ entity chameleon_sdram is
 		vram_u_n : in std_logic;
 		vram_l_n : in std_logic;
 
+		vram32_req : in std_logic;
+		vram32_ack : out std_logic;
+		vram32_a   : in std_logic_vector((colAddrBits+rowAddrBits+2) downto 1);
+		vram32_q   : out std_logic_vector(31 downto 0);
+
 --GE Temporary
 		initDone : out std_logic;
 -- Debug ports
@@ -144,6 +149,7 @@ architecture rtl of chameleon_sdram is
 		PORT_ROMWR,
 		PORT_RAM68K,
 		PORT_VRAM,
+		PORT_VRAM32,
 		PORT_SRAM
 	);
 
@@ -172,12 +178,14 @@ architecture rtl of chameleon_sdram is
 	signal romrd_ackReg : std_logic := '0';
 	signal ram68k_ackReg : std_logic := '0';
 	signal vram_ackReg : std_logic := '0';
+	signal vram32_ackReg : std_logic := '0';
 	signal sram_ackReg : std_logic := '0';
 
 	signal romwr_qReg : std_logic_vector(15 downto 0);
 	signal romrd_qReg : std_logic_vector(63 downto 0);
 	signal ram68k_qReg : std_logic_vector(15 downto 0);
 	signal vram_qReg : std_logic_vector(15 downto 0);
+	signal vram32_qReg : std_logic_vector(31 downto 0);
 	signal sram_qReg : std_logic_vector(15 downto 0);
 
 	signal initDoneReg : std_logic := '0';
@@ -368,6 +376,14 @@ begin
 				nextRamCol <= vram_a(addr_colbits);
 				nextLdqm <= vram_l_n;
 				nextUdqm <= vram_u_n;
+			elsif (vram32_req /= vram32_ackReg) and (currentPort /= PORT_VRAM32) then
+				nextRamState <= RAM_READ_1;
+				nextRamPort <= PORT_VRAM32;
+				nextRamBank <= vram32_a(addr_bankbits);
+				nextRamRow <= vram32_a(addr_rowbits);
+				nextRamCol <= vram32_a(addr_colbits);
+				nextLdqm <= '0';
+				nextUdqm <= '0';
 			end if;
 		--end if;
 	end process;
@@ -526,7 +542,7 @@ begin
 					if currentPort = PORT_VRAM then
 						ramTimer <= casLatency;
 						ramState <= RAM_READ_CACHE_FILL;
-					elsif currentPort = PORT_ROMRD then
+					elsif currentPort = PORT_ROMRD or currentPort = PORT_VRAM32 then
 						ramTimer <= casLatency + 1;
 						ramState <= RAM_READ_2;
 					else
@@ -548,7 +564,7 @@ begin
 					ramState <= RAM_READ_2;
 
 				when RAM_READ_2 =>
-					if currentPort = PORT_ROMRD or currentPort = PORT_VRAM then
+					if currentPort = PORT_ROMRD or currentPort = PORT_VRAM or currentPort = PORT_VRAM32 then
 						ramState <= RAM_READ_3;
 					else
 						ramDone <='1';
@@ -572,6 +588,10 @@ begin
 				when RAM_READ_3 =>
 					ramState <= RAM_READ_4;
 					currentRdData(31 downto 16) <= ram_data_reg;
+					if currentPort = PORT_VRAM32 then
+						ramDone <= '1';
+						ramState <= RAM_IDLE;
+					end if;
 
 				when RAM_READ_4 =>
 					ramState <= RAM_READ_5;
@@ -667,6 +687,19 @@ begin
 	end process;
 	romrd_ack <= romrd_ackReg;
 	romrd_q <= romrd_qReg; --GE
+
+	process(clk)
+	begin
+		if rising_edge(clk) then
+			if currentPort = PORT_VRAM32
+			and ramDone = '1' then
+				vram32_ackReg <= not vram32_ackReg;
+				vram32_qReg <= currentRdData(31 downto 0);
+			end if;
+		end if;
+	end process;
+	vram32_ack <= vram32_ackReg;
+	vram32_q <= vram32_qReg;
 
 	process(clk)
 	begin

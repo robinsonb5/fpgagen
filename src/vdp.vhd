@@ -62,7 +62,7 @@ entity vdp is
 		vram_req : out std_logic;
 		vram_ack : in std_logic;
 		vram_we : out std_logic;
-		vram_a : out std_logic_vector(14 downto 0);
+		vram_a : out std_logic_vector(15 downto 1);
 		vram_d : out std_logic_vector(15 downto 0);
 		vram_q : in std_logic_vector(15 downto 0);
 		vram_u_n : out std_logic;
@@ -430,7 +430,7 @@ signal BGB_BASE		: std_logic_vector(15 downto 0);
 signal BGB_TILEBASE	: std_logic_vector(15 downto 0);
 signal BGB_HF		: std_logic;
 
-signal BGB_VRAM_ADDR	: std_logic_vector(14 downto 0);
+signal BGB_VRAM_ADDR	: std_logic_vector(15 downto 1);
 signal BGB_VRAM_DO	: std_logic_vector(15 downto 0);
 signal BGB_VRAM_DO_REG	: std_logic_vector(15 downto 0);
 signal BGB_SEL		: std_logic;
@@ -471,7 +471,7 @@ signal BGA_BASE		: std_logic_vector(15 downto 0);
 signal BGA_TILEBASE	: std_logic_vector(15 downto 0);
 signal BGA_HF		: std_logic;
 
-signal BGA_VRAM_ADDR	: std_logic_vector(14 downto 0);
+signal BGA_VRAM_ADDR	: std_logic_vector(15 downto 1);
 signal BGA_VRAM_DO	: std_logic_vector(15 downto 0);
 signal BGA_VRAM_DO_REG	: std_logic_vector(15 downto 0);
 signal BGA_SEL		: std_logic;
@@ -585,7 +585,7 @@ type sp2c_t is (
 signal SP2C	: SP2C_t;
 signal SP2_Y			: std_logic_vector(8 downto 0);
 signal SP2_EN			: std_logic;
-signal SP2_VRAM_ADDR	: std_logic_vector(14 downto 0);
+signal SP2_VRAM_ADDR	: std_logic_vector(15 downto 1);
 signal SP2_VRAM_DO		: std_logic_vector(15 downto 0);
 signal SP2_VRAM_DO_REG	: std_logic_vector(15 downto 0);
 signal SP2_SEL			: std_logic;
@@ -608,7 +608,7 @@ type sp3c_t is (
 );
 signal SP3C		: SP3C_t;
 
-signal SP3_VRAM_ADDR	: std_logic_vector(14 downto 0);
+signal SP3_VRAM_ADDR	: std_logic_vector(15 downto 1);
 signal SP3_VRAM_DO	: std_logic_vector(15 downto 0);
 signal SP3_VRAM_DO_SAVE	: std_logic_vector(15 downto 0);
 signal SP3_VRAM_DO_REG	: std_logic_vector(15 downto 0);

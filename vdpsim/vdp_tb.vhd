@@ -31,7 +31,7 @@ component vdp
                 vram_req : out std_logic;
                 vram_ack : in std_logic;
                 vram_we : out std_logic;
-                vram_a : out std_logic_vector(14 downto 0);
+                vram_a : out std_logic_vector(15 downto 1);
                 vram_d : out std_logic_vector(15 downto 0);
                 vram_q : in std_logic_vector(15 downto 0);
                 vram_u_n : out std_logic;
@@ -77,7 +77,7 @@ signal   reset_n  : std_logic := '1';
 
 signal vram_req_loop: std_logic;
 signal vram_we: std_logic;
-signal vram_a: std_logic_vector(14 downto 0);
+signal vram_a: std_logic_vector(15 downto 1);
 signal vram_q: std_logic_vector(15 downto 0);
 signal vram_d: std_logic_vector(15 downto 0);
 
@@ -160,7 +160,7 @@ begin
   memory : process (memclk)
     variable c : std_logic;
     variable we : std_logic;
-    variable a : std_logic_vector(14 downto 0);
+    variable a : std_logic_vector(15 downto 1);
     variable q : std_logic_vector(15 downto 0);
     variable d : std_logic_vector(15 downto 0);
   begin

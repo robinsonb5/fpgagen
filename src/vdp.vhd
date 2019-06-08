@@ -123,8 +123,22 @@ signal CRAM_WE_B		: std_logic;
 signal CRAM_Q_A		: std_logic_vector(8 downto 0);
 signal CRAM_Q_B		: std_logic_vector(8 downto 0);
 
-type vsram_t is array(0 to 39) of std_logic_vector(10 downto 0);
-signal VSRAM		: vsram_t;
+signal VSRAM0_ADDR_A    : std_logic_vector( 4 downto 0);
+signal VSRAM0_ADDR_B    : std_logic_vector( 4 downto 0);
+signal VSRAM0_D_A       : std_logic_vector(10 downto 0);
+signal VSRAM0_WE_A      : std_logic;
+signal VSRAM0_WE_B      : std_logic;
+signal VSRAM0_Q_A       : std_logic_vector(10 downto 0);
+signal VSRAM0_Q_B       : std_logic_vector(10 downto 0);
+
+signal VSRAM1_ADDR_A    : std_logic_vector( 4 downto 0);
+signal VSRAM1_ADDR_B    : std_logic_vector( 4 downto 0);
+signal VSRAM1_D_A       : std_logic_vector(10 downto 0);
+signal VSRAM1_WE_A      : std_logic;
+signal VSRAM1_WE_B      : std_logic;
+signal VSRAM1_Q_A       : std_logic_vector(10 downto 0);
+signal VSRAM1_Q_B       : std_logic_vector(10 downto 0);
+
 ----------------------------------------------------------------
 -- CPU INTERFACE
 ----------------------------------------------------------------
@@ -254,7 +268,9 @@ type dtc_t is (
 	DTC_CRAM_RD,
 	DTC_CRAM_RD1,
 	DTC_CRAM_RD2,
-	DTC_VSRAM_RD
+	DTC_VSRAM_RD,
+	DTC_VSRAM_RD2,
+	DTC_VSRAM_RD3
 );
 signal DTC	: dtc_t;
 
@@ -407,6 +423,8 @@ signal BGEN_ACTIVATE	: std_logic;
 type bgbc_t is (
 	BGBC_INIT,
 	BGBC_GET_VSCROLL,
+	BGBC_GET_VSCROLL2,
+	BGBC_GET_VSCROLL3,
 	BGBC_CALC_Y,
 	BGBC_CALC_BASE,
 	BGBC_BASE_RD,
@@ -449,6 +467,8 @@ signal BGB_VSRAM1_LAST_READ : std_logic_vector(10 downto 0);
 type bgac_t is (
 	BGAC_INIT,
 	BGAC_GET_VSCROLL,
+	BGAC_GET_VSCROLL2,
+	BGAC_GET_VSCROLL3,
 	BGAC_CALC_Y,
 	BGAC_CALC_BASE,
 	BGAC_BASE_RD,
@@ -843,6 +863,42 @@ port map(
 );
 CRAM_WE_B <= '0';
 
+vsram0 : entity work.DualPortRAM
+generic map (
+	addrbits => 5,
+	databits => 11
+)
+port map(
+	address_a   => VSRAM0_ADDR_A,
+	address_b   => VSRAM0_ADDR_B,
+	clock       => CLK,
+	data_a      => VSRAM0_D_A,
+	data_b      => (others => '0'),
+	wren_a      => VSRAM0_WE_A,
+	wren_b      => VSRAM0_WE_B,
+	q_a         => VSRAM0_Q_A,
+	q_b         => VSRAM0_Q_B
+);
+VSRAM0_WE_B <= '0';
+
+vsram1 : entity work.DualPortRAM
+generic map (
+	addrbits => 5,
+	databits => 11
+)
+port map(
+	address_a   => VSRAM1_ADDR_A,
+	address_b   => VSRAM1_ADDR_B,
+	clock       => CLK,
+	data_a      => VSRAM1_D_A,
+	data_b      => (others => '0'),
+	wren_a      => VSRAM1_WE_A,
+	wren_b      => VSRAM1_WE_B,
+	q_a         => VSRAM1_Q_A,
+	q_b         => VSRAM1_Q_B
+);
+VSRAM1_WE_B <= '0';
+
 ----------------------------------------------------------------
 -- REGISTERS
 ----------------------------------------------------------------
@@ -1172,9 +1228,10 @@ begin
 	elsif rising_edge(CLK) then
 			case BGBC is
 			when BGBC_DONE =>
+				VSRAM1_ADDR_B <= (others => '0');
 				if HV_HCNT = H_INT_POS and HV_PIXDIV = 0 and VSCR = '0' then
-					BGB_VSRAM1_LATCH <= VSRAM(1);
-					BGB_VSRAM1_LAST_READ <= VSRAM(1);
+					BGB_VSRAM1_LATCH <= VSRAM1_Q_B;
+					BGB_VSRAM1_LAST_READ <= VSRAM1_Q_B;
 				end if;
 				BGB_SEL <= '0';
 				BGB_COLINFO_WE_A <= '0';
@@ -1210,11 +1267,21 @@ begin
 
 			when BGBC_GET_VSCROLL =>
 				BGB_COLINFO_WE_A <= '0';
+				if BGB_COL(5 downto 1) <= 19 then
+					VSRAM1_ADDR_B <= BGB_COL(5 downto 1);
+				else
+					VSRAM1_ADDR_B <= (others => '0');
+				end if;
+				BGBC <= BGBC_GET_VSCROLL2;
+
+			when BGBC_GET_VSCROLL2 =>
+				BGBC <= BGBC_GET_VSCROLL3;
+
+			when BGBC_GET_VSCROLL3 =>
 				if VSCR = '1' then
-					vscroll_index := BGB_COL(5 downto 1);
-					if vscroll_index <= 19 then
-						BGB_VSRAM1_LATCH <= VSRAM(CONV_INTEGER(vscroll_index & "1"));
-						BGB_VSRAM1_LAST_READ <= VSRAM(CONV_INTEGER(vscroll_index & "1"));
+					if BGB_COL(5 downto 1) <= 19 then
+						BGB_VSRAM1_LATCH <= VSRAM1_Q_B;
+						BGB_VSRAM1_LAST_READ <= VSRAM1_Q_B;
 					elsif H40 = '0' then
 						BGB_VSRAM1_LATCH <= (others => '0');
 					elsif VSCROLL_BUG = '1' then
@@ -1222,7 +1289,7 @@ begin
 						BGB_VSRAM1_LATCH <= BGB_VSRAM1_LAST_READ and BGA_VSRAM0_LAST_READ;
 					else
 						-- using VSRAM(1) sometimes looks better (Gynoug)
-						 BGB_VSRAM1_LATCH <= VSRAM(1);
+						BGB_VSRAM1_LATCH <= VSRAM1_Q_B;
 					end if;
 				end if;
 				BGBC <= BGBC_CALC_Y;
@@ -1438,10 +1505,11 @@ begin
 	elsif rising_edge(CLK) then
 			case BGAC is
 			when BGAC_DONE =>
+				VSRAM0_ADDR_B <= (others => '0');
 				if HV_HCNT = H_INT_POS and HV_PIXDIV = 0 then
 					if VSCR = '0' then
-						BGA_VSRAM0_LATCH <= VSRAM(0);
-						BGA_VSRAM0_LAST_READ <= VSRAM(0);
+						BGA_VSRAM0_LATCH <= VSRAM0_Q_B;
+						BGA_VSRAM0_LAST_READ <= VSRAM0_Q_B;
 					end if;
 					WRIGT_LATCH <= WRIGT;
 					WHP_LATCH <= WHP;
@@ -1492,11 +1560,21 @@ begin
 
 			when BGAC_GET_VSCROLL =>
 				BGA_COLINFO_WE_A <= '0';
+				if BGA_COL(5 downto 1) <= 19 then
+					VSRAM0_ADDR_B <= BGA_COL(5 downto 1);
+				else
+					VSRAM0_ADDR_B <= (others => '0');
+				end if;
+				BGAC <= BGAC_GET_VSCROLL2;
+
+			when BGAC_GET_VSCROLL2 =>
+				BGAC <= BGAC_GET_VSCROLL3;
+
+			when BGAC_GET_VSCROLL3 =>
 				if VSCR = '1' then
-					vscroll_index := BGA_COL(5 downto 1);
-					if vscroll_index <= 19 then
-						BGA_VSRAM0_LATCH <= VSRAM(CONV_INTEGER(vscroll_index & '0'));
-						BGA_VSRAM0_LAST_READ <= VSRAM(CONV_INTEGER(vscroll_index & '0'));
+					if BGA_COL(5 downto 1) <= 19 then
+						BGA_VSRAM0_LATCH <= VSRAM0_Q_B;
+						BGA_VSRAM0_LAST_READ <= VSRAM0_Q_B;
 					elsif H40 = '0' then
 						BGA_VSRAM0_LATCH <= (others => '0');
 					elsif VSCROLL_BUG = '1' then
@@ -1504,7 +1582,7 @@ begin
 						BGA_VSRAM0_LATCH <= BGA_VSRAM0_LAST_READ and BGB_VSRAM1_LAST_READ;
 					else
 						-- using VSRAM(0) sometimes looks better (Gynoug)
-						BGA_VSRAM0_LATCH <= VSRAM(0);
+						BGA_VSRAM0_LATCH <= VSRAM0_Q_B;
 					end if;
 				end if;
 				BGAC <= BGAC_CALC_Y;
@@ -2818,7 +2896,6 @@ begin
 	if RST_N = '0' then
 
 		REG <= (others => (others => '0'));
-		VSRAM <= (others => (others => '0'));
 
 		ADDR <= (others => '0');
 		ADDR_SET_ACK <= '0';
@@ -3007,11 +3084,21 @@ begin
 				writeline(F,L);									
 -- synthesis translate_on
 				if DT_WR_ADDR(6 downto 1) < 40 then
-					VSRAM( CONV_INTEGER(DT_WR_ADDR(6 downto 1)) ) <= DT_WR_DATA(10 downto 0);
+					if DT_WR_ADDR(1) = '0' then
+						VSRAM0_WE_A <= '1';
+						VSRAM0_ADDR_A <= DT_WR_ADDR(6 downto 2);
+						VSRAM0_D_A <= DT_WR_DATA(10 downto 0);
+					else
+						VSRAM1_WE_A <= '1';
+						VSRAM1_ADDR_A <= DT_WR_ADDR(6 downto 2);
+						VSRAM1_D_A <= DT_WR_DATA(10 downto 0);
+					end if;
 				end if;
 				DTC <= DTC_WR_END;
 
 			when DTC_WR_END =>
+				VSRAM0_WE_A <= '0';
+				VSRAM1_WE_A <= '0';
 				if DMA_FILL = '1' then
 					DMAF_SET_REQ <= '1';
 				end if;
@@ -3062,10 +3149,22 @@ begin
 				DT_RD_DTACK_N <= '0';
 				ADDR <= ADDR + ADDR_STEP;	
 				DTC <= DTC_IDLE;
-				
+
 			when DTC_VSRAM_RD =>
+				VSRAM0_ADDR_A <= ADDR(6 downto 2);
+				VSRAM1_ADDR_A <= ADDR(6 downto 2);
+				DTC <= DTC_VSRAM_RD2;
+
+			when DTC_VSRAM_RD2 =>
+				DTC <= DTC_VSRAM_RD3;
+
+			when DTC_VSRAM_RD3 =>
 				if ADDR(6 downto 1) < 40 then
-					DT_RD_DATA <= FIFO_DATA( CONV_INTEGER( FIFO_RD_POS ) )(15 downto 11) & VSRAM( CONV_INTEGER(ADDR(6 downto 1)) );
+					if ADDR(1) = '0' then
+						DT_RD_DATA <= FIFO_DATA( CONV_INTEGER( FIFO_RD_POS ) )(15 downto 11) & VSRAM0_Q_A;
+					else
+						DT_RD_DATA <= FIFO_DATA( CONV_INTEGER( FIFO_RD_POS ) )(15 downto 11) & VSRAM1_Q_A;
+					end if;
 				elsif ADDR(1) = '0' then
 					DT_RD_DATA <= FIFO_DATA( CONV_INTEGER( FIFO_RD_POS ) )(15 downto 11) & BGA_VSRAM0_LATCH;
 				else
@@ -3162,7 +3261,15 @@ begin
 			when DMA_FILL_VSRAM =>
 				if VRAM_SPEED = '0' or FIFO_EN = '1' then
 					if ADDR(6 downto 1) < 40 then
-						VSRAM( CONV_INTEGER(ADDR(6 downto 1)) ) <= DT_DMAF_DATA(10 downto 0);
+						if ADDR(1) = '0' then
+							VSRAM0_WE_A <= '1';
+							VSRAM0_ADDR_A <= ADDR(6 downto 2);
+							VSRAM0_D_A <= DT_DMAF_DATA(10 downto 0);
+						else
+							VSRAM1_WE_A <= '1';
+							VSRAM1_ADDR_A <= ADDR(6 downto 2);
+							VSRAM1_D_A <= DT_DMAF_DATA(10 downto 0);
+						end if;
 					end if;
 					DMAC <= DMA_FILL_NEXT;
 				end if;
@@ -3203,6 +3310,8 @@ begin
 				end if;
 
 			when DMA_FILL_NEXT =>
+				VSRAM0_WE_A <= '0';
+				VSRAM1_WE_A <= '0';
 				ADDR <= ADDR + ADDR_STEP;
 				DMA_SOURCE <= DMA_SOURCE + ADDR_STEP;
 				DMA_LENGTH <= DMA_LENGTH - 1;

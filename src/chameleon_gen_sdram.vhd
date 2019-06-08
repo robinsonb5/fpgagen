@@ -100,6 +100,11 @@ entity chameleon_sdram is
 		vram_u_n : in std_logic;
 		vram_l_n : in std_logic;
 
+		vram32_req : in std_logic;
+		vram32_ack : out std_logic;
+		vram32_a   : in std_logic_vector((colAddrBits+rowAddrBits+2) downto 1);
+		vram32_q   : out std_logic_vector(31 downto 0);
+
 --GE Temporary
 		initDone : out std_logic;
 -- Debug ports
@@ -128,6 +133,7 @@ architecture rtl of chameleon_sdram is
 		RAM_READ_1,
 		RAM_READ_CACHE_FILL,
 		RAM_READ_TERMINATE_BURST,
+		RAM_READ_TERMINATE_BURST2,
 		RAM_READ_2,
 		RAM_READ_3,
 		RAM_READ_4,
@@ -144,6 +150,7 @@ architecture rtl of chameleon_sdram is
 		PORT_ROMWR,
 		PORT_RAM68K,
 		PORT_VRAM,
+		PORT_VRAM32,
 		PORT_SRAM
 	);
 
@@ -172,12 +179,14 @@ architecture rtl of chameleon_sdram is
 	signal romrd_ackReg : std_logic := '0';
 	signal ram68k_ackReg : std_logic := '0';
 	signal vram_ackReg : std_logic := '0';
+	signal vram32_ackReg : std_logic := '0';
 	signal sram_ackReg : std_logic := '0';
 
 	signal romwr_qReg : std_logic_vector(15 downto 0);
 	signal romrd_qReg : std_logic_vector(63 downto 0);
 	signal ram68k_qReg : std_logic_vector(15 downto 0);
 	signal vram_qReg : std_logic_vector(15 downto 0);
+	signal vram32_qReg : std_logic_vector(31 downto 0);
 	signal sram_qReg : std_logic_vector(15 downto 0);
 
 	signal initDoneReg : std_logic := '0';
@@ -252,29 +261,29 @@ architecture rtl of chameleon_sdram is
 	END COMPONENT;
 begin
 
-	mytwc : component TwoWayCache
-	PORT map (
-		clk => clk,
-		reset_n => reset_n,
-		ready => cache_ready,
-		cpu_addr(31 downto colAddrBits+rowAddrBits+3) => (others => '0'),
-		cpu_addr(colAddrBits+rowAddrBits+2 downto 0) => vram_a&'0',
-		cpu_req => cache_req,
-		cpu_ack => cache_ack,
-		cpu_cachevalid => cache_valid,
-		cpu_rw_n => not vram_we,
-		cpu_rwl_n => vram_l_n,
-		cpu_rwu_n => vram_u_n,
-		data_from_cpu => vram_d,
-		data_to_cpu => cache_q,--vram_q,
-		data_from_sdram => ram_data_reg,
-		sdram_req => cache_sdram_req,
-		sdram_fill => cache_fill
-	);
-	cache_req <= '1' when (vram_req /= vram_ackReg) and (currentPort /= PORT_VRAM) and cache_ack = '0' else '0';
-
-	debugvram_q <= vram_qReg;
-	debugcache_q <= cache_q;
+--	mytwc : component TwoWayCache
+--	PORT map (
+--		clk => clk,
+--		reset_n => reset_n,
+--		ready => cache_ready,
+--		cpu_addr(31 downto colAddrBits+rowAddrBits+3) => (others => '0'),
+--		cpu_addr(colAddrBits+rowAddrBits+2 downto 0) => vram_a&'0',
+--		cpu_req => cache_req,
+--		cpu_ack => cache_ack,
+--		cpu_cachevalid => cache_valid,
+--		cpu_rw_n => not vram_we,
+--		cpu_rwl_n => vram_l_n,
+--		cpu_rwu_n => vram_u_n,
+--		data_from_cpu => vram_d,
+--		data_to_cpu => cache_q,--vram_q,
+--		data_from_sdram => ram_data_reg,
+--		sdram_req => cache_sdram_req,
+--		sdram_fill => cache_fill
+--	);
+--	cache_req <= '1' when (vram_req /= vram_ackReg) and (currentPort /= PORT_VRAM) and cache_ack = '0' else '0';
+--
+--	debugvram_q <= vram_qReg;
+--	debugcache_q <= cache_q;
 -- -----------------------------------------------------------------------
 
 	ram_data_reg <= sd_data;
@@ -305,6 +314,7 @@ begin
 		romwr_a, romwr_we, romwr_req, romwr_ackReg,
 		ram68k_a, ram68k_we, ram68k_req, ram68k_ackReg, ram68k_l_n, ram68k_u_n,
 		vram_a, vram_we, vram_req, vram_ackReg, vram_l_n, vram_u_n,
+		vram32_req,vram32_ackReg, vram32_a,
 		sram_a, sram_we, sram_req, sram_ackReg, sram_l_n, sram_u_n)
 	begin
 		--if rising_edge(clk) then
@@ -357,7 +367,8 @@ begin
 				nextRamCol <= ram68k_a(addr_colbits);
 				nextLdqm <= ram68k_l_n;
 				nextUdqm <= ram68k_u_n;
-			elsif (vram_req /= vram_ackReg) and (currentPort /= PORT_VRAM) and (vram_we = '1' or cache_sdram_req = '1') then
+--			elsif (vram_req /= vram_ackReg) and (currentPort /= PORT_VRAM) and (vram_we = '1' or cache_sdram_req = '1') then
+			elsif (vram_req /= vram_ackReg) and (currentPort /= PORT_VRAM) then
 				nextRamState <= RAM_READ_1;
 				if vram_we = '1' then
 					nextRamState <= RAM_WRITE_1;
@@ -368,6 +379,14 @@ begin
 				nextRamCol <= vram_a(addr_colbits);
 				nextLdqm <= vram_l_n;
 				nextUdqm <= vram_u_n;
+			elsif (vram32_req /= vram32_ackReg) and (currentPort /= PORT_VRAM32) then
+				nextRamState <= RAM_READ_1;
+				nextRamPort <= PORT_VRAM32;
+				nextRamBank <= vram32_a(addr_bankbits);
+				nextRamRow <= vram32_a(addr_rowbits);
+				nextRamCol <= vram32_a(addr_colbits);
+				nextLdqm <= '0';
+				nextUdqm <= '0';
 			end if;
 		--end if;
 	end process;
@@ -523,12 +542,15 @@ begin
 					bankActive(to_integer(unsigned(currentBank))) <= '1';
 
 				when RAM_READ_1 =>
-					if currentPort = PORT_VRAM then
-						ramTimer <= casLatency;
-						ramState <= RAM_READ_CACHE_FILL;
-					elsif currentPort = PORT_ROMRD then
+--					if currentPort = PORT_VRAM then
+--						ramTimer <= casLatency;
+--						ramState <= RAM_READ_CACHE_FILL;
+					if currentPort = PORT_ROMRD then
 						ramTimer <= casLatency + 1;
 						ramState <= RAM_READ_2;
+					elsif currentPort = PORT_VRAM32 then
+						ramTimer <= 1;
+						ramState <= RAM_READ_TERMINATE_BURST2;
 					else
 						ramState <= RAM_READ_TERMINATE_BURST;
 					end if;
@@ -547,8 +569,14 @@ begin
 					ramTimer <= casLatency;
 					ramState <= RAM_READ_2;
 
+				when RAM_READ_TERMINATE_BURST2 =>
+					sd_we_n_reg <= '0';
+					ramTimer <= casLatency - 1;
+					ramState <= RAM_READ_2;
+
 				when RAM_READ_2 =>
-					if currentPort = PORT_ROMRD or currentPort = PORT_VRAM then
+--					if currentPort = PORT_ROMRD or currentPort = PORT_VRAM or currentPort = PORT_VRAM32 then
+					if currentPort = PORT_ROMRD or currentPort = PORT_VRAM32 then
 						ramState <= RAM_READ_3;
 					else
 						ramDone <='1';
@@ -572,6 +600,10 @@ begin
 				when RAM_READ_3 =>
 					ramState <= RAM_READ_4;
 					currentRdData(31 downto 16) <= ram_data_reg;
+					if currentPort = PORT_VRAM32 then
+						ramDone <= '1';
+						ramState <= RAM_IDLE;
+					end if;
 
 				when RAM_READ_4 =>
 					ramState <= RAM_READ_5;
@@ -630,17 +662,17 @@ begin
 	process(clk)
 	begin
 		if rising_edge(clk) then
-			if (currentPort = PORT_VRAM and ((vram_we='1' and ramDone = '1') or (vram_we='0' and cache_ack = '1')))
-			or (cache_valid = '1' and cache_ack = '1' and vram_we = '0')
-			--if (currentPort = PORT_VRAM and ramDone = '1')
+--			if (currentPort = PORT_VRAM and ((vram_we='1' and ramDone = '1') or (vram_we='0' and cache_ack = '1')))
+--			or (cache_valid = '1' and cache_ack = '1' and vram_we = '0')
+			if (currentPort = PORT_VRAM and ramDone = '1')
 			then
 				vram_ackReg <= vram_req;
 			end if;
 		end if;
 	end process;
 	vram_ack <= vram_ackReg;
-	vram_q <= cache_q;
---	vram_q <= vram_qReg;
+--	vram_q <= cache_q;
+	vram_q <= vram_qReg;
 
 
 	process(clk)
@@ -667,6 +699,19 @@ begin
 	end process;
 	romrd_ack <= romrd_ackReg;
 	romrd_q <= romrd_qReg; --GE
+
+	process(clk)
+	begin
+		if rising_edge(clk) then
+			if currentPort = PORT_VRAM32
+			and ramDone = '1' then
+				vram32_ackReg <= not vram32_ackReg;
+				vram32_qReg <= currentRdData(31 downto 0);
+			end if;
+		end if;
+	end process;
+	vram32_ack <= vram32_ackReg;
+	vram32_q <= vram32_qReg;
 
 	process(clk)
 	begin

@@ -184,6 +184,11 @@ signal vram_q : std_logic_vector(15 downto 0);
 signal vram_l_n : std_logic;
 signal vram_u_n : std_logic;
 
+signal vram32_req : std_logic;
+signal vram32_ack : std_logic;
+signal vram32_a   : std_logic_vector(15 downto 1);
+signal vram32_q   : std_logic_vector(31 downto 0);
+
 -- Z80 RAM
 signal zram_a : std_logic_vector(12 downto 0);
 signal zram_d : std_logic_vector(7 downto 0);
@@ -616,6 +621,11 @@ sdc : entity work.chameleon_sdram generic map (
 	vram_u_n => vram_u_n,
 	vram_l_n => vram_l_n,
 
+	vram32_req => vram32_req,
+	vram32_ack => vram32_ack,
+	vram32_a   => conv_std_logic_vector(2#110000000#, addrwidth - 15) & vram32_a,
+	vram32_q   => vram32_q,
+
 	initDone 	=> SDR_INIT_DONE
 );
 
@@ -790,7 +800,12 @@ port map(
 	vram_q	=> vram_q,
 	vram_u_n	=> vram_u_n,
 	vram_l_n	=> vram_l_n,
-	
+
+	vram32_req => vram32_req,
+	vram32_ack => vram32_ack,
+	vram32_a   => vram32_a,
+	vram32_q   => vram32_q,
+
 	HINT			=> HINT,
 	VINT_TG68		=> VINT_FX68,
 	VINT_T80			=> VINT_T80,

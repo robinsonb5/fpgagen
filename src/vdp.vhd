@@ -1277,7 +1277,7 @@ begin
 					write(L, string'(" BASE_RD ["));
 					hwrite(L, BGB_VRAM_ADDR & '0');					
 					write(L, string'("] = ["));
-					hwrite(L, BGB_VRAM_DO);
+					hwrite(L, BGB_VRAM32_DO);
 					write(L, string'("]"));
 					writeline(F,L);									
 -- synthesis translate_on
@@ -1388,6 +1388,7 @@ begin
 						else
 							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO( 3 downto  0);
 						end if;
+					when others => null;
 					end case;
 					BGB_X <= (BGB_X + 1) and hscroll_mask;
 					BGB_POS <= BGB_POS + 1;
@@ -1564,7 +1565,7 @@ begin
 					write(L, string'(" BASE_RD ["));
 					hwrite(L, BGA_VRAM_ADDR & '0');					
 					write(L, string'("] = ["));
-					hwrite(L, BGA_VRAM_DO);
+					hwrite(L, BGA_VRAM32_DO);
 					write(L, string'("]"));
 					writeline(F,L);									
 -- synthesis translate_on											
@@ -1616,7 +1617,7 @@ begin
 					write(L, string'(" TILE_RD ["));
 					hwrite(L, BGA_VRAM_ADDR & '0');
 					write(L, string'("] = ["));
-					hwrite(L, BGA_VRAM_DO);
+					hwrite(L, BGA_VRAM32_DO);
 					write(L, string'("]"));
 					writeline(F,L);
 -- synthesis translate_on
@@ -1695,6 +1696,7 @@ begin
 							else
 								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM32_DO( 3 downto  0);
 							end if;
+						when others => null;
 					end case;
 
 					BGA_X <= (BGA_X + 1) and hscroll_mask;

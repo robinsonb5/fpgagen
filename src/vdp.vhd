@@ -109,7 +109,6 @@ end vdp;
 
 architecture rtl of vdp is
 
-signal vram_req_reg : std_logic;
 signal vram_a_reg	: std_logic_vector(16 downto 1);
 
 signal vram32_req_reg : std_logic;
@@ -283,16 +282,14 @@ type dmac_t is (
 );
 signal DMAC	: dmac_t;
 
-signal DT_VRAM_SEL		: std_logic;
-signal DT_VRAM_SEL_D	: std_logic;
-signal DT_VRAM_ADDR		: std_logic_vector(16 downto 1);
-signal DT_VRAM_DI		: std_logic_vector(15 downto 0);
-signal DT_VRAM_DO		: std_logic_vector(15 downto 0);
-signal DT_VRAM_DO_REG		: std_logic_vector(15 downto 0);
-signal DT_VRAM_RNW		: std_logic;
-signal DT_VRAM_UDS_N	: std_logic;
-signal DT_VRAM_LDS_N	: std_logic;
-signal DT_VRAM_DTACK_N	: std_logic;
+signal DT_VRAM_SEL      : std_logic;
+signal DT_VRAM_SEL_D    : std_logic;
+signal DT_VRAM_ADDR     : std_logic_vector(16 downto 1);
+signal DT_VRAM_DI       : std_logic_vector(15 downto 0);
+signal DT_VRAM_DO       : std_logic_vector(15 downto 0);
+signal DT_VRAM_RNW      : std_logic;
+signal DT_VRAM_UDS_N    : std_logic;
+signal DT_VRAM_LDS_N    : std_logic;
 
 signal DT_WR_ADDR	: std_logic_vector(16 downto 0);
 signal DT_WR_DATA	: std_logic_vector(15 downto 0);
@@ -375,13 +372,6 @@ signal V30_R           : std_logic;
 ----------------------------------------------------------------
 -- VRAM CONTROLLER
 ----------------------------------------------------------------
-
-type vmc_t is (
-	VMC_IDLE,
-	VMC_DT
-);
-signal VMC	: vmc_t := VMC_IDLE;
-signal VMC_NEXT : vmc_t := VMC_IDLE;
 
 signal early_ack_dt : std_logic;
 
@@ -1119,78 +1109,17 @@ begin
 	end if;
 end process;
 
+-- 16 bit interface for data transfer
 
-vram_req <= vram_req_reg;
-
+vram_req <= DT_VRAM_SEL;
 vram_d <= DT_VRAM_DI when M128 = '0' else DT_VRAM_DI(7 downto 0) & DT_VRAM_DI(7 downto 0);
-vram_we <= not DT_VRAM_RNW when VMC=VMC_DT else '0';
-vram_u_n <= (DT_VRAM_UDS_N or M128) and (not vram_a_reg(1) or not M128) when VMC=VMC_DT else '0';
-vram_l_n <= (DT_VRAM_LDS_N or M128) and (vram_a_reg(1) or not M128) when VMC=VMC_DT else '0';
+vram_we <= not DT_VRAM_RNW;
+vram_u_n <= (DT_VRAM_UDS_N or M128) and (not vram_a_reg(1) or not M128);
+vram_l_n <= (DT_VRAM_LDS_N or M128) and (vram_a_reg(1) or not M128);
 vram_a <= vram_a_reg(15 downto 1) when M128 = '0' else vram_a_reg(16 downto 11) & vram_a_reg(9 downto 2) & vram_a_reg(10);
-
-early_ack_dt <= '0' when VMC=VMC_DT and vram_req_reg=vram_ack else '1';
-
-DT_VRAM_DO <= vram_q when early_ack_dt='0' and DT_VRAM_DTACK_N = '1' else DT_VRAM_DO_REG;
-
-
-process( RST_N, CLK,
-	DT_VRAM_SEL, DT_VRAM_DTACK_N,
-	early_ack_dt)
--- synthesis translate_off
-file F		: text open write_mode is "vram_dbg.out";
-variable L	: line;
--- synthesis translate_on
-begin
-	if RST_N = '0' then
-		
-		DT_VRAM_DTACK_N <= '1';
-
-		vram_req_reg <= '0';
-		
-		VMC<=VMC_IDLE;
-		VMC_NEXT<=VMC_IDLE;
-	else
-
-		-- Priority encoder for next port...
-		VMC_NEXT<=VMC_IDLE;
-		if DT_VRAM_SEL = '1' and DT_VRAM_DTACK_N = '1' and early_ack_dt='1' then
-			VMC_NEXT <= VMC_DT;
-		end if;
-
-	if rising_edge(CLK) then
-	
-		if DT_VRAM_SEL = '0' then 
-			DT_VRAM_DTACK_N <= '1';
-		end if;
-
-		if vram_req_reg = vram_ack then
-			VMC <= VMC_NEXT;
-			case VMC_NEXT is
-				when VMC_IDLE =>
-					null;
-				when VMC_DT =>
-					vram_a_reg <= DT_VRAM_ADDR;
-			end case;
-			if VMC_NEXT /= VMC_IDLE then
-				vram_req_reg <= not vram_req_reg;
-			end if;
-		end if;
-		
-		case VMC is
-		when VMC_IDLE =>
-			null;
-
-		when VMC_DT =>		-- DATA TRANSFER
-			if vram_req_reg = vram_ack then
-				DT_VRAM_DO_REG <= vram_q;
-				DT_VRAM_DTACK_N <= '0';
-			end if;
-
-		when others => null;
-		end case;
-	end if;
-	end if;
-end process;
+vram_a_reg <= DT_VRAM_ADDR;
+early_ack_dt <= '0' when DT_VRAM_SEL=vram_ack else '1';
+DT_VRAM_DO <= vram_q;
 
 ----------------------------------------------------------------
 -- HSCROLL READ
@@ -1824,7 +1753,7 @@ begin
 
 		cache_addr := DT_VRAM_ADDR(16 downto 3) - (SATB & "000000");
 		DT_VRAM_SEL_D <= DT_VRAM_SEL;
-		if DT_VRAM_SEL_D = '0' and DT_VRAM_SEL = '1' and DT_VRAM_RNW = '0' and
+		if DT_VRAM_SEL_D /= DT_VRAM_SEL and DT_VRAM_RNW = '0' and
 		   DT_VRAM_ADDR(2) = '0' and cache_addr < OBJ_MAX_FRAME
 		then
 			if DT_VRAM_ADDR(1) = '0' then
@@ -1840,6 +1769,7 @@ begin
 				OBJ_CACHE_SL_D <= DT_VRAM_DI;
 			end if;
 		end if;
+
 	end if;
 end process;
 
@@ -3033,7 +2963,7 @@ begin
 				write(L, string'("]"));
 				writeline(F,L);									
 -- synthesis translate_on								
-				DT_VRAM_SEL <= '1';
+				DT_VRAM_SEL <= not DT_VRAM_SEL;
 				DT_VRAM_RNW <= '0';
 				DT_VRAM_ADDR <= DT_WR_ADDR(16 downto 1);
 				DT_VRAM_UDS_N <= '0';
@@ -3048,7 +2978,6 @@ begin
 
 			when DTC_VRAM_WR2 =>
 				if early_ack_dt='0' then
-					DT_VRAM_SEL <= '0';	
 					DTC <= DTC_WR_END;
 				end if;
 
@@ -3087,7 +3016,7 @@ begin
 				DTC <= DTC_IDLE;
 
 			when DTC_VRAM_RD1 =>
-				DT_VRAM_SEL <= '1';
+				DT_VRAM_SEL <= not DT_VRAM_SEL;
 				DT_VRAM_ADDR <= '0'&ADDR(15 downto 1);
 				DT_VRAM_RNW <= '1';
 				DT_VRAM_UDS_N <= '0';
@@ -3096,7 +3025,6 @@ begin
 			
 			when DTC_VRAM_RD2 =>
 				if early_ack_dt='0' then
-					DT_VRAM_SEL <= '0';
 					if DT_RD_CODE = "1100" then
 						-- VRAM 8 bit read - unused bits come from the next FIFO entry
 						if ADDR(0) = '0' then
@@ -3253,7 +3181,7 @@ begin
 					write(L, string'("]"));
 					writeline(F,L);
 -- synthesis translate_on					
-					DT_VRAM_SEL <= '1';
+					DT_VRAM_SEL <= not DT_VRAM_SEL;
 					DT_VRAM_ADDR <= '0'&ADDR(15 downto 1);
 					DT_VRAM_RNW <= '0';
 					DT_VRAM_DI <= DT_DMAF_DATA(15 downto 8) & DT_DMAF_DATA(15 downto 8);
@@ -3269,7 +3197,6 @@ begin
 
 			when DMA_FILL_WR2 =>
 				if early_ack_dt='0' then
-					DT_VRAM_SEL <= '0';	
 					DMAC <= DMA_FILL_NEXT;
 				end if;
 
@@ -3315,7 +3242,7 @@ begin
 				DMAC <= DMA_COPY_RD;
 				
 			when DMA_COPY_RD =>
-				DT_VRAM_SEL <= '1';
+				DT_VRAM_SEL <= not DT_VRAM_SEL;
 				DT_VRAM_ADDR <= '0'&DMA_SOURCE(15 downto 1);
 				DT_VRAM_RNW <= '1';
 				DT_VRAM_UDS_N <= '0';
@@ -3338,7 +3265,6 @@ begin
 					write(L, string'("]"));
 					writeline(F,L);									
 -- synthesis translate_on									
-					DT_VRAM_SEL <= '0';	
 					DMAC <= DMA_COPY_WR;
 				end if;
 
@@ -3357,7 +3283,7 @@ begin
 					write(L, string'("]"));
 					writeline(F,L);									
 -- synthesis translate_on									
-				DT_VRAM_SEL <= '1';
+				DT_VRAM_SEL <= not DT_VRAM_SEL;
 				DT_VRAM_ADDR <= '0'&ADDR(15 downto 1);
 				DT_VRAM_RNW <= '0';
 				if DMA_SOURCE(0) = '0' then
@@ -3376,7 +3302,6 @@ begin
 
 			when DMA_COPY_WR2 =>
 				if early_ack_dt='0' then
-					DT_VRAM_SEL <= '0';	
 					ADDR <= ADDR + ADDR_STEP;
 					DMA_LENGTH <= DMA_LENGTH - 1;
 					DMA_SOURCE <= DMA_SOURCE + 1;

@@ -11,7 +11,7 @@ FLAGS=--ieee=synopsys -fexplicit
 all: vdp_tb
 
 vdp_tb.o: vdp.o vram.o vram32.o video.o cpu.o
-vdp.o: DualPortRAM.o vdp_common.o
+vdp.o: DualPortRAM.o vdp_common.o obj_cache.o
 vram.o: vram_c.o
 video.o: video_c.o
 cpu.o: cpu_c.o

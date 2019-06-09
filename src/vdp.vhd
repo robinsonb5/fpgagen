@@ -516,29 +516,12 @@ signal WIN_H		: std_logic;
 signal OBJ_MAX_FRAME			: std_logic_vector(6 downto 0);
 signal OBJ_MAX_LINE			: std_logic_vector(6 downto 0);
 
-signal OBJ_CACHE_Y_L_D		: std_logic_vector(7 downto 0);
-signal OBJ_CACHE_Y_L_WE		: std_logic;
-signal OBJ_CACHE_Y_L_Q		: std_logic_vector(7 downto 0);
-signal OBJ_CACHE_Y_H_D		: std_logic_vector(7 downto 0);
-signal OBJ_CACHE_Y_H_WE		: std_logic;
-signal OBJ_CACHE_Y_H_Q		: std_logic_vector(7 downto 0);
-
-signal OBJ_CACHE_Y_D		: std_logic_vector(15 downto 0);
-signal OBJ_CACHE_Y_ADDR_RD	: std_logic_vector(6 downto 0);
-signal OBJ_CACHE_Y_ADDR_WR	: std_logic_vector(6 downto 0);
-signal OBJ_CACHE_Y_Q		: std_logic_vector(15 downto 0);
-
-signal OBJ_CACHE_SL_L_D		: std_logic_vector(7 downto 0);
-signal OBJ_CACHE_SL_L_WE	: std_logic;
-signal OBJ_CACHE_SL_L_Q		: std_logic_vector(7 downto 0);
-signal OBJ_CACHE_SL_H_D		: std_logic_vector(7 downto 0);
-signal OBJ_CACHE_SL_H_WE	: std_logic;
-signal OBJ_CACHE_SL_H_Q		: std_logic_vector(7 downto 0);
-
-signal OBJ_CACHE_SL_D		: std_logic_vector(15 downto 0);
-signal OBJ_CACHE_SL_ADDR_RD	: std_logic_vector(6 downto 0);
-signal OBJ_CACHE_SL_ADDR_WR	: std_logic_vector(6 downto 0);
-signal OBJ_CACHE_SL_Q		: std_logic_vector(15 downto 0);
+signal OBJ_CACHE_ADDR_RD    : std_logic_vector(6 downto 0);
+signal OBJ_CACHE_ADDR_WR    : std_logic_vector(6 downto 0);
+signal OBJ_CACHE_D          : std_logic_vector(31 downto 0);
+signal OBJ_CACHE_Q          : std_logic_vector(31 downto 0);
+signal OBJ_CACHE_BE         : std_logic_vector(3 downto 0);
+signal OBJ_CACHE_WE         : std_logic_vector(1 downto 0);
 
 signal OBJ_VISINFO_ADDR_RD	: std_logic_vector(4 downto 0);
 signal OBJ_VISINFO_ADDR_WR	: std_logic_vector(4 downto 0);
@@ -735,81 +718,18 @@ OBJ_COLINFO_WE_A <= '0';
 OBJ_COLINFO_WE_B <= OBJ_COLINFO_WE_SP3 when SP3C /= SP3C_DONE else OBJ_COLINFO_WE_REND;
 OBJ_COLINFO_D_B <= OBJ_COLINFO_D_SP3 when SP3C /= SP3C_DONE else OBJ_COLINFO_D_REND;
 
-obj_cache_y_l : entity work.DualPortRAM
-generic map (
-	addrbits	=> 7,
-	databits	=> 8
-)
+obj_cache : entity work.obj_cache
 port map(
-	clock		=> CLK,
-	data_a		=> (others => '0'),
-	data_b		=> OBJ_CACHE_Y_L_D,
-	address_a	=> OBJ_CACHE_Y_ADDR_RD,
-	address_b	=> OBJ_CACHE_Y_ADDR_WR,
-	wren_a		=> '0',
-	wren_b		=> OBJ_CACHE_Y_L_WE,
-	q_a			=> OBJ_CACHE_Y_L_Q,
-	q_b			=> open
- );
+	clock       => CLK,
+	rdaddress   => OBJ_CACHE_ADDR_RD,
+	q           => OBJ_CACHE_Q,
+	wraddress   => OBJ_CACHE_ADDR_WR,
+	data        => OBJ_CACHE_D,
+	wren        => OBJ_CACHE_WE(1),
+	byteena_a   => OBJ_CACHE_BE
+);
 
-obj_cache_y_h : entity work.DualPortRAM
-generic map (
-	addrbits	=> 7,
-	databits	=> 8
-)
-port map(
-	clock		=> CLK,
-	data_a		=> (others => '0'),
-	data_b		=> OBJ_CACHE_Y_H_D,
-	address_a	=> OBJ_CACHE_Y_ADDR_RD,
-	address_b	=> OBJ_CACHE_Y_ADDR_WR,
-	wren_a		=> '0',
-	wren_b		=> OBJ_CACHE_Y_H_WE,
-	q_a			=> OBJ_CACHE_Y_H_Q,
-	q_b			=> open
- );
-
-OBJ_CACHE_Y_L_D <= OBJ_CACHE_Y_D(7 downto 0);
-OBJ_CACHE_Y_H_D <= OBJ_CACHE_Y_D(15 downto 8);
-OBJ_CACHE_Y_Q <= OBJ_CACHE_Y_H_Q & OBJ_CACHE_Y_L_Q;
-
-obj_cache_sl_l : entity work.DualPortRAM
-generic map (
-	addrbits	=> 7,
-	databits	=> 8
-)
-port map(
-	clock		=> CLK,
-	data_a		=> (others => '0'),
-	data_b		=> OBJ_CACHE_SL_L_D,
-	address_a	=> OBJ_CACHE_SL_ADDR_RD,
-	address_b	=> OBJ_CACHE_SL_ADDR_WR,
-	wren_a		=> '0',
-	wren_b		=> OBJ_CACHE_SL_L_WE,
-	q_a			=> OBJ_CACHE_SL_L_Q,
-	q_b			=> open
- );
-
-obj_cache_sl_h : entity work.DualPortRAM
-generic map (
-	addrbits	=> 7,
-	databits	=> 8
-)
-port map(
-	clock		=> CLK,
-	data_a		=> (others => '0'),
-	data_b		=> OBJ_CACHE_SL_H_D,
-	address_a	=> OBJ_CACHE_SL_ADDR_RD,
-	address_b	=> OBJ_CACHE_SL_ADDR_WR,
-	wren_a		=> '0',
-	wren_b		=> OBJ_CACHE_SL_H_WE,
-	q_a			=> OBJ_CACHE_SL_H_Q,
-	q_b			=> open
- );
-
-OBJ_CACHE_SL_L_D <= OBJ_CACHE_SL_D(7 downto 0);
-OBJ_CACHE_SL_H_D <= OBJ_CACHE_SL_D(15 downto 8);
-OBJ_CACHE_SL_Q <= OBJ_CACHE_SL_H_Q & OBJ_CACHE_SL_L_Q;
+OBJ_CACHE_ADDR_RD <= OBJ_CACHE_ADDR_RD_SP1 when SP1C /= SP1C_DONE else OBJ_CACHE_ADDR_RD_SP2;
 
 obj_visinfo : entity work.DualPortRAM
 generic map (
@@ -1818,44 +1738,29 @@ process( RST_N, CLK )
 variable cache_addr: std_logic_vector(13 downto 0);
 begin
 	if RST_N = '0' then
-		OBJ_CACHE_Y_L_WE <= '0';
-		OBJ_CACHE_Y_H_WE <= '0';
-		OBJ_CACHE_Y_ADDR_WR <= (others => '0');
 
-		OBJ_CACHE_SL_L_WE <= '0';
-		OBJ_CACHE_SL_H_WE <= '0';
-		OBJ_CACHE_SL_ADDR_WR <= (others => '0');
+		OBJ_CACHE_ADDR_WR <= (others => '0');
+		OBJ_CACHE_WE <= "00";
+
 	elsif rising_edge(CLK) then
-		OBJ_CACHE_Y_L_WE <= '0';
-		OBJ_CACHE_Y_H_WE <= '0';
-		OBJ_CACHE_SL_L_WE <= '0';
-		OBJ_CACHE_SL_H_WE <= '0';
+
+		OBJ_CACHE_WE <= OBJ_CACHE_WE(0) & '0';
 
 		cache_addr := DT_VRAM_ADDR(16 downto 3) - (SATB & "000000");
 		DT_VRAM_SEL_D <= DT_VRAM_SEL;
 		if DT_VRAM_SEL_D /= DT_VRAM_SEL and DT_VRAM_RNW = '0' and
 		   DT_VRAM_ADDR(2) = '0' and cache_addr < OBJ_MAX_FRAME
 		then
-			if DT_VRAM_ADDR(1) = '0' then
-				OBJ_CACHE_Y_L_WE <= not DT_VRAM_LDS_N;
-				OBJ_CACHE_Y_H_WE <= not DT_VRAM_UDS_N;
-				OBJ_CACHE_Y_ADDR_WR <= cache_addr(6 downto 0);
-				OBJ_CACHE_Y_D <= DT_VRAM_DI;
-			end if;
-			if DT_VRAM_ADDR(1) = '1' then
-				OBJ_CACHE_SL_ADDR_WR <= cache_addr(6 downto 0);
-				OBJ_CACHE_SL_L_WE <= not DT_VRAM_LDS_N;
-				OBJ_CACHE_SL_H_WE <= not DT_VRAM_UDS_N;
-				OBJ_CACHE_SL_D <= DT_VRAM_DI;
-			end if;
+			OBJ_CACHE_ADDR_WR <= cache_addr(6 downto 0);
+			OBJ_CACHE_D <= DT_VRAM_DI & DT_VRAM_DI;
+			OBJ_CACHE_BE(3) <= DT_VRAM_ADDR(1) and not DT_VRAM_UDS_N;
+			OBJ_CACHE_BE(2) <= DT_VRAM_ADDR(1) and not DT_VRAM_LDS_N;
+			OBJ_CACHE_BE(1) <= not DT_VRAM_ADDR(1) and not DT_VRAM_UDS_N;
+			OBJ_CACHE_BE(0) <= not DT_VRAM_ADDR(1) and not DT_VRAM_LDS_N;
+			OBJ_CACHE_WE <= "01";
 		end if;
-
 	end if;
 end process;
-
-
-OBJ_CACHE_SL_ADDR_RD <= OBJ_CACHE_ADDR_RD_SP1 when SP1C /= SP1C_DONE else OBJ_CACHE_ADDR_RD_SP2;
-OBJ_CACHE_Y_ADDR_RD <= OBJ_CACHE_ADDR_RD_SP1 when SP1C /= SP1C_DONE else OBJ_CACHE_ADDR_RD_SP2;
 
 ----------------------------------------------------------------
 -- SPRITE ENGINE - PART ONE
@@ -1905,14 +1810,14 @@ begin
 
 			when SP1C_Y_RD3 =>
 				if LSM = "11" then
-					y_offset := "0100000000" + SP1_Y - OBJ_CACHE_Y_Q(9 downto 0);
+					y_offset := "0100000000" + SP1_Y - OBJ_CACHE_Q(9 downto 0);
 					OBJ_Y_OFS <= y_offset(9 downto 1);
 				else
-					y_offset := "0010000000" + SP1_Y - ('0' & OBJ_CACHE_Y_Q(8 downto 0));
+					y_offset := "0010000000" + SP1_Y - ('0' & OBJ_CACHE_Q(8 downto 0));
 					OBJ_Y_OFS <= y_offset(8 downto 0);
 				end if;
-				OBJ_VS1 <= OBJ_CACHE_SL_Q(9 downto 8);
-				OBJ_LINK <= OBJ_CACHE_SL_Q(6 downto 0);
+				OBJ_VS1 <= OBJ_CACHE_Q(25 downto 24);
+				OBJ_LINK <= OBJ_CACHE_Q(22 downto 16);
 				SP1C <= SP1C_Y_TST;
 
 			when SP1C_Y_TST =>
@@ -1930,7 +1835,7 @@ begin
 				write(L, string'("OBJ ID="));
 				hwrite(L, "0" & OBJ_NEXT);
 				write(L, string'(" Y = "));
-				hwrite(L, "000000" & OBJ_CACHE_Y_Q(9 downto 0));
+				hwrite(L, "000000" & OBJ_CACHE_Q(9 downto 0));
 				write(L, string'(" VS = "));
 				hwrite(L, "000000" & OBJ_VS1);
 				write(L, string'(" LINK = "));
@@ -2033,15 +1938,15 @@ begin
 				SP2C <= SP2C_Y_RD4;
 			when SP2C_Y_RD4 =>
 				if LSM = "11" then
-					y_offset := "0100000000" + SP2_Y - OBJ_CACHE_Y_Q(9 downto 0);
+					y_offset := "0100000000" + SP2_Y - OBJ_CACHE_Q(9 downto 0);
 				else
-					y_offset := "0010000000" + SP2_Y - ('0' & OBJ_CACHE_Y_Q(8 downto 0));
+					y_offset := "0010000000" + SP2_Y - ('0' & OBJ_CACHE_Q(8 downto 0));
 				end if;
 				--save only the last 5(6 in doubleres) bits of the offset for part 3
 				--Titan 2 textured cube (ab)uses this
 				OBJ_SPINFO_D(5 downto 0) <= y_offset(5 downto 0); --Y offset
-				OBJ_SPINFO_D(7 downto 6) <= OBJ_CACHE_SL_Q(9 downto 8); --VS
-				OBJ_SPINFO_D(9 downto 8) <= OBJ_CACHE_SL_Q(11 downto 10); --HS
+				OBJ_SPINFO_D(7 downto 6) <= OBJ_CACHE_Q(25 downto 24); --VS
+				OBJ_SPINFO_D(9 downto 8) <= OBJ_CACHE_Q(27 downto 26); --HS
 
 				SP2_VRAM_ADDR <= (SATB(6 downto 0) & "00000000") + (OBJ_VISINFO_Q(6 downto 0) & "10");
 				SP2_SEL <= '1';

@@ -1487,8 +1487,9 @@ process( RST_N, CLK )
 variable V_BGA_XSTART	: std_logic_vector(9 downto 0);
 variable V_BGA_XBASE		: std_logic_vector(15 downto 0);
 variable V_BGA_BASE		: std_logic_vector(15 downto 0);
+variable bga_pos_next   : std_logic_vector(9 downto 0);
 variable bga_nametable_item : std_logic_vector(15 downto 0);
-variable tile_pos       : std_logic_vector(2 downto 0);
+variable tile_pos       : std_logic_vector(3 downto 0);
 variable vscroll_mask	: std_logic_vector(10 downto 0);
 variable hscroll_mask	: std_logic_vector(9 downto 0);
 variable vscroll_val    : std_logic_vector(10 downto 0);
@@ -1543,7 +1544,7 @@ begin
 				if WHP_LATCH = "00000" then
 					WIN_H <= WRIGT_LATCH;
 				else
-					WIN_H <= not(WRIGT_LATCH);
+					WIN_H <= not WRIGT_LATCH;
 				end if;
 
 				V_BGA_XSTART := "0000000000" - HSC_VRAM32_DO(9 downto 0);
@@ -1560,6 +1561,7 @@ begin
 
 			when BGAC_GET_VSCROLL =>
 				BGA_COLINFO_WE_A <= '0';
+
 				if BGA_COL(5 downto 1) <= 19 then
 					VSRAM0_ADDR_B <= BGA_COL(5 downto 1);
 				else
@@ -1704,28 +1706,14 @@ begin
 				end if;
 
 			when BGAC_LOOP =>
-				BGA_COLINFO_WE_A <= '0';
-				if BGA_POS(9) = '0' and WIN_H = '0' and WRIGT_LATCH = '1' 
-					and BGA_POS(3 downto 0) = "0000" and BGA_POS(8 downto 4) = WHP_LATCH
-				then
-					WIN_H <= not WIN_H;
-					BGAC <= BGAC_GET_VSCROLL;
-				elsif BGA_POS(9) = '0' and WIN_H = '1' and WRIGT_LATCH = '0' 
-					and BGA_X(3 downto 0) = "0000" and BGA_POS(8 downto 4) = WHP_LATCH
-				then
-					WIN_H <= not WIN_H;
-					if WIN_V = '0' then
-						BGAC <= BGAC_GET_VSCROLL;
-					end if;
-				else
 					BGA_COLINFO_WE_A <= '1';
 					BGA_COLINFO_ADDR_A <= BGA_POS(8 downto 0);
 					if WIN_H = '1' or WIN_V = '1' then
-						tile_pos := BGA_POS(2 downto 0);
+						tile_pos := BGA_POS(3 downto 0);
 					else
-						tile_pos := BGA_X(2 downto 0);
+						tile_pos := BGA_X(3 downto 0);
 					end if;
-					case tile_pos is
+					case tile_pos(2 downto 0) is
 						when "100" =>
 							if BGA_HF = '1' then
 								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM32_DO( 3 downto  0);
@@ -1778,10 +1766,10 @@ begin
 					end case;
 
 					BGA_X <= (BGA_X + 1) and hscroll_mask;
-					BGA_POS <= BGA_POS + 1;
-					if tile_pos = "111" then
-						if (BGA_X(3) = '0' and (WIN_H = '0' and WIN_V = '0')) or
-						   (BGA_POS(3) = '0' and (WIN_H = '1' or WIN_V = '1')) then
+					bga_pos_next := BGA_POS + 1;
+					BGA_POS <= bga_pos_next;
+					if tile_pos(2 downto 0) = "111" then
+						if tile_pos(3) = '0' then
 							BGAC <= BGAC_TILE_RD;
 						else
 							BGAC <= BGAC_GET_VSCROLL;
@@ -1789,13 +1777,25 @@ begin
 					else
 						BGAC <= BGAC_LOOP;
 					end if;
+
+					if WIN_H = '1' and WRIGT_LATCH = '0' and BGA_POS(3 downto 0) = "1111" and bga_pos_next(8 downto 4) = WHP_LATCH
+					then
+						-- window on the left side ends, but not neccessarily on a scroll boundary,
+						-- when it continues to draw a wrong tile ("left window bug")
+						WIN_H <= '0';
+					elsif WIN_H = '0' and WRIGT_LATCH = '1' and BGA_POS(3 downto 0) = "1111" and bga_pos_next(8 downto 4) = WHP_LATCH
+					then
+						-- window on the right side starts, cancel rendering the current tile
+						WIN_H <= '1';
+						BGAC <= BGAC_GET_VSCROLL;
+					end if;
+
 					if BGA_X(2 downto 0) = "111" then
 						BGA_COL <= BGA_COL + 1;
 						if (H40 = '0' and BGA_COL = 31) or (H40 = '1' and BGA_COL = 39) then
 							BGAC <= BGAC_DONE;
 						end if;
 					end if;
-				end if;
 
 			when others =>	-- BGAC_DONE
 				BGA_SEL <= '0';

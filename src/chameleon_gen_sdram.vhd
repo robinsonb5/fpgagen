@@ -261,29 +261,29 @@ architecture rtl of chameleon_sdram is
 	END COMPONENT;
 begin
 
---	mytwc : component TwoWayCache
---	PORT map (
---		clk => clk,
---		reset_n => reset_n,
---		ready => cache_ready,
---		cpu_addr(31 downto colAddrBits+rowAddrBits+3) => (others => '0'),
---		cpu_addr(colAddrBits+rowAddrBits+2 downto 0) => vram_a&'0',
---		cpu_req => cache_req,
---		cpu_ack => cache_ack,
---		cpu_cachevalid => cache_valid,
---		cpu_rw_n => not vram_we,
---		cpu_rwl_n => vram_l_n,
---		cpu_rwu_n => vram_u_n,
---		data_from_cpu => vram_d,
---		data_to_cpu => cache_q,--vram_q,
---		data_from_sdram => ram_data_reg,
---		sdram_req => cache_sdram_req,
---		sdram_fill => cache_fill
---	);
---	cache_req <= '1' when (vram_req /= vram_ackReg) and (currentPort /= PORT_VRAM) and cache_ack = '0' else '0';
---
---	debugvram_q <= vram_qReg;
---	debugcache_q <= cache_q;
+	mytwc : component TwoWayCache
+	PORT map (
+		clk => clk,
+		reset_n => reset_n,
+		ready => cache_ready,
+		cpu_addr(31 downto colAddrBits+rowAddrBits+3) => (others => '0'),
+		cpu_addr(colAddrBits+rowAddrBits+2 downto 0) => ram68k_a&'0',
+		cpu_req => cache_req,
+		cpu_ack => cache_ack,
+		cpu_cachevalid => cache_valid,
+		cpu_rw_n => not ram68k_we,
+		cpu_rwl_n => ram68k_l_n,
+		cpu_rwu_n => ram68k_u_n,
+		data_from_cpu => ram68k_d,
+		data_to_cpu => cache_q,
+		data_from_sdram => ram_data_reg,
+		sdram_req => cache_sdram_req,
+		sdram_fill => cache_fill
+	);
+	cache_req <= '1' when (ram68k_req /= ram68k_ackReg) and (currentPort /= PORT_RAM68K) and cache_ack = '0' else '0';
+
+	debugvram_q <= vram_qReg;
+	debugcache_q <= cache_q;
 -- -----------------------------------------------------------------------
 
 	ram_data_reg <= sd_data;
@@ -356,7 +356,7 @@ begin
 				nextRamCol <= romrd_a(addr_colbits_64bit) & "00";
 				nextLdqm <= '0';
 				nextUdqm <= '0';
-			elsif (ram68k_req /= ram68k_ackReg) and (currentPort /= PORT_RAM68K) then
+			elsif (ram68k_req /= ram68k_ackReg) and (currentPort /= PORT_RAM68K) and (ram68k_we = '1' or cache_sdram_req = '1') then
 				nextRamState <= RAM_READ_1;
 				if ram68k_we = '1' then
 					nextRamState <= RAM_WRITE_1;
@@ -367,7 +367,6 @@ begin
 				nextRamCol <= ram68k_a(addr_colbits);
 				nextLdqm <= ram68k_l_n;
 				nextUdqm <= ram68k_u_n;
---			elsif (vram_req /= vram_ackReg) and (currentPort /= PORT_VRAM) and (vram_we = '1' or cache_sdram_req = '1') then
 			elsif (vram_req /= vram_ackReg) and (currentPort /= PORT_VRAM) then
 				nextRamState <= RAM_READ_1;
 				if vram_we = '1' then
@@ -542,10 +541,10 @@ begin
 					bankActive(to_integer(unsigned(currentBank))) <= '1';
 
 				when RAM_READ_1 =>
---					if currentPort = PORT_VRAM then
---						ramTimer <= casLatency;
---						ramState <= RAM_READ_CACHE_FILL;
-					if currentPort = PORT_ROMRD then
+					if currentPort = PORT_RAM68K then
+						ramTimer <= casLatency;
+						ramState <= RAM_READ_CACHE_FILL;
+					elsif currentPort = PORT_ROMRD then
 						ramTimer <= casLatency + 1;
 						ramState <= RAM_READ_2;
 					elsif currentPort = PORT_VRAM32 then
@@ -575,8 +574,7 @@ begin
 					ramState <= RAM_READ_2;
 
 				when RAM_READ_2 =>
---					if currentPort = PORT_ROMRD or currentPort = PORT_VRAM or currentPort = PORT_VRAM32 then
-					if currentPort = PORT_ROMRD or currentPort = PORT_VRAM32 then
+					if currentPort = PORT_ROMRD or currentPort = PORT_RAM68K or currentPort = PORT_VRAM32 then
 						ramState <= RAM_READ_3;
 					else
 						ramDone <='1';
@@ -662,8 +660,6 @@ begin
 	process(clk)
 	begin
 		if rising_edge(clk) then
---			if (currentPort = PORT_VRAM and ((vram_we='1' and ramDone = '1') or (vram_we='0' and cache_ack = '1')))
---			or (cache_valid = '1' and cache_ack = '1' and vram_we = '0')
 			if (currentPort = PORT_VRAM and ramDone = '1')
 			then
 				vram_ackReg <= vram_req;
@@ -716,13 +712,15 @@ begin
 	process(clk)
 	begin
 		if rising_edge(clk) then
-			if currentPort = PORT_RAM68K and ramDone = '1' then
+			if (currentPort = PORT_RAM68K and ((ram68k_we='1' and ramDone = '1') or (ram68k_we='0' and cache_ack = '1')))
+			or (cache_valid = '1' and cache_ack = '1' and ram68k_we = '0')
+			then
 				ram68k_ackReg <= not ram68k_ackReg;
 			end if;
 		end if;
 	end process;
 	ram68k_ack <= ram68k_ackReg;
-	ram68k_q <= ram68k_qReg; --GE
+	ram68k_q <= cache_q;
 
 	process(clk)
 	begin

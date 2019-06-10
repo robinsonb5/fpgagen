@@ -1,6 +1,7 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.numeric_std.ALL;
+use work.build_id.all;
 use work.mist.ALL;
  
 entity MIST_Toplevel is
@@ -136,7 +137,8 @@ constant CONF_STR : string :=
     "OH,PCM HiFi sound,Disable,Enable;"&
     "OJ,Border,Disable,Enable;"&
     CONF_DBG_STR&
-    "T0,Reset;";
+    "T0,Reset;"&
+    "V,v"&BUILD_DATE;
 
 -- convert string to std_logic_vector to be given to user_io
 function to_slv(s: string) return std_logic_vector is

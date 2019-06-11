@@ -105,6 +105,26 @@ entity chameleon_sdram is
 		vram32_a   : in std_logic_vector((colAddrBits+rowAddrBits+2) downto 1);
 		vram32_q   : out std_logic_vector(31 downto 0);
 
+		svp_ram1_req : in std_logic;
+		svp_ram1_ack : out std_logic;
+		svp_ram1_we : in std_logic;
+		svp_ram1_a : in std_logic_vector((colAddrBits+rowAddrBits+2) downto 1);
+		svp_ram1_d : in std_logic_vector(15 downto 0);
+		svp_ram1_q : out std_logic_vector(15 downto 0);
+
+		svp_ram2_req : in std_logic;
+		svp_ram2_ack : out std_logic;
+		svp_ram2_we : in std_logic;
+		svp_ram2_a : in std_logic_vector((colAddrBits+rowAddrBits+2) downto 1);
+		svp_ram2_d : in std_logic_vector(15 downto 0);
+		svp_ram2_q : out std_logic_vector(15 downto 0);
+		svp_ram2_u_n : in std_logic;
+		svp_ram2_l_n : in std_logic;
+
+		svp_rom_req : in std_logic;
+		svp_rom_ack : out std_logic;
+		svp_rom_a : in std_logic_vector((colAddrBits+rowAddrBits+2) downto 1);
+		svp_rom_q : out std_logic_vector(15 downto 0);
 --GE Temporary
 		initDone : out std_logic;
 -- Debug ports
@@ -151,7 +171,10 @@ architecture rtl of chameleon_sdram is
 		PORT_RAM68K,
 		PORT_VRAM,
 		PORT_VRAM32,
-		PORT_SRAM
+		PORT_SRAM,
+		PORT_SVP_RAM1,
+		PORT_SVP_RAM2,
+		PORT_SVP_ROM
 	);
 
 	subtype row_t is std_logic_vector((rowAddrBits-1) downto 0);
@@ -181,6 +204,9 @@ architecture rtl of chameleon_sdram is
 	signal vram_ackReg : std_logic := '0';
 	signal vram32_ackReg : std_logic := '0';
 	signal sram_ackReg : std_logic := '0';
+	signal svp_ram1_ackReg : std_logic := '0';
+	signal svp_ram2_ackReg : std_logic := '0';
+	signal svp_rom_ackReg : std_logic := '0';
 
 	signal romwr_qReg : std_logic_vector(15 downto 0);
 	signal romrd_qReg : std_logic_vector(63 downto 0);
@@ -188,6 +214,9 @@ architecture rtl of chameleon_sdram is
 	signal vram_qReg : std_logic_vector(15 downto 0);
 	signal vram32_qReg : std_logic_vector(31 downto 0);
 	signal sram_qReg : std_logic_vector(15 downto 0);
+	signal svp_ram1_qReg : std_logic_vector(15 downto 0);
+	signal svp_ram2_qReg : std_logic_vector(15 downto 0);
+	signal svp_rom_qReg : std_logic_vector(15 downto 0);
 
 	signal initDoneReg : std_logic := '0';
 
@@ -315,6 +344,9 @@ begin
 		ram68k_a, ram68k_we, ram68k_req, ram68k_ackReg, ram68k_l_n, ram68k_u_n,
 		vram_a, vram_we, vram_req, vram_ackReg, vram_l_n, vram_u_n,
 		vram32_req,vram32_ackReg, vram32_a,
+		svp_ram1_req, svp_ram1_ackReg, svp_ram1_a, svp_ram1_we,
+		svp_ram2_req, svp_ram2_ackReg, svp_ram2_a, svp_ram2_we, svp_ram2_u_n, svp_ram2_l_n,
+		svp_rom_req, svp_rom_ackReg, svp_rom_a,
 		sram_a, sram_we, sram_req, sram_ackReg, sram_l_n, sram_u_n)
 	begin
 		--if rising_edge(clk) then
@@ -337,6 +369,36 @@ begin
 				nextRamCol <= sram_a(addr_colbits);
 				nextLdqm <= sram_l_n;
 				nextUdqm <= sram_u_n;
+			elsif (svp_ram1_req /= svp_ram1_ackReg) and (currentPort /= PORT_SVP_RAM1) then
+				nextRamState <= RAM_READ_1;
+				if svp_ram1_we = '1' then
+					nextRamState <= RAM_WRITE_1;
+				end if;
+				nextRamPort <= PORT_SVP_RAM1;
+				nextRamBank <= svp_ram1_a(addr_bankbits);
+				nextRamRow <= svp_ram1_a(addr_rowbits);
+				nextRamCol <= svp_ram1_a(addr_colbits);
+				nextLdqm <= '0';
+				nextUdqm <= '0';
+			elsif (svp_ram2_req /= svp_ram2_ackReg) and (currentPort /= PORT_SVP_RAM2) then
+				nextRamState <= RAM_READ_1;
+				if svp_ram2_we = '1' then
+					nextRamState <= RAM_WRITE_1;
+				end if;
+				nextRamPort <= PORT_SVP_RAM2;
+				nextRamBank <= svp_ram2_a(addr_bankbits);
+				nextRamRow <= svp_ram2_a(addr_rowbits);
+				nextRamCol <= svp_ram2_a(addr_colbits);
+				nextLdqm <= svp_ram2_l_n;
+				nextUdqm <= svp_ram2_u_n;
+			elsif (svp_rom_req /= svp_rom_ackReg) and (currentPort /= PORT_SVP_ROM) then
+				nextRamState <= RAM_READ_1;
+				nextRamPort <= PORT_SVP_ROM;
+				nextRamBank <= svp_rom_a(addr_bankbits);
+				nextRamRow <= svp_rom_a(addr_rowbits);
+				nextRamCol <= svp_rom_a(addr_colbits);
+				nextLdqm <= '0';
+				nextUdqm <= '0';
 			elsif (romwr_req /= romwr_ackReg) and (currentPort /= PORT_ROMWR) then
 				nextRamState <= RAM_READ_1;
 				if romwr_we = '1' then
@@ -494,6 +556,10 @@ begin
 							currentWrData <= sram_d;
 						when PORT_ROMWR =>
 							currentWrData <= romwr_d;
+						when PORT_SVP_RAM1 =>
+							currentWrData <= svp_ram1_d;
+						when PORT_SVP_RAM2 =>
+							currentWrData <= svp_ram2_d;
 						when others =>
 							null;
 						end case;
@@ -591,6 +657,12 @@ begin
 							vram_qReg <= ram_data_reg;
 						when PORT_SRAM => --GE
 							sram_qReg <= ram_data_reg;
+						when PORT_SVP_RAM1 =>
+							svp_ram1_qReg <= ram_data_reg;
+						when PORT_SVP_RAM2 =>
+							svp_ram2_qReg <= ram_data_reg;
+						when PORT_SVP_ROM =>
+							svp_rom_qReg <= ram_data_reg;
 						when others =>
 							null;
 					end case;
@@ -667,9 +739,33 @@ begin
 		end if;
 	end process;
 	vram_ack <= vram_ackReg;
---	vram_q <= cache_q;
 	vram_q <= vram_qReg;
 
+	process(clk)
+	begin
+		if rising_edge(clk) then
+			if (currentPort = PORT_SVP_RAM1 and ramDone = '1')
+			then
+				svp_ram1_ackReg <= svp_ram1_req;
+			end if;
+			if (currentPort = PORT_SVP_RAM2 and ramDone = '1')
+			then
+				svp_ram2_ackReg <= svp_ram2_req;
+			end if;
+			if (currentPort = PORT_SVP_ROM and ramDone = '1')
+			then
+				svp_rom_ackReg <= svp_rom_req;
+			end if;
+		end if;
+	end process;
+	svp_ram1_ack <= svp_ram1_ackReg;
+	svp_ram1_q <= svp_ram1_qReg;
+
+	svp_ram2_ack <= svp_ram2_ackReg;
+	svp_ram2_q <= svp_ram2_qReg;
+
+	svp_rom_ack <= svp_rom_ackReg;
+	svp_rom_q <= svp_rom_qReg;
 
 	process(clk)
 	begin

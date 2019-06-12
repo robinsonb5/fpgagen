@@ -90,12 +90,12 @@ constant VSYNC_START_NTSC_V28	: integer := 485;
 constant VSYNC_START_NTSC_V30	: integer := 466;
 
 constant VBORDER_END_PAL_V28    : integer := V_DISP_HEIGHT_V28 + 32;
-constant VBORDER_END_PAL_V30    : integer := V_DISP_HEIGHT_V30 + 40;
+constant VBORDER_END_PAL_V30    : integer := V_DISP_HEIGHT_V30 + 24;
 constant VBORDER_END_NTSC_V28   : integer := V_DISP_HEIGHT_V28 + 8;
 constant VBORDER_END_NTSC_V30   : integer := V_DISP_HEIGHT_V30;
 
 constant VBORDER_START_PAL_V28  : integer := 480;
-constant VBORDER_START_PAL_V30  : integer := 472;
+constant VBORDER_START_PAL_V30  : integer := 482;
 constant VBORDER_START_NTSC_V28 : integer := 501;
 constant VBORDER_START_NTSC_V30 : integer := 493;
 

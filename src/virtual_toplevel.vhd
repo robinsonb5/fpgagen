@@ -184,6 +184,11 @@ signal vram_q : std_logic_vector(15 downto 0);
 signal vram_l_n : std_logic;
 signal vram_u_n : std_logic;
 
+signal vram32_req : std_logic;
+signal vram32_ack : std_logic;
+signal vram32_a   : std_logic_vector(15 downto 1);
+signal vram32_q   : std_logic_vector(31 downto 0);
+
 -- Z80 RAM
 signal zram_a : std_logic_vector(12 downto 0);
 signal zram_d : std_logic_vector(7 downto 0);
@@ -200,6 +205,43 @@ signal T80_ZRAM_DTACK_N	: std_logic;
 
 type zrc_t is ( ZRC_IDLE, ZRC_ACC1, ZRC_ACC2 );
 signal ZRC : zrc_t;
+
+-- SVP
+signal svp_ram1_req : std_logic;
+signal svp_ram1_ack : std_logic;
+signal svp_ram1_we  : std_logic;
+signal svp_ram1_a   : std_logic_vector(16 downto 1);
+signal svp_ram1_d   : std_logic_vector(15 downto 0);
+signal svp_ram1_q   : std_logic_vector(15 downto 0);
+
+signal svp_ram2_req : std_logic;
+signal svp_ram2_ack : std_logic;
+signal svp_ram2_we  : std_logic;
+signal svp_ram2_a   : std_logic_vector(16 downto 1);
+signal svp_ram2_d   : std_logic_vector(15 downto 0);
+signal svp_ram2_q   : std_logic_vector(15 downto 0);
+signal svp_ram2_u_n : std_logic;
+signal svp_ram2_l_n : std_logic;
+
+signal svp_rom_req  : std_logic;
+signal svp_rom_ack  : std_logic;
+signal svp_rom_a    : std_logic_vector(20 downto 1);
+signal svp_rom_q    : std_logic_vector(15 downto 0);
+
+type svprc_t is ( SVPRC_IDLE, SVPRC_FX68, SVPRC_DMA);
+signal SVPRC : svprc_t;
+
+signal SVP_CLKEN    : std_logic;
+signal SVP_ENABLE   : std_logic;
+
+signal SVP_DI       : std_logic_vector(15 downto 0);
+signal SVP_DO       : std_logic_vector(15 downto 0);
+signal SVP_SEL      : std_logic;
+signal SVP_A        : std_logic_vector(3 downto 1);
+signal SVP_RNW      : std_logic;
+signal SVP_DTACK_N  : std_logic;
+signal FX68_SVP_SEL : std_logic;
+signal T80_SVP_SEL  : std_logic;
 
 constant useCache : boolean := true;
 
@@ -299,6 +341,15 @@ signal SSF2_MAP             : std_logic_vector(8*6-1 downto 0);
 signal SSF2_USE_MAP         : std_logic;
 signal ROM_PAGE             : std_logic_vector(2 downto 0);
 signal ROM_PAGE_A           : std_logic_vector(4 downto 0); -- 16 MB only (original mapper: max. 32)
+
+-- SVP CONTROL
+signal FX68_SVP_RAM_SEL     : std_logic;
+signal FX68_SVP_RAM_D       : std_logic_vector(15 downto 0);
+signal FX68_SVP_RAM_DTACK_N : std_logic;
+
+signal DMA_SVP_RAM_SEL      : std_logic;
+signal DMA_SVP_RAM_D        : std_logic_vector(15 downto 0);
+signal DMA_SVP_RAM_DTACK_N  : std_logic;
 
 -- OPERATING SYSTEM ROM
 signal FX68_OS_SEL			: std_logic;
@@ -592,7 +643,7 @@ sdc : entity work.chameleon_sdram generic map (
 	ram68k_req	=> ram68k_req,
 	ram68k_ack	=> ram68k_ack,
 	ram68k_we	=> ram68k_we,
-	ram68k_a	=> conv_std_logic_vector(2#100000000#, addrwidth - 15) & ram68k_a,
+	ram68k_a	=> conv_std_logic_vector(2#111111000#, addrwidth - 15) & ram68k_a,
 	ram68k_d	=> ram68k_d,
 	ram68k_q	=> ram68k_q,
 	ram68k_u_n	=> ram68k_u_n,
@@ -601,7 +652,7 @@ sdc : entity work.chameleon_sdram generic map (
 	sram_req	=> sram_req,
 	sram_ack	=> sram_ack,
 	sram_we	=> sram_we,
-	sram_a		=> conv_std_logic_vector(2#010000000#, addrwidth - 15) & sram_a,
+	sram_a		=> conv_std_logic_vector(2#111111010#, addrwidth - 15) & sram_a,
 	sram_d		=> sram_d,
 	sram_q		=> sram_q,
 	sram_u_n	=> sram_u_n,
@@ -610,11 +661,37 @@ sdc : entity work.chameleon_sdram generic map (
 	vram_req	=> vram_req,
 	vram_ack => vram_ack,
 	vram_we	=> vram_we,
-	vram_a	=> conv_std_logic_vector(2#110000000#, addrwidth - 15) & vram_a,
+	vram_a	=> conv_std_logic_vector(2#111111100#, addrwidth - 15) & vram_a,
 	vram_d	=> vram_d,
 	vram_q	=> vram_q,
 	vram_u_n => vram_u_n,
 	vram_l_n => vram_l_n,
+
+	vram32_req => vram32_req,
+	vram32_ack => vram32_ack,
+	vram32_a   => conv_std_logic_vector(2#111111100#, addrwidth - 15) & vram32_a,
+	vram32_q   => vram32_q,
+
+	svp_ram1_req => svp_ram1_req,
+	svp_ram1_ack => svp_ram1_ack,
+	svp_ram1_we  => svp_ram1_we,
+	svp_ram1_a   => conv_std_logic_vector(2#11111111#, addrwidth - 16) & svp_ram1_a,
+	svp_ram1_d   => svp_ram1_d,
+	svp_ram1_q   => svp_ram1_q,
+
+	svp_ram2_req => svp_ram2_req,
+	svp_ram2_ack => svp_ram2_ack,
+	svp_ram2_we  => svp_ram2_we,
+	svp_ram2_a   => conv_std_logic_vector(2#11111111#, addrwidth - 16) & svp_ram2_a,
+	svp_ram2_d   => svp_ram2_d,
+	svp_ram2_q   => svp_ram2_q,
+	svp_ram2_u_n => svp_ram2_u_n,
+	svp_ram2_l_n => svp_ram2_l_n,
+
+	svp_rom_req	=> svp_rom_req,
+	svp_rom_ack	=> svp_rom_ack,
+	svp_rom_a	=> conv_std_logic_vector(0, addrwidth - 20) & svp_rom_a,
+	svp_rom_q	=> svp_rom_q,
 
 	initDone 	=> SDR_INIT_DONE
 );
@@ -622,21 +699,17 @@ sdc : entity work.chameleon_sdram generic map (
 -- -----------------------------------------------------------------------
 -- Z80 RAM
 -- -----------------------------------------------------------------------
-zram : entity work.DualPortRAM
+zram : entity work.SinglePortRAM
 generic map (
 	addrbits => 13,
 	databits => 8
 )
 port map(
-	address_a	=> zram_a,
-	address_b	=> (others => '0'),
-	clock		=> MCLK,
-	data_a		=> zram_d,
-	data_b		=> (others => '0'),
-	wren_a		=> zram_we,
-	wren_b		=> '0',
-	q_a			=> zram_q,
-	q_b			=> open
+	address	  => zram_a,
+	clock     => MCLK,
+	data      => zram_d,
+	wren      => zram_we,
+	q         => zram_q
 );
 
 -- -----------------------------------------------------------------------
@@ -790,7 +863,12 @@ port map(
 	vram_q	=> vram_q,
 	vram_u_n	=> vram_u_n,
 	vram_l_n	=> vram_l_n,
-	
+
+	vram32_req => vram32_req,
+	vram32_ack => vram32_ack,
+	vram32_a   => vram32_a,
+	vram32_q   => vram32_q,
+
 	HINT			=> HINT,
 	VINT_TG68		=> VINT_FX68,
 	VINT_T80			=> VINT_T80,
@@ -867,6 +945,42 @@ port map(
     snd_right => DAC_RDATA
 );
 
+SVP_ENABLE <= '1';
+-- SVP at A15000-A1500F
+FX68_SVP_SEL <= '1' when SVP_ENABLE = '1' and FX68_SEL = '1' and FX68_A(23 downto 4) = x"A1500" else '0';
+T80_SVP_SEL <= '1' when BAR(23 downto 15) = x"A1"&'0' and T80_A(15 downto 4) = x"500" and T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0') else '0';
+SVP_SEL <= T80_SVP_SEL or FX68_SVP_SEL;
+SVP_RNW <= T80_WR_N when T80_SVP_SEL = '1' else FX68_RNW when FX68_SVP_SEL = '1' else '1';
+SVP_A <= T80_A(3 downto 1) when T80_SVP_SEL = '1' else FX68_A(3 downto 1);
+SVP_DI <= T80_DO & T80_DO when T80_SVP_SEL = '1' else FX68_DO;
+
+SVP : work.SVP
+port map (
+	CLK         => MCLK,
+	CE          => SVP_CLKEN,
+	RST_N       => MRST_N,
+	ENABLE      => SVP_ENABLE,
+
+	BUS_A       => SVP_A,
+	BUS_DO      => SVP_DO,
+	BUS_DI      => SVP_DI,
+	BUS_SEL     => SVP_SEL,
+	BUS_RNW     => SVP_RNW,
+	BUS_DTACK_N => SVP_DTACK_N,
+
+	ROM_A       => svp_rom_a,
+	ROM_DI      => svp_rom_q,
+	ROM_REQ     => svp_rom_req,
+	ROM_ACK     => svp_rom_ack,
+
+	DRAM_A      => svp_ram1_a,
+	DRAM_DI     => svp_ram1_q,
+	DRAM_DO     => svp_ram1_d,
+	DRAM_WE     => svp_ram1_we,
+	DRAM_REQ    => svp_ram1_req,
+	DRAM_ACK    => svp_ram1_ack
+);
+
 -- #############################################################################
 -- #############################################################################
 -- #############################################################################
@@ -932,6 +1046,7 @@ begin
 	if MRST_N = '0' then
 		VCLKCNT <= "001"; -- important for SDRAM controller (EDIT: not needed anymore)
 		ZCLKCNT <= (others => '0');
+		SVP_CLKEN <= '0';
 	elsif rising_edge(MCLK) then
 		ZCLKCNT <= ZCLKCNT + 1;
 		if ZCLKCNT = "1110" then
@@ -972,15 +1087,19 @@ begin
 			FX68_PHI2 <= '0';
 		end if;
 
+		SVP_CLKEN <= not SVP_CLKEN;
+
      end if;
 end process;
 
 -- DMA VBUS
 VBUS_DTACK_N <= DMA_FLASH_DTACK_N when DMA_FLASH_SEL = '1'
 	else DMA_SDRAM_DTACK_N when DMA_SDRAM_SEL = '1'
+	else DMA_SVP_RAM_DTACK_N when DMA_SVP_RAM_SEL = '1'
 	else '0';
 VBUS_DATA <= DMA_FLASH_D when DMA_FLASH_SEL = '1'
 	else DMA_SDRAM_D when DMA_SDRAM_SEL = '1'
+	else DMA_SVP_RAM_D when DMA_SVP_RAM_SEL = '1'
 	else x"FFFF";
 
 -- 68K INPUTS
@@ -995,7 +1114,9 @@ FX68_DTACK_N <= '1' when bootState /= BOOT_DONE
 	else FX68_OS_DTACK_N when FX68_OS_SEL = '1' 
 	else FX68_IO_DTACK_N when FX68_IO_SEL = '1' 
 	else FX68_BAR_DTACK_N when FX68_BAR_SEL = '1' 
-	else FX68_VDP_DTACK_N when FX68_VDP_SEL = '1' 
+	else FX68_VDP_DTACK_N when FX68_VDP_SEL = '1'
+	else FX68_SVP_RAM_DTACK_N when FX68_SVP_RAM_SEL = '1'
+	else SVP_DTACK_N when FX68_SVP_SEL = '1'
 	else '0';
 FX68_DI(15 downto 8) <= FX68_FLASH_D(15 downto 8) when FX68_FLASH_SEL = '1' and FX68_UDS_N = '0'
 	else FX68_SDRAM_D(15 downto 8) when FX68_SDRAM_SEL = '1' and FX68_UDS_N = '0'
@@ -1008,6 +1129,8 @@ FX68_DI(15 downto 8) <= FX68_FLASH_D(15 downto 8) when FX68_FLASH_SEL = '1' and 
 	else FX68_VDP_D(15 downto 8) when FX68_VDP_SEL = '1' and FX68_UDS_N = '0'
 	else FX68_FM_D(15 downto 8) when FX68_FM_SEL = '1' and FX68_UDS_N = '0'
 	else FX68_EEPROM_DATA(15 downto 8) when FX68_EEPROM_SEL = '1' and FX68_UDS_N = '0'
+	else FX68_SVP_RAM_D(15 downto 8) when FX68_SVP_RAM_SEL = '1' and FX68_UDS_N = '0'
+	else SVP_DO(15 downto 8) when FX68_SVP_SEL = '1' and FX68_UDS_N = '0'
 	else NO_DATA(15 downto 8);
 FX68_DI(7 downto 0) <= FX68_FLASH_D(7 downto 0) when FX68_FLASH_SEL = '1' and FX68_LDS_N = '0'
 	else FX68_SDRAM_D(7 downto 0) when FX68_SDRAM_SEL = '1' and FX68_LDS_N = '0'
@@ -1020,6 +1143,8 @@ FX68_DI(7 downto 0) <= FX68_FLASH_D(7 downto 0) when FX68_FLASH_SEL = '1' and FX
 	else FX68_VDP_D(7 downto 0) when FX68_VDP_SEL = '1' and FX68_LDS_N = '0'
 	else FX68_FM_D(7 downto 0) when FX68_FM_SEL = '1' and FX68_LDS_N = '0'
 	else FX68_EEPROM_DATA(7 downto 0) when FX68_EEPROM_SEL = '1' and FX68_LDS_N = '0'
+	else FX68_SVP_RAM_D(7 downto 0) when FX68_SVP_RAM_SEL = '1' and FX68_LDS_N = '0'
+	else SVP_DO(7 downto 0) when FX68_SVP_SEL = '1' and FX68_LDS_N = '0'
 	else NO_DATA(7 downto 0);
 
 -- Floating bus
@@ -1066,6 +1191,7 @@ T80_DI <= T80_SDRAM_D when T80_SDRAM_SEL = '1'
 	else T80_BAR_D when T80_BAR_SEL = '1'
 	else T80_VDP_D when T80_VDP_SEL = '1'
 	else T80_FM_D when T80_FM_SEL = '1'
+	else SVP_DO(7 downto 0) when T80_SVP_SEL = '1'
 	else x"FF";
 
 -- OPERATING SYSTEM ROM
@@ -1521,12 +1647,13 @@ ROM_PAGE_A <= FX68_A(23 downto 19) when FX68_FLASH_SEL = '1' and FX68_DTACK_N = 
 -- DMA  : 000000 - 9fffff
 
 FX68_FLASH_SEL <= '1' when (FX68_A(23) = '0' or FX68_A(23 downto 21) = "100") and FX68_SEL = '1' and
-	FX68_RNW = '1' and FX68_SRAM_SEL = '0' and FX68_SRAM_SEL = '0' and FX68_EEPROM_SEL = '0' and CART_EN = '1' else '0';
+	FX68_RNW = '1' and FX68_SRAM_SEL = '0' and FX68_SRAM_SEL = '0' and FX68_EEPROM_SEL = '0' and FX68_SVP_RAM_SEL = '0' and CART_EN = '1' else '0';
 T80_FLASH_SEL <= '1' when T80_A(15) = '1' and T80_MREQ_N = '0' and T80_RD_N = '0' and (BAR(23) = '0' or BAR(23 downto 21) = "100")
 	else '0';
-DMA_FLASH_SEL <= '1' when (VBUS_ADDR(23) = '0' or VBUS_ADDR(23 downto 21) = "100") and VBUS_SEL = '1' else '0';
+DMA_FLASH_SEL <= '1' when (VBUS_ADDR(23) = '0' or VBUS_ADDR(23 downto 21) = "100") and VBUS_SEL = '1' and DMA_SVP_RAM_SEL = '0' else '0';
 
 process( MRST_N, MCLK )
+variable dma_a : std_logic_vector(23 downto 1);
 begin
 	if MRST_N = '0' then
 		FC <= FC_IDLE;
@@ -1616,9 +1743,14 @@ begin
 					end if;
 				elsif DMA_FLASH_SEL = '1' and DMA_FLASH_DTACK_N = '1' then
 					-- FF_FL_ADDR <= VBUS_ADDR(21 downto 0);
+					if SVP_ENABLE = '1' then
+						dma_a := VBUS_ADDR - 1;
+					else
+						dma_a := VBUS_ADDR;
+					end if;
 
-					if useCache and (ROM_PAGE_A & VBUS_ADDR(18 downto 3) = romrd_a_cached(23 downto 3)) then
-						case VBUS_ADDR(2 downto 1) is
+					if useCache and (ROM_PAGE_A & dma_a(18 downto 3) = romrd_a_cached(23 downto 3)) then
+						case dma_a(2 downto 1) is
 						when "00" =>
 							DMA_FLASH_D <= romrd_q_cached(15 downto 0);
 						when "01" =>
@@ -1632,8 +1764,8 @@ begin
 						DMA_FLASH_DTACK_N <= '0';
 					else
 						romrd_req <= not romrd_req;
-						romrd_a <= ROM_PAGE_A & VBUS_ADDR(18 downto 3);
-						romrd_a_cached <= ROM_PAGE_A & VBUS_ADDR(18 downto 3);
+						romrd_a <= ROM_PAGE_A & dma_a(18 downto 3);
+						romrd_a_cached <= ROM_PAGE_A & dma_a(18 downto 3);
 						FC <= FC_DMA_RD;
 					end if;
 				end if;
@@ -1694,8 +1826,14 @@ begin
 		
 		when FC_DMA_RD =>
 			if romrd_req = romrd_ack then
+				if SVP_ENABLE = '1' then
+					dma_a := VBUS_ADDR - 1;
+				else
+					dma_a := VBUS_ADDR;
+				end if;
+
 				romrd_q_cached <= romrd_q;
-				case VBUS_ADDR(2 downto 1) is
+				case dma_a(2 downto 1) is
 				when "00" =>
 					DMA_FLASH_D <= romrd_q(15 downto 0);
 				when "01" =>
@@ -1810,7 +1948,7 @@ end process;
 
 -- SRAM at 0x200000 - 20FFFF
 -- EEPROM at 0x200000
-SRAM_EN <= SRAM_EN_AUTO or SRAM_EN_PAGEIN;
+SRAM_EN <= (SRAM_EN_AUTO or SRAM_EN_PAGEIN) and not SVP_ENABLE;
 
 FX68_SRAM_SEL <= '1' when SRAM_EN = '1' and FX68_SEL = '1' and FX68_A(23 downto 16) = x"20" and FX68_EEPROM_SEL = '0' else '0';
 FX68_EEPROM_SEL <= '1' when EEPROM_EN = '1' and FX68_SEL = '1' and FX68_A(23 downto 4) = x"20000" and FX68_A(3 downto 1) = "000" else '0';
@@ -1941,6 +2079,83 @@ begin
 
 end process;
 
+-- SVP RAM CONTROL
+-- 300000-37FFFF - 128K mirrored x4
+-- 390000-39FFFF - cell arrange 1
+-- 3A0000-3AFFFF - cell arrange 2
+FX68_SVP_RAM_SEL <= '1' when SVP_ENABLE = '1' and (FX68_A(23 downto 19) = x"3"&'0' or FX68_A(23 downto 16) = x"39" or FX68_A(23 downto 16) = x"3A") and FX68_SEL = '1' else '0';
+DMA_SVP_RAM_SEL <= '1' when SVP_ENABLE = '1' and (VBUS_ADDR(23 downto 19) = x"3"&'0' or VBUS_ADDR(23 downto 16) = x"39" or VBUS_ADDR(23 downto 16) = x"3A") and VBUS_SEL = '1' else '0';
+
+process( MRST_N, MCLK )
+variable svp_dma_a: std_logic_vector(23 downto 1);
+begin
+	if MRST_N = '0' then
+		FX68_SVP_RAM_DTACK_N <= '1';
+		DMA_SVP_RAM_DTACK_N <= '1';
+
+		svp_ram2_req <= '0';
+
+		SVPRC <= SVPRC_IDLE;
+
+	elsif rising_edge(MCLK) then
+		if FX68_SVP_RAM_SEL = '0' then 
+			FX68_SVP_RAM_DTACK_N <= '1';
+		end if;	
+		if DMA_SVP_RAM_SEL = '0' then 
+			DMA_SVP_RAM_DTACK_N <= '1';
+		end if;	
+
+		case SVPRC is
+		when SVPRC_IDLE =>
+			if FX68_SVP_RAM_SEL = '1' and FX68_SVP_RAM_DTACK_N = '1' then
+				svp_ram2_req <= not svp_ram2_req;
+				if FX68_A(23 downto 16) = x"39" then
+					svp_ram2_a <= '0' & FX68_A(15 downto 13) & FX68_A(6 downto 2) & FX68_A(12 downto 7) & FX68_A(1);
+				elsif FX68_A(23 downto 16) = x"3A" then
+					svp_ram2_a <= '0' & FX68_A(15 downto 12) & FX68_A(5 downto 2) & FX68_A(11 downto 6) & FX68_A(1);
+				else
+					svp_ram2_a <= FX68_A(16 downto 1);
+				end if;
+				svp_ram2_d <= FX68_DO;
+				svp_ram2_we <= not FX68_RNW;
+				svp_ram2_u_n <= FX68_UDS_N;
+				svp_ram2_l_n <= FX68_LDS_N;
+				SVPRC <= SVPRC_FX68;
+			elsif DMA_SVP_RAM_SEL = '1' and DMA_SDRAM_DTACK_N = '1' then
+				svp_ram2_req <= not svp_ram2_req;
+				svp_dma_a := VBUS_ADDR - 1;
+				if VBUS_ADDR(23 downto 16) = x"39" then
+					svp_ram2_a <= '0' & svp_dma_a(15 downto 13) & svp_dma_a(6 downto 2) & svp_dma_a(12 downto 7) & svp_dma_a(1);
+				elsif VBUS_ADDR(23 downto 16) = x"3A" then
+					svp_ram2_a <= '0' & svp_dma_a(15 downto 12) & svp_dma_a(5 downto 2) & svp_dma_a(11 downto 6) & svp_dma_a(1);
+				else
+					svp_ram2_a <= svp_dma_a(16 downto 1);
+				end if;
+				svp_ram2_we <= '0';
+				svp_ram2_u_n <= '0';
+				svp_ram2_l_n <= '0';
+				SVPRC <= SVPRC_DMA;
+			end if;
+
+		when SVPRC_FX68 =>
+			if svp_ram2_req = svp_ram2_ack then
+				FX68_SVP_RAM_D <= svp_ram2_q;
+				FX68_SVP_RAM_DTACK_N <= '0';
+				SVPRC <= SVPRC_IDLE;
+			end if;
+
+		when SVPRC_DMA =>
+			if svp_ram2_req = svp_ram2_ack then
+				DMA_SVP_RAM_D <= svp_ram2_q;
+				DMA_SVP_RAM_DTACK_N <= '0';
+				SVPRC <= SVPRC_IDLE;
+			end if;
+
+		when others => null;
+		end case;
+	end if;
+
+end process;
 
 -- #############################################################################
 -- #############################################################################

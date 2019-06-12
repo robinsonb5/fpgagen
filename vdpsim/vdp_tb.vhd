@@ -1,5 +1,6 @@
 library work;
 use work.vram.all;
+use work.vram32.all;
 use work.video.all;
 use work.cpu.all;
 
@@ -31,11 +32,16 @@ component vdp
                 vram_req : out std_logic;
                 vram_ack : in std_logic;
                 vram_we : out std_logic;
-                vram_a : out std_logic_vector(14 downto 0);
+                vram_a : out std_logic_vector(15 downto 1);
                 vram_d : out std_logic_vector(15 downto 0);
                 vram_q : in std_logic_vector(15 downto 0);
                 vram_u_n : out std_logic;
                 vram_l_n : out std_logic;
+
+                vram32_req : out std_logic;
+                vram32_ack : in std_logic;
+                vram32_a : out std_logic_vector(15 downto 1);
+                vram32_q : in std_logic_vector(31 downto 0);
 
                 HINT            : out std_logic;
                 INTACK          : in std_logic;
@@ -77,9 +83,14 @@ signal   reset_n  : std_logic := '1';
 
 signal vram_req_loop: std_logic;
 signal vram_we: std_logic;
-signal vram_a: std_logic_vector(14 downto 0);
+signal vram_a: std_logic_vector(15 downto 1);
 signal vram_q: std_logic_vector(15 downto 0);
 signal vram_d: std_logic_vector(15 downto 0);
+
+signal vram32_req_loop: std_logic;
+signal vram32_we: std_logic;
+signal vram32_a: std_logic_vector(15 downto 1);
+signal vram32_q: std_logic_vector(31 downto 0);
 
 signal CPU_SEL: std_logic;
 signal CPU_A: std_logic_vector(4 downto 0);
@@ -115,6 +126,11 @@ begin
       vram_q => vram_q,
       vram_we => vram_we,
       vram_d => vram_d,
+
+      vram32_a => vram32_a,
+      vram32_req => vram32_req_loop,
+      vram32_ack => vram32_req_loop,
+      vram32_q => vram32_q,
 
       INTACK => '0',
       BG_N => '0',
@@ -160,7 +176,7 @@ begin
   memory : process (memclk)
     variable c : std_logic;
     variable we : std_logic;
-    variable a : std_logic_vector(14 downto 0);
+    variable a : std_logic_vector(15 downto 1);
     variable q : std_logic_vector(15 downto 0);
     variable d : std_logic_vector(15 downto 0);
   begin
@@ -175,6 +191,21 @@ begin
       vram_q <= q;    
     end if;   
  end process memory;
+
+  memory32 : process (memclk)
+    variable c : std_logic;
+    variable a : std_logic_vector(15 downto 1);
+    variable q : std_logic_vector(31 downto 0);
+  begin
+    -- wire memory
+    c := memclk;
+    a := vram32_a;
+    vram32_c(c,a,q);
+
+    if (memclk = '0' and memclk'event) then
+      vram32_q <= q;
+    end if;
+ end process memory32;
 
  video : process (clk)
     variable c : std_logic;

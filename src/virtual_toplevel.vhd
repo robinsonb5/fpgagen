@@ -99,7 +99,8 @@ entity Virtual_Toplevel is
 		ext_data_ack   : in std_logic := '0';
 
         -- DIP switches
-		ext_sw         : in std_logic_vector(15 downto 0) -- 2 - joy swap
+		ext_sw         : in std_logic_vector(15 downto 0) -- 1 - SVP
+														  -- 2 - joy swap
 														  -- 3 - PSG EN
 														  -- 4 - FM EN
 														  -- 5 - Export
@@ -945,7 +946,7 @@ port map(
     snd_right => DAC_RDATA
 );
 
-SVP_ENABLE <= '1';
+SVP_ENABLE <= SW(1);
 -- SVP at A15000-A1500F
 FX68_SVP_SEL <= '1' when SVP_ENABLE = '1' and FX68_SEL = '1' and FX68_A(23 downto 4) = x"A1500" else '0';
 T80_SVP_SEL <= '1' when BAR(23 downto 15) = x"A1"&'0' and T80_A(15 downto 4) = x"500" and T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0') else '0';

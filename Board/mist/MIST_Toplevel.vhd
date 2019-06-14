@@ -116,14 +116,21 @@ signal ext_data_ack     : std_logic := '0';
 signal ext_sw           : std_logic_vector( 15 downto 0); --DIP switches
 signal core_led         : std_logic;
 
+constant SVP_EN         : std_logic := '0';
+
+function core_name return string is
+begin
+	if SVP_EN = '1' then return "GEN_SVP"; else return "GENESIS"; end if;
+end function;
+
 constant CONF_DBG_STR : string := "";
 --constant CONF_DBG_STR : string :=
 --    "O3,VRAM Speed,Slow,Fast;"&
 --    "O4,FM Sound,Enable,Disable;"&
 --    "O5,PSG Sound,Enable,Disable;";
 
-constant CONF_STR : string :=
-    "GENESIS;BINGENMD ;"&
+constant CONF_STR : string := core_name &
+    ";BINGENMD ;"&
     "S,SAV,Mount;"&
     "TE,Write Save RAM;"&
     "O78,Region,Auto,EU,JP,US;"&
@@ -209,6 +216,7 @@ begin
 	end if;
 end process;
 
+ext_sw(1) <= SVP_EN; -- SVP
 ext_sw(2) <= status(6); --joy swap
 ext_sw(3) <= status(5); --psg en
 ext_sw(4) <= status(4); --fm en

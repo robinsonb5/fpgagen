@@ -110,6 +110,8 @@ end vdp;
 architecture rtl of vdp is
 
 signal vram_a_reg	: std_logic_vector(16 downto 1);
+signal vram32_a_reg : std_logic_vector(15 downto 1);
+signal vram32_a_next: std_logic_vector(15 downto 1);
 
 signal vram32_req_reg : std_logic;
 ----------------------------------------------------------------
@@ -1011,7 +1013,8 @@ end process;
 ----------------------------------------------------------------
 -- VRAM CONTROLLER
 ----------------------------------------------------------------
-vram32_req <= vram32_req_reg;
+vram32_req <= not vram32_req_reg when VMC32_NEXT /= VMC32_IDLE and RAM_REQ_PROGRESS = '0' and vram32_req_reg = vram32_ack else vram32_req_reg;
+vram32_a <= vram32_a_next when VMC32_NEXT /= VMC32_IDLE and RAM_REQ_PROGRESS = '0' and vram32_req_reg = vram32_ack else vram32_a_reg;
 
 -- Get the ack and data one cycle earlier
 SP2_VRAM32_DO <= vram32_q when VMC32 = VMC32_SP2 else SP2_VRAM32_DO_REG;
@@ -1033,8 +1036,29 @@ VMC32_NEXT <= VMC32_SP3 when SP3_SEL = '1' else
               VMC32_BGB when BGB_SEL = '1' else
               VMC32_IDLE;
 
-process( RST_N, CLK)
+process( RST_N, CLK, 
+	vram32_req_reg, vram32_ack, RAM_REQ_PROGRESS, VMC32_NEXT,
+	SP2_VRAM_ADDR, SP3_VRAM_ADDR, HSC_VRAM_ADDR, BGB_VRAM_ADDR, BGA_VRAM_ADDR)
 begin
+
+	vram32_a_next <= (others => '0');
+	if vram32_req_reg = vram32_ack and RAM_REQ_PROGRESS = '0' then
+		case VMC32_NEXT is
+		when VMC32_IDLE =>
+			null;
+		when VMC32_SP2 =>
+			vram32_a_next <= SP2_VRAM_ADDR;
+		when VMC32_SP3 =>
+			vram32_a_next <= SP3_VRAM_ADDR;
+		when VMC32_HSC =>
+			vram32_a_next <= HSC_VRAM_ADDR;
+		when VMC32_BGB =>
+			vram32_a_next <= BGB_VRAM_ADDR;
+		when VMC32_BGA =>
+			vram32_a_next <= BGA_VRAM_ADDR;
+		end case;
+	end if;
+
 	if RST_N = '0' then
 
 		vram32_req_reg <= '0';
@@ -1046,21 +1070,8 @@ begin
 		if vram32_req_reg = vram32_ack then
 			if RAM_REQ_PROGRESS = '0' then
 				VMC32 <= VMC32_NEXT;
-				case VMC32_NEXT is
-				when VMC32_IDLE =>
-					null;
-				when VMC32_SP2 =>
-					vram32_a <= SP2_VRAM_ADDR;
-				when VMC32_SP3 =>
-					vram32_a <= SP3_VRAM_ADDR;
-				when VMC32_HSC =>
-					vram32_a <= HSC_VRAM_ADDR;
-				when VMC32_BGB =>
-					vram32_a <= BGB_VRAM_ADDR;
-				when VMC32_BGA =>
-					vram32_a <= BGA_VRAM_ADDR;
-				end case;
 				if VMC32_NEXT /= VMC32_IDLE then
+					vram32_a_reg <= vram32_a_next;
 					vram32_req_reg <= not vram32_req_reg;
 					RAM_REQ_PROGRESS <= '1';
 				end if;

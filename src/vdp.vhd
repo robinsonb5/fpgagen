@@ -162,12 +162,12 @@ type fifo_code_t is array(0 to 3) of std_logic_vector(3 downto 0);
 signal FIFO_CODE	: fifo_code_t;
 signal FIFO_WR_POS	: std_logic_vector(1 downto 0);
 signal FIFO_RD_POS	: std_logic_vector(1 downto 0);
+signal FIFO_QUEUE	: std_logic_vector(2 downto 0);
 signal FIFO_EMPTY	: std_logic;
 signal FIFO_FULL	: std_logic;
 signal REFRESH_SLOT	: std_logic;
 signal FIFO_EN		: std_logic;
-signal FIFO_SKIP	: std_logic;
-signal FIFO_SKIP_PRE	: std_logic;
+signal FIFO_PARTIAL	: std_logic;
 
 signal IN_DMA		: std_logic;
 signal IN_HBL		: std_logic;
@@ -309,14 +309,15 @@ signal DT_VRAM_RNW      : std_logic;
 signal DT_VRAM_UDS_N    : std_logic;
 signal DT_VRAM_LDS_N    : std_logic;
 
-signal DT_WR_ADDR	: std_logic_vector(16 downto 0);
-signal DT_WR_DATA	: std_logic_vector(15 downto 0);
+signal DT_WR_ADDR       : std_logic_vector(16 downto 0);
+signal DT_WR_DATA       : std_logic_vector(15 downto 0);
 
-signal DT_FF_DATA	: std_logic_vector(15 downto 0);
-signal DT_FF_CODE	: std_logic_vector(3 downto 0);
-signal DT_FF_SEL	: std_logic;
-signal DT_FF_DTACK_N	: std_logic;
-signal DT_VBUS_SEL	: std_logic;
+signal DT_FF_DATA       : std_logic_vector(15 downto 0);
+signal DT_FF_CODE       : std_logic_vector(3 downto 0);
+signal DT_FF_SEL        : std_logic;
+signal DT_FF_DTACK_N    : std_logic;
+signal DT_VBUS_SEL      : std_logic;
+signal DT_VBUS_DTACK_N  : std_logic;
 
 signal DT_RD_DATA	: std_logic_vector(15 downto 0);
 signal DT_RD_CODE	: std_logic_vector(3 downto 0);
@@ -911,7 +912,7 @@ begin
 	elsif rising_edge(CLK) then
 		SOVR_CLR <= '0';
 		SCOL_CLR <= '0';
-	
+
 		if SEL = '0' then
 			FF_DTACK_N <= '1';
 		elsif SEL = '1' and FF_DTACK_N = '1' then			
@@ -2385,8 +2386,8 @@ begin
 
 		HV_PIXDIV <= HV_PIXDIV + 1;
 		if (RS0 = '1' and H40 = '1' and 
-			((HV_PIXDIV = 8-1 and (HV_HCNT < 336 or HV_HCNT >= H_DISP_START)) or --336-365 - 30
-			(HV_PIXDIV = 10-1 and HV_HCNT >= 336 and HV_HCNT < H_DISP_START))) or --normal H40 - 30*10+390*8=3420 cycles
+			((HV_PIXDIV = 8-1 and (HV_HCNT < H_DISP_START or HV_HCNT >= H_DISP_START + 30)) or --336-365 - 30
+			(HV_PIXDIV = 10-1))) or --normal H40 - 30*10+390*8=3420 cycles
 		   (RS0 = '0' and H40 = '1' and HV_PIXDIV = 8-1) or --fast H40
 		   (RS0 = '0' and H40 = '0' and HV_PIXDIV = 10-1) or --normal H32
 		   (RS0 = '1' and H40 = '0' and HV_PIXDIV = 8-1) then --fast H32
@@ -2807,6 +2808,9 @@ end process;
 VBUS_ADDR <= FF_VBUS_ADDR;
 VBUS_SEL <= FF_VBUS_SEL;
 
+FIFO_EMPTY <= '1' when FIFO_QUEUE = 0 and FIFO_PARTIAL = '0' else '0';
+FIFO_FULL <= '1' when (FIFO_QUEUE(2) = '1') or (FIFO_QUEUE = 3 and FIFO_PARTIAL = '1') else '0';
+
 process( RST_N, CLK )
 -- synthesis translate_off
 file F		: text open write_mode is "vdp_dbg.out";
@@ -2825,12 +2829,12 @@ begin
 		
 		FIFO_RD_POS <= "00";
 		FIFO_WR_POS <= "00";
-		FIFO_EMPTY <= '1';
-		FIFO_FULL <= '0';
-		FIFO_SKIP <= '0';
+		FIFO_QUEUE <= "000";
+		FIFO_PARTIAL <= '0';
 
 		DT_RD_DTACK_N <= '1';
 		DT_FF_DTACK_N <= '1';
+		DT_VBUS_DTACK_N <= '1';
 
 		FF_VBUS_ADDR <= (others => '0');
 		FF_VBUS_SEL	<= '0';
@@ -2851,21 +2855,14 @@ begin
 
 	elsif rising_edge(CLK) then
 
-		if FIFO_RD_POS = FIFO_WR_POS then
-			FIFO_EMPTY <= '1';
-		else
-			FIFO_EMPTY <= '0';
-		end if;
-		if FIFO_WR_POS + 1 = FIFO_RD_POS then
-			FIFO_FULL <= '1';
-		else
-			FIFO_FULL <= '0';
-		end if;		
 		if DT_RD_SEL = '0' then
 			DT_RD_DTACK_N <= '1';
 		end if;
-		if DT_FF_SEL = '0' and DT_VBUS_SEL = '0' then
+		if DT_FF_SEL = '0' then
 			DT_FF_DTACK_N <= '1';
+		end if;
+		if DT_VBUS_SEL = '0' then
+			DT_VBUS_DTACK_N <= '1';
 		end if;
 		if ADDR_SET_REQ = '0' then
 			ADDR_SET_ACK <= '0';
@@ -2876,20 +2873,22 @@ begin
 
 		CRAM_WE_A <= '0';
 
-		if DT_FF_SEL = '1' and (FIFO_WR_POS + 1 /= FIFO_RD_POS) and DT_FF_DTACK_N = '1' then
+		if ((DT_FF_SEL = '1' and DT_FF_DTACK_N = '1') or (DT_VBUS_SEL = '1' and DT_VBUS_DTACK_N = '1')) and
+		    FIFO_FULL = '0' and DTC /= DTC_FIFO_RD
+		then
 			FIFO_ADDR( CONV_INTEGER( FIFO_WR_POS ) ) <= ADDR;
-			FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_FF_DATA;
-			FIFO_CODE( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_FF_CODE;
+			if DT_FF_SEL = '1' then
+				FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_FF_DATA;
+				FIFO_CODE( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_FF_CODE;
+				DT_FF_DTACK_N <= '0';
+			else
+				FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_DMAV_DATA;
+				FIFO_CODE( CONV_INTEGER( FIFO_WR_POS ) ) <= CODE(3 downto 0);
+				DT_VBUS_DTACK_N <= '0';
+			end if;
 			FIFO_WR_POS <= FIFO_WR_POS + 1;
+			FIFO_QUEUE <= FIFO_QUEUE + 1;
 			ADDR <= ADDR + ADDR_STEP;
-			DT_FF_DTACK_N <= '0';
-		elsif DT_VBUS_SEL = '1' and (FIFO_WR_POS + 1 /= FIFO_RD_POS) and DT_FF_DTACK_N = '1' then
-			FIFO_ADDR( CONV_INTEGER( FIFO_WR_POS ) ) <= ADDR;
-			FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_DMAV_DATA;
-			FIFO_CODE( CONV_INTEGER( FIFO_WR_POS ) ) <= CODE(3 downto 0);
-			FIFO_WR_POS <= FIFO_WR_POS + 1;
-			ADDR <= ADDR + ADDR_STEP;
-			DT_FF_DTACK_N <= '0';
 		end if;
 
 		-- Register set
@@ -2905,18 +2904,17 @@ begin
 			case DTC is
 			when DTC_IDLE =>
 				if FIFO_EN = '1' then
-					FIFO_SKIP <= FIFO_SKIP_PRE;
-					FIFO_SKIP_PRE <= '0';
+					FIFO_PARTIAL <= '0';
 				end if;
 				-- Direct color DMA hack (correct, but why?)
 				-- Skip the slot after a refresh
-				if FIFO_RD_POS /= FIFO_WR_POS and FIFO_CODE( CONV_INTEGER( FIFO_RD_POS ) ) = "0011" and
+				if FIFO_EMPTY = '0' and FIFO_CODE( CONV_INTEGER( FIFO_RD_POS ) ) = "0011" and
 				   DE = '0' and REFRESH_SLOT = '1' then
-					FIFO_SKIP <= '1';
+					FIFO_PARTIAL <= '1';
 				end if;
 
-				if VRAM_SPEED = '0' or (FIFO_EN = '1' and FIFO_SKIP = '0') then
-					if FIFO_RD_POS /= FIFO_WR_POS then
+				if VRAM_SPEED = '0' or (FIFO_EN = '1' and FIFO_PARTIAL = '0') then
+					if FIFO_EMPTY = '0' then
 						DTC <= DTC_FIFO_RD;
 					elsif DT_RD_SEL = '1' and DT_RD_DTACK_N = '1' then
 						case DT_RD_CODE is
@@ -2929,27 +2927,28 @@ begin
 						end case;
 					end if;
 				end if;
-			
+
 			when DTC_FIFO_RD =>
 				DT_WR_ADDR <= FIFO_ADDR( CONV_INTEGER( FIFO_RD_POS ) );
 				DT_WR_DATA <= FIFO_DATA( CONV_INTEGER( FIFO_RD_POS ) );
 				FIFO_RD_POS <= FIFO_RD_POS + 1;
+				FIFO_QUEUE <= FIFO_QUEUE - 1;
 				case FIFO_CODE( CONV_INTEGER( FIFO_RD_POS ) ) is
 				when "0011" => -- CRAM Write
 					DTC <= DTC_CRAM_WR;
 				when "0101" => -- VSRAM Write
 					DTC <= DTC_VSRAM_WR;
 				when "0001" => -- VRAM Write
+					if M128 = '0' then
+						--skip next FIFO slot since we write 16 bit now instead of the original 8
+						FIFO_PARTIAL <= '1';
+					end if;
 					DTC <= DTC_VRAM_WR1;
 				when others => --invalid target
 					DTC <= DTC_WR_END;
 				end case;
 
 			when DTC_VRAM_WR1 =>
-				if M128 = '0' then
-					--skip next FIFO slot since we write 16 bit now instead of the original 8
-					FIFO_SKIP_PRE <= '1';
-				end if;
 -- synthesis translate_off
 				write(L, string'("   VRAM WR ["));
 				hwrite(L, x"00" & DT_WR_ADDR(15 downto 1) & '0');
@@ -3117,7 +3116,7 @@ begin
 				ADDR_SET_ACK <= '1';
 			end if;
 
-			if FIFO_RD_POS = FIFO_WR_POS and DMA_FILL = '1' and DMAF_SET_REQ = '1' then
+			if FIFO_EMPTY = '1' and DMA_FILL = '1' and DMAF_SET_REQ = '1' then
 				if CODE(3 downto 0) = "0011" or CODE(3 downto 0) = "0101" then
 					-- CRAM, VSRAM fill gets its data from the next FIFO write position
 					DT_DMAF_DATA <= FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) );
@@ -3156,7 +3155,7 @@ begin
 				DMAC <= DMA_FILL_START;
 
 			when DMA_FILL_START =>
-				if FIFO_RD_POS = FIFO_WR_POS and DTC = DTC_IDLE and DMAF_SET_REQ = '0' then
+				if FIFO_EMPTY = '1' and DTC = DTC_IDLE and DMAF_SET_REQ = '0' then
 					-- suspend FILL if the FIFO is not empty
 					case CODE(3 downto 0) is
 					when "0011" => -- CRAM Write
@@ -3399,7 +3398,7 @@ begin
 				end if;
 	
 			when DMA_VBUS_SEL =>
-				if DT_FF_DTACK_N = '1' then
+				if DT_VBUS_DTACK_N = '1' then
 					DT_VBUS_SEL <= '1';
 					DMA_LENGTH <= DMA_LENGTH - 1;
 					DMA_SOURCE <= DMA_SOURCE + 1;
@@ -3407,7 +3406,7 @@ begin
 				end if;
 
 			when DMA_VBUS_LOOP =>
-				if DT_FF_DTACK_N = '0' then
+				if DT_VBUS_DTACK_N = '0' then
 					DT_VBUS_SEL <= '0';
 					REG(20) <= DMA_LENGTH(15 downto 8);
 					REG(19) <= DMA_LENGTH(7 downto 0);
@@ -3432,6 +3431,7 @@ begin
 			-- Do nothing
 		end if;
 	end if;
+
 end process;
 
 ----------------------------------------------------------------

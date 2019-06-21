@@ -575,8 +575,8 @@ type sp1c_t is (
 );
 signal SP1C	: SP1C_t;
 signal SP1_Y			: std_logic_vector(8 downto 0);
-signal SP1_STOP			: std_logic;
 signal SP1_EN			: std_logic;
+signal SP1_STEPS        : std_logic_vector(6 downto 0);
 
 signal OBJ_TOT			: std_logic_vector(6 downto 0);
 signal OBJ_NEXT			: std_logic_vector(6 downto 0);
@@ -1781,7 +1781,6 @@ begin
 		OBJ_VISINFO_ADDR_WR <= (others => '0');
 
 		SP1_SOVR_SET <= '0';
-		SP1_STOP <= '0';
 
 	elsif rising_edge(CLK) then
 
@@ -1794,16 +1793,20 @@ begin
 				OBJ_NEXT <= (others => '0');
 				OBJ_NB <= (others => '0');
 				OBJ_VISINFO_WE <= '0';
-				SP1_STOP <= '0';
+				SP1_STEPS <= (others => '0');
 				SP1C <= SP1C_Y_RD;
 
 			when SP1C_Y_RD =>
-				if DE='0' then
-					SP1_STOP <= '1';
-				end if;
-				if SP1_EN = '1' then --check one sprite/pixel, this matches the original HW behavior
+				if SP1_EN = '1' and DE = '1' then --check one sprite/pixel, this matches the original HW behavior
 					OBJ_CACHE_ADDR_RD_SP1 <= OBJ_NEXT;
 					SP1C <= SP1C_Y_RD2;
+				end if;
+
+				if SP1_EN = '1' then
+					SP1_STEPS <= SP1_STEPS + 1;
+				end if;
+				if SP1_STEPS = OBJ_MAX_FRAME then
+					SP1C <= SP1C_DONE;
 				end if;
 
 			when SP1C_Y_RD2 =>
@@ -1870,8 +1873,7 @@ begin
 				elsif OBJ_TOT = OBJ_MAX_FRAME - 1  or 
 					 -- the following checks are inspired by the gens-ii emulator
 						OBJ_LINK >= OBJ_MAX_FRAME or
-						OBJ_LINK = "0000000" or
-						SP1_STOP = '1'
+						OBJ_LINK = "0000000"
 				then
 					SP1C <= SP1C_DONE;
 				else

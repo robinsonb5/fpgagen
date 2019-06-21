@@ -293,6 +293,7 @@ type dmac_t is (
 	DMA_COPY_WR2,
 	DMA_COPY_LOOP,
 	DMA_VBUS_INIT,
+	DMA_VBUS_WAIT,
 	DMA_VBUS_RD,
 	DMA_VBUS_RD2,
 	DMA_VBUS_SEL,
@@ -344,6 +345,7 @@ signal DMA_COPY		: std_logic;
 signal DMA_LENGTH	: std_logic_vector(15 downto 0);
 signal DMA_SOURCE	: std_logic_vector(15 downto 0);
 
+signal DMA_VBUS_TIMER : std_logic_vector(2 downto 0);
 ----------------------------------------------------------------
 -- VIDEO COUNTING
 ----------------------------------------------------------------
@@ -3376,7 +3378,16 @@ begin
 -- synthesis translate_on
 					DMA_LENGTH <= REG(20) & REG(19);
 					DMA_SOURCE <= REG(22) & REG(21);
-					DMAC <= DMA_VBUS_RD;
+					DMA_VBUS_TIMER <= "101";
+					DMAC <= DMA_VBUS_WAIT;
+				end if;
+
+			when DMA_VBUS_WAIT =>
+				if HV_PIXDIV = 0 then
+					if DMA_VBUS_TIMER = "000" then
+						DMAC <= DMA_VBUS_RD;
+					end if;
+					DMA_VBUS_TIMER <= DMA_VBUS_TIMER - 1;
 				end if;
 
 			when DMA_VBUS_RD =>

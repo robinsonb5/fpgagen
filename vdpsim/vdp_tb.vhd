@@ -73,7 +73,9 @@ component vdp
                 VS              : out std_logic;
 
                 VRAM_SPEED      : in std_logic := '1';
-                VSCROLL_BUG     : in std_logic := '0'
+                VSCROLL_BUG     : in std_logic := '0';
+                BORDER_EN       : in std_logic := '1'
+
         );
 end component ;
 
@@ -87,7 +89,8 @@ signal vram_a: std_logic_vector(15 downto 1);
 signal vram_q: std_logic_vector(15 downto 0);
 signal vram_d: std_logic_vector(15 downto 0);
 
-signal vram32_req_loop: std_logic;
+signal vram32_req: std_logic;
+signal vram32_ack: std_logic;
 signal vram32_we: std_logic;
 signal vram32_a: std_logic_vector(15 downto 1);
 signal vram32_q: std_logic_vector(31 downto 0);
@@ -128,8 +131,8 @@ begin
       vram_d => vram_d,
 
       vram32_a => vram32_a,
-      vram32_req => vram32_req_loop,
-      vram32_ack => vram32_req_loop,
+      vram32_req => vram32_req,
+      vram32_ack => vram32_ack,
       vram32_q => vram32_q,
 
       INTACK => '0',
@@ -198,12 +201,15 @@ begin
     variable q : std_logic_vector(31 downto 0);
   begin
     -- wire memory
-    c := memclk;
-    a := vram32_a;
-    vram32_c(c,a,q);
 
     if (memclk = '0' and memclk'event) then
-      vram32_q <= q;
+      if vram32_req /= vram32_ack then
+        vram32_ack <= vram32_req;
+        c := memclk;
+        a := vram32_a;
+        vram32_c(c,a,q);
+        vram32_q <= q;
+      end if;
     end if;
  end process memory32;
 

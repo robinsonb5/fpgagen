@@ -345,7 +345,7 @@ begin
 
 		FILL2:
 		begin
-			//cpu_ack<=cpu_req; // Maintain ack signal if necessary
+			cpu_ack<=cpu_req; // Maintain ack signal if necessary
 			// write second word to Cache...
 			readword_burst<=1'b1;
 			readword<=readword+1'b1;
@@ -357,7 +357,7 @@ begin
 
 		FILL3:
 		begin
-			//cpu_ack<=cpu_req; // Maintain ack signal if necessary
+			cpu_ack<=cpu_req; // Maintain ack signal if necessary
 			// write third word to Cache...
 			readword_burst<=1'b1;
 			readword<=readword+1'b1;

@@ -160,6 +160,8 @@ type fifo_data_t is array(0 to 3) of std_logic_vector(15 downto 0);
 signal FIFO_DATA	: fifo_data_t;
 type fifo_code_t is array(0 to 3) of std_logic_vector(3 downto 0);
 signal FIFO_CODE	: fifo_code_t;
+type fifo_delay_t is array(0 to 3) of std_logic_vector(1 downto 0);
+signal FIFO_DELAY   : fifo_delay_t;
 signal FIFO_WR_POS	: std_logic_vector(1 downto 0);
 signal FIFO_RD_POS	: std_logic_vector(1 downto 0);
 signal FIFO_QUEUE	: std_logic_vector(2 downto 0);
@@ -168,6 +170,7 @@ signal FIFO_FULL	: std_logic;
 signal REFRESH_SLOT	: std_logic;
 signal FIFO_EN		: std_logic;
 signal FIFO_PARTIAL	: std_logic;
+signal SLOT_EN      : std_logic;
 
 signal IN_DMA		: std_logic;
 signal IN_HBL		: std_logic;
@@ -345,7 +348,7 @@ signal DMA_COPY		: std_logic;
 signal DMA_LENGTH	: std_logic_vector(15 downto 0);
 signal DMA_SOURCE	: std_logic_vector(15 downto 0);
 
-signal DMA_VBUS_TIMER : std_logic_vector(2 downto 0);
+signal DMA_VBUS_TIMER : std_logic_vector(1 downto 0);
 ----------------------------------------------------------------
 -- VIDEO COUNTING
 ----------------------------------------------------------------
@@ -2365,6 +2368,7 @@ begin
 		VBL_AREA <= '1';
 
 		FIFO_EN <= '0';
+		SLOT_EN <= '0';
 
 		SP1_EN <= '0';
 		SP2_EN <= '0';
@@ -2380,6 +2384,7 @@ begin
 		VINT_T80_SET <= '0';
 		VINT_T80_CLR <= '0';
 		FIFO_EN <= '0';
+		SLOT_EN <= '0';
 
 		SP1_EN <= '0';
 		SP2_EN <= '0';
@@ -2518,6 +2523,8 @@ begin
 				when "0000" => BGB_PATTERN_EN <= '1';
 				when others => null;
 			end case;
+
+			SLOT_EN <= not HV_HCNT(0);
 
 		end if;
 	end if;
@@ -2877,6 +2884,13 @@ begin
 
 		CRAM_WE_A <= '0';
 
+		if SLOT_EN = '1' then
+			if FIFO_DELAY(0) /= "00" then FIFO_DELAY(0) <= FIFO_DELAY(0) - 1; end if;
+			if FIFO_DELAY(1) /= "00" then FIFO_DELAY(1) <= FIFO_DELAY(1) - 1; end if;
+			if FIFO_DELAY(2) /= "00" then FIFO_DELAY(2) <= FIFO_DELAY(2) - 1; end if;
+			if FIFO_DELAY(3) /= "00" then FIFO_DELAY(3) <= FIFO_DELAY(3) - 1; end if;
+		end if;
+
 		if ((DT_FF_SEL = '1' and DT_FF_DTACK_N = '1') or (DT_VBUS_SEL = '1' and DT_VBUS_DTACK_N = '1')) and
 		    FIFO_FULL = '0' and DTC /= DTC_FIFO_RD
 		then
@@ -2884,10 +2898,12 @@ begin
 			if DT_FF_SEL = '1' then
 				FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_FF_DATA;
 				FIFO_CODE( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_FF_CODE;
+				FIFO_DELAY( CONV_INTEGER( FIFO_WR_POS ) ) <= "00"; -- should be delayed, too?
 				DT_FF_DTACK_N <= '0';
 			else
 				FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_DMAV_DATA;
 				FIFO_CODE( CONV_INTEGER( FIFO_WR_POS ) ) <= CODE(3 downto 0);
+				FIFO_DELAY( CONV_INTEGER( FIFO_WR_POS ) ) <= "10";
 				DT_VBUS_DTACK_N <= '0';
 			end if;
 			FIFO_WR_POS <= FIFO_WR_POS + 1;
@@ -2918,7 +2934,7 @@ begin
 				end if;
 
 				if VRAM_SPEED = '0' or (FIFO_EN = '1' and FIFO_PARTIAL = '0') then
-					if FIFO_EMPTY = '0' then
+					if FIFO_EMPTY = '0' and FIFO_DELAY( CONV_INTEGER( FIFO_RD_POS ) ) = 0 then
 						DTC <= DTC_FIFO_RD;
 					elsif DT_RD_SEL = '1' and DT_RD_DTACK_N = '1' then
 						case DT_RD_CODE is
@@ -3378,13 +3394,13 @@ begin
 -- synthesis translate_on
 					DMA_LENGTH <= REG(20) & REG(19);
 					DMA_SOURCE <= REG(22) & REG(21);
-					DMA_VBUS_TIMER <= "101";
+					DMA_VBUS_TIMER <= "10";
 					DMAC <= DMA_VBUS_WAIT;
 				end if;
 
 			when DMA_VBUS_WAIT =>
-				if HV_PIXDIV = 0 then
-					if DMA_VBUS_TIMER = "000" then
+				if SLOT_EN = '1' then
+					if DMA_VBUS_TIMER = "00" then
 						DMAC <= DMA_VBUS_RD;
 					end if;
 					DMA_VBUS_TIMER <= DMA_VBUS_TIMER - 1;

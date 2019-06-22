@@ -350,7 +350,7 @@ signal DMA_COPY		: std_logic;
 signal DMA_LENGTH	: std_logic_vector(15 downto 0);
 signal DMA_SOURCE	: std_logic_vector(15 downto 0);
 
-signal DMA_VBUS_TIMER : std_logic_vector(1 downto 0);
+signal DMA_VBUS_TIMER : std_logic;
 ----------------------------------------------------------------
 -- VIDEO COUNTING
 ----------------------------------------------------------------
@@ -3412,16 +3412,16 @@ begin
 -- synthesis translate_on
 					DMA_LENGTH <= REG(20) & REG(19);
 					DMA_SOURCE <= REG(22) & REG(21);
-					DMA_VBUS_TIMER <= "10";
+					DMA_VBUS_TIMER <= '1';
 					DMAC <= DMA_VBUS_WAIT;
 				end if;
 
 			when DMA_VBUS_WAIT =>
 				if SLOT_EN = '1' then
-					if DMA_VBUS_TIMER = "00" then
+					if DMA_VBUS_TIMER = '0' then
 						DMAC <= DMA_VBUS_RD;
 					end if;
-					DMA_VBUS_TIMER <= DMA_VBUS_TIMER - 1;
+					DMA_VBUS_TIMER <= not DMA_VBUS_TIMER;
 				end if;
 
 			when DMA_VBUS_RD =>

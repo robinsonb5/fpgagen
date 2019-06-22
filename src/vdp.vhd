@@ -981,12 +981,15 @@ begin
 				elsif A(4 downto 2) = "111" then
 					DBG <= DI;
 					FF_DTACK_N <= '0';
+				elsif A(4 downto 3) = "10" then
+					-- PSG
+					FF_DTACK_N <= '0';
 				else
 					-- Unused (Lock-up)
 					FF_DTACK_N <= '0';
 				end if;			
 			else -- Read
-				if A(3 downto 2) = "00" then
+				if A(4 downto 2) = "000" then
 					PENDING <= '0';
 					-- Data Port
 					if CODE = "001000" -- CRAM Read
@@ -1005,14 +1008,14 @@ begin
 					else
 						FF_DTACK_N <= '0';
 					end if;
-				elsif A(3 downto 2) = "01" then
+				elsif A(4 downto 2) = "001" then
 					-- Control Port (Read Status Register)
 					PENDING <= '0';
 					FF_DO <= STATUS;
 					SOVR_CLR <= '1';
 					SCOL_CLR <= '1';
 					FF_DTACK_N <= '0';
-				elsif A(3) = '1' then
+				elsif A(4 downto 3) = "01" then
 					-- HV Counter
 					FF_DO <= HV;
 					FF_DTACK_N <= '0';

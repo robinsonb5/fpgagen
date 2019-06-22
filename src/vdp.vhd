@@ -1021,8 +1021,11 @@ begin
 					-- HV Counter
 					FF_DO <= HV;
 					FF_DTACK_N <= '0';
+				elsif A(4) = '1' then
+					-- unused, PSG, DBG
+					FF_DO <= x"FFFF";
+					FF_DTACK_N <= '0';
 				end if;
-
 			end if;
 		end if;
 	end if;

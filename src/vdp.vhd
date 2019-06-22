@@ -168,6 +168,8 @@ signal FIFO_QUEUE	: std_logic_vector(2 downto 0);
 signal FIFO_EMPTY	: std_logic;
 signal FIFO_FULL	: std_logic;
 signal REFRESH_SLOT	: std_logic;
+signal REFRESH_FLAG : std_logic;
+signal REFRESH_EN   : std_logic;
 signal FIFO_EN		: std_logic;
 signal FIFO_PARTIAL	: std_logic;
 signal SLOT_EN      : std_logic;
@@ -2372,6 +2374,7 @@ begin
 
 		FIFO_EN <= '0';
 		SLOT_EN <= '0';
+		REFRESH_EN <= '0';
 
 		SP1_EN <= '0';
 		SP2_EN <= '0';
@@ -2388,6 +2391,7 @@ begin
 		VINT_T80_CLR <= '0';
 		FIFO_EN <= '0';
 		SLOT_EN <= '0';
+		REFRESH_EN <= '0';
 
 		SP1_EN <= '0';
 		SP2_EN <= '0';
@@ -2528,6 +2532,9 @@ begin
 			end case;
 
 			SLOT_EN <= not HV_HCNT(0);
+			if REFRESH_SLOT = '1' then
+				REFRESH_EN <= '1';
+			end if;
 
 		end if;
 	end if;
@@ -2846,6 +2853,8 @@ begin
 		FIFO_QUEUE <= "000";
 		FIFO_PARTIAL <= '0';
 
+		REFRESH_FLAG <= '0';
+
 		DT_RD_DTACK_N <= '1';
 		DT_FF_DTACK_N <= '1';
 		DT_VBUS_DTACK_N <= '1';
@@ -2923,20 +2932,23 @@ begin
 			REG_SET_ACK <= '1';
 		end if;
 
+		if SLOT_EN = '1' then
+			if REFRESH_EN = '1' then
+				-- skip the slot after a refresh for DMA
+				REFRESH_FLAG <= DMA_VBUS;
+			else
+				REFRESH_FLAG <= '0';
+			end if;
+		end if;
+
 		if DT_ACTIVE = '1' then
 			case DTC is
 			when DTC_IDLE =>
 				if FIFO_EN = '1' then
 					FIFO_PARTIAL <= '0';
 				end if;
-				-- Direct color DMA hack (correct, but why?)
-				-- Skip the slot after a refresh
-				if FIFO_EMPTY = '0' and FIFO_CODE( CONV_INTEGER( FIFO_RD_POS ) ) = "0011" and
-				   DE = '0' and REFRESH_SLOT = '1' then
-					FIFO_PARTIAL <= '1';
-				end if;
 
-				if VRAM_SPEED = '0' or (FIFO_EN = '1' and FIFO_PARTIAL = '0') then
+				if VRAM_SPEED = '0' or (FIFO_EN = '1' and FIFO_PARTIAL = '0' and REFRESH_FLAG = '0') then
 					if FIFO_EMPTY = '0' and FIFO_DELAY( CONV_INTEGER( FIFO_RD_POS ) ) = 0 then
 						DTC <= DTC_FIFO_RD;
 					elsif DT_RD_SEL = '1' and DT_RD_DTACK_N = '1' then

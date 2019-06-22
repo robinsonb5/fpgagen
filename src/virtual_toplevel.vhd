@@ -1389,7 +1389,7 @@ end process;
 -- 7F = 01111111 000
 -- FF = 11111111 000
 -- VDP AREA
-FX68_VDP_SEL <= '1' when FX68_AS_N = '0' and
+FX68_VDP_SEL <= '1' when ((FX68_AS_N = '0' and FX68_RNW = '0') or FX68_SEL = '1') and
 	((FX68_A(23 downto 21) = "110" and FX68_A(18 downto 16) = "000") or
 	 (FX68_A(23 downto 16) = x"A0" and FX68_A(14 downto 5) = "1111111" & "000")) -- Z80 Address space
 	else '0';
@@ -1409,8 +1409,6 @@ begin
 
 		VDPC <= VDPC_IDLE;
 
-		HEXVALUE <= x"0000";
-
 	elsif rising_edge(MCLK) then
 		if FX68_VDP_SEL = '0' then 
 			FX68_VDP_DTACK_N <= '1';
@@ -1422,42 +1420,17 @@ begin
 		case VDPC is
 		when VDPC_IDLE =>
 			if FX68_VDP_SEL = '1' and FX68_VDP_DTACK_N = '1' then
-				if FX68_A(4 downto 3) = "10" then
-					-- PSG (used for debug)
-					if FX68_A(3 downto 1) = "000" and FX68_LDS_N = '0' and FX68_RNW = '0' then
-						HEXVALUE(15 downto 8) <= FX68_DO(7 downto 0);
-					end if;
-					if FX68_A(3 downto 1) = "001" and FX68_LDS_N = '0' and FX68_RNW = '0' then
-						HEXVALUE(7 downto 0) <= FX68_DO(7 downto 0);
-					end if;
-					FX68_VDP_D <= x"FFFF";
-					FX68_VDP_DTACK_N <= '0';
-				else
-					-- VDP
-					VDP_SEL <= '1';
-					VDP_A <= FX68_A(4 downto 1) & '0';
-					VDP_RNW <= FX68_RNW;
-					VDP_DI <= FX68_DO;
-					VDPC <= VDPC_FX68_ACC;
-				end if;
+				VDP_SEL <= '1';
+				VDP_A <= FX68_A(4 downto 1) & '0';
+				VDP_RNW <= FX68_RNW;
+				VDP_DI <= FX68_DO;
+				VDPC <= VDPC_FX68_ACC;
 			elsif T80_VDP_SEL = '1' and T80_VDP_DTACK_N = '1' then
-				if T80_A(4 downto 3) = "10" then
-					-- PSG (used for debug)
-					if T80_A(3 downto 0) = "0001" and T80_WR_N = '0' then
-						HEXVALUE(15 downto 8) <= T80_DO;
-					end if;
-					if T80_A(3 downto 0) = "0011" and T80_WR_N = '0' then
-						HEXVALUE(7 downto 0) <= T80_DO;
-					end if;
-					T80_VDP_D <= x"FF";
-					T80_VDP_DTACK_N <= '0';
-				else
-					VDP_SEL <= '1';
-					VDP_A <= T80_A(4 downto 0);
-					VDP_RNW <= T80_WR_N;
-					VDP_DI <= T80_DO & T80_DO;
-					VDPC <= VDPC_T80_ACC;
-				end if;
+				VDP_SEL <= '1';
+				VDP_A <= T80_A(4 downto 0);
+				VDP_RNW <= T80_WR_N;
+				VDP_DI <= T80_DO & T80_DO;
+				VDPC <= VDPC_T80_ACC;
 			end if;
 
 		when VDPC_FX68_ACC =>
@@ -1513,10 +1486,10 @@ T80_FM_D <= FM_DO;
 -- Z80: 7F11h
 -- 68k: C00011
 
-T80_PSG_SEL <= '1' when T80_A(15 downto 3) = x"7F1"&'0' and T80_MREQ_N = '0' and T80_WR_N = '0' else '0';
-FX68_PSG_SEL <= '1' when FX68_A(23 downto 3) = x"C0001"&'0' and FX68_SEL = '1' and FX68_RNW='0' else '0';
+T80_PSG_SEL <= '1' when T80_VDP_SEL = '1' and T80_A(4 downto 3) = "10" and T80_MREQ_N = '0' and T80_WR_N = '0' else '0';
+FX68_PSG_SEL <= '1' when FX68_VDP_SEL = '1' and FX68_A(4 downto 3) = "10" and FX68_RNW='0' else '0';
 PSG_SEL <= T80_PSG_SEL or FX68_PSG_SEL;
-PSG_DI <= T80_DO when T80_PSG_SEL = '1' else FX68_DO(15 downto 8) when FX68_UDS_N = '0' else FX68_DO(7 downto 0);
+PSG_DI <= T80_DO when T80_PSG_SEL = '1' else FX68_DO(7 downto 0);
 
 -- Z80:
 -- 60 = 01100000

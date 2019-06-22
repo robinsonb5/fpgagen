@@ -110,6 +110,8 @@ end vdp;
 architecture rtl of vdp is
 
 signal vram_a_reg	: std_logic_vector(16 downto 1);
+signal vram32_a_reg : std_logic_vector(15 downto 1);
+signal vram32_a_next: std_logic_vector(15 downto 1);
 
 signal vram32_req_reg : std_logic;
 ----------------------------------------------------------------
@@ -158,14 +160,19 @@ type fifo_data_t is array(0 to 3) of std_logic_vector(15 downto 0);
 signal FIFO_DATA	: fifo_data_t;
 type fifo_code_t is array(0 to 3) of std_logic_vector(3 downto 0);
 signal FIFO_CODE	: fifo_code_t;
+type fifo_delay_t is array(0 to 3) of std_logic_vector(1 downto 0);
+signal FIFO_DELAY   : fifo_delay_t;
 signal FIFO_WR_POS	: std_logic_vector(1 downto 0);
 signal FIFO_RD_POS	: std_logic_vector(1 downto 0);
+signal FIFO_QUEUE	: std_logic_vector(2 downto 0);
 signal FIFO_EMPTY	: std_logic;
 signal FIFO_FULL	: std_logic;
 signal REFRESH_SLOT	: std_logic;
+signal REFRESH_FLAG : std_logic;
+signal REFRESH_EN   : std_logic;
 signal FIFO_EN		: std_logic;
-signal FIFO_SKIP	: std_logic;
-signal FIFO_SKIP_PRE	: std_logic;
+signal FIFO_PARTIAL	: std_logic;
+signal SLOT_EN      : std_logic;
 
 signal IN_DMA		: std_logic;
 signal IN_HBL		: std_logic;
@@ -291,6 +298,7 @@ type dmac_t is (
 	DMA_COPY_WR2,
 	DMA_COPY_LOOP,
 	DMA_VBUS_INIT,
+	DMA_VBUS_WAIT,
 	DMA_VBUS_RD,
 	DMA_VBUS_RD2,
 	DMA_VBUS_SEL,
@@ -307,14 +315,15 @@ signal DT_VRAM_RNW      : std_logic;
 signal DT_VRAM_UDS_N    : std_logic;
 signal DT_VRAM_LDS_N    : std_logic;
 
-signal DT_WR_ADDR	: std_logic_vector(16 downto 0);
-signal DT_WR_DATA	: std_logic_vector(15 downto 0);
+signal DT_WR_ADDR       : std_logic_vector(16 downto 0);
+signal DT_WR_DATA       : std_logic_vector(15 downto 0);
 
-signal DT_FF_DATA	: std_logic_vector(15 downto 0);
-signal DT_FF_CODE	: std_logic_vector(3 downto 0);
-signal DT_FF_SEL	: std_logic;
-signal DT_FF_DTACK_N	: std_logic;
-signal DT_VBUS_SEL	: std_logic;
+signal DT_FF_DATA       : std_logic_vector(15 downto 0);
+signal DT_FF_CODE       : std_logic_vector(3 downto 0);
+signal DT_FF_SEL        : std_logic;
+signal DT_FF_DTACK_N    : std_logic;
+signal DT_VBUS_SEL      : std_logic;
+signal DT_VBUS_DTACK_N  : std_logic;
 
 signal DT_RD_DATA	: std_logic_vector(15 downto 0);
 signal DT_RD_CODE	: std_logic_vector(3 downto 0);
@@ -341,6 +350,7 @@ signal DMA_COPY		: std_logic;
 signal DMA_LENGTH	: std_logic_vector(15 downto 0);
 signal DMA_SOURCE	: std_logic_vector(15 downto 0);
 
+signal DMA_VBUS_TIMER : std_logic;
 ----------------------------------------------------------------
 -- VIDEO COUNTING
 ----------------------------------------------------------------
@@ -429,7 +439,6 @@ type bgbc_t is (
 	BGBC_CALC_BASE,
 	BGBC_BASE_RD,
 	BGBC_TILE_RD,
-	BGBC_TILE_RD2,
 	BGBC_LOOP,
 	BGBC_DONE
 );
@@ -459,9 +468,13 @@ signal BGB_VRAM_ADDR        : std_logic_vector(15 downto 1);
 signal BGB_VRAM32_DO        : std_logic_vector(31 downto 0);
 signal BGB_VRAM32_DO_REG    : std_logic_vector(31 downto 0);
 signal BGB_VRAM32_ACK       : std_logic;
+signal BGB_VRAM32_ACK_REG   : std_logic;
 signal BGB_SEL		        : std_logic;
 signal BGB_VSRAM1_LATCH     : std_logic_vector(10 downto 0);
 signal BGB_VSRAM1_LAST_READ : std_logic_vector(10 downto 0);
+
+signal BGB_MAPPING_EN       : std_logic;
+signal BGB_PATTERN_EN       : std_logic;
 
 -- BACKGROUND A
 type bgac_t is (
@@ -472,9 +485,8 @@ type bgac_t is (
 	BGAC_CALC_Y,
 	BGAC_CALC_BASE,
 	BGAC_BASE_RD,
-	BGAC_LOOP,
 	BGAC_TILE_RD,
-	BGAC_TILE_RD2,
+	BGAC_LOOP,
 	BGAC_DONE
 );
 signal BGAC		: bgac_t;
@@ -503,6 +515,7 @@ signal BGA_VRAM_ADDR        : std_logic_vector(15 downto 1);
 signal BGA_VRAM32_DO        : std_logic_vector(31 downto 0);
 signal BGA_VRAM32_DO_REG    : std_logic_vector(31 downto 0);
 signal BGA_VRAM32_ACK       : std_logic;
+signal BGA_VRAM32_ACK_REG   : std_logic;
 signal BGA_SEL              : std_logic;
 signal BGA_VSRAM0_LATCH     : std_logic_vector(10 downto 0);
 signal BGA_VSRAM0_LAST_READ : std_logic_vector(10 downto 0);
@@ -510,11 +523,14 @@ signal BGA_VSRAM0_LAST_READ : std_logic_vector(10 downto 0);
 signal WIN_V		: std_logic;
 signal WIN_H		: std_logic;
 
+signal BGA_MAPPING_EN       : std_logic;
+signal BGA_PATTERN_EN       : std_logic;
+
 ----------------------------------------------------------------
 -- SPRITE ENGINE
 ----------------------------------------------------------------
 signal OBJ_MAX_FRAME			: std_logic_vector(6 downto 0);
-signal OBJ_MAX_LINE			: std_logic_vector(6 downto 0);
+signal OBJ_MAX_LINE         : std_logic_vector(4 downto 0);
 
 signal OBJ_CACHE_ADDR_RD    : std_logic_vector(6 downto 0);
 signal OBJ_CACHE_ADDR_WR    : std_logic_vector(6 downto 0);
@@ -566,8 +582,8 @@ type sp1c_t is (
 );
 signal SP1C	: SP1C_t;
 signal SP1_Y			: std_logic_vector(8 downto 0);
-signal SP1_STOP			: std_logic;
 signal SP1_EN			: std_logic;
+signal SP1_STEPS        : std_logic_vector(6 downto 0);
 
 signal OBJ_TOT			: std_logic_vector(6 downto 0);
 signal OBJ_NEXT			: std_logic_vector(6 downto 0);
@@ -610,9 +626,9 @@ signal SP3E_ACTIVATE	: std_logic;
 type sp3c_t is (
 	SP3C_INIT,
 	SP3C_NEXT,
+	SP3C_TILE_RD,
 	SP3C_LOOP,
 	SP3C_PLOT,
-	SP3C_TILE_RD,
 	SP3C_DONE
 );
 signal SP3C		: SP3C_t;
@@ -621,9 +637,10 @@ signal SP3_VRAM_ADDR	: std_logic_vector(15 downto 1);
 signal SP3_VRAM32_DO    : std_logic_vector(31 downto 0);
 signal SP3_VRAM32_DO_REG: std_logic_vector(31 downto 0);
 signal SP3_VRAM32_ACK   : std_logic;
+signal SP3_VRAM32_ACK_REG: std_logic;
 signal SP3_SEL          : std_logic;
 
-signal OBJ_PIX			: std_logic_vector(8 downto 0);
+signal OBJ_PIX          : std_logic_vector(8 downto 0);
 signal OBJ_NO			: std_logic_vector(4 downto 0);
 
 signal OBJ_LINK			: std_logic_vector(6 downto 0);
@@ -902,7 +919,7 @@ begin
 	elsif rising_edge(CLK) then
 		SOVR_CLR <= '0';
 		SCOL_CLR <= '0';
-	
+
 		if SEL = '0' then
 			FF_DTACK_N <= '1';
 		elsif SEL = '1' and FF_DTACK_N = '1' then			
@@ -966,12 +983,15 @@ begin
 				elsif A(4 downto 2) = "111" then
 					DBG <= DI;
 					FF_DTACK_N <= '0';
+				elsif A(4 downto 3) = "10" then
+					-- PSG
+					FF_DTACK_N <= '0';
 				else
 					-- Unused (Lock-up)
 					FF_DTACK_N <= '0';
 				end if;			
 			else -- Read
-				if A(3 downto 2) = "00" then
+				if A(4 downto 2) = "000" then
 					PENDING <= '0';
 					-- Data Port
 					if CODE = "001000" -- CRAM Read
@@ -990,19 +1010,22 @@ begin
 					else
 						FF_DTACK_N <= '0';
 					end if;
-				elsif A(3 downto 2) = "01" then
+				elsif A(4 downto 2) = "001" then
 					-- Control Port (Read Status Register)
 					PENDING <= '0';
 					FF_DO <= STATUS;
 					SOVR_CLR <= '1';
 					SCOL_CLR <= '1';
 					FF_DTACK_N <= '0';
-				elsif A(3) = '1' then
+				elsif A(4 downto 3) = "01" then
 					-- HV Counter
 					FF_DO <= HV;
 					FF_DTACK_N <= '0';
+				elsif A(4) = '1' then
+					-- unused, PSG, DBG
+					FF_DO <= x"FFFF";
+					FF_DTACK_N <= '0';
 				end if;
-
 			end if;
 		end if;
 	end if;
@@ -1011,7 +1034,8 @@ end process;
 ----------------------------------------------------------------
 -- VRAM CONTROLLER
 ----------------------------------------------------------------
-vram32_req <= vram32_req_reg;
+vram32_req <= not vram32_req_reg when VMC32_NEXT /= VMC32_IDLE and RAM_REQ_PROGRESS = '0' and vram32_req_reg = vram32_ack else vram32_req_reg;
+vram32_a <= vram32_a_next when VMC32_NEXT /= VMC32_IDLE and RAM_REQ_PROGRESS = '0' and vram32_req_reg = vram32_ack else vram32_a_reg;
 
 -- Get the ack and data one cycle earlier
 SP2_VRAM32_DO <= vram32_q when VMC32 = VMC32_SP2 else SP2_VRAM32_DO_REG;
@@ -1021,46 +1045,67 @@ BGB_VRAM32_DO <= vram32_q when VMC32 = VMC32_BGB else BGB_VRAM32_DO_REG;
 BGA_VRAM32_DO <= vram32_q when VMC32 = VMC32_BGA else BGA_VRAM32_DO_REG;
 
 SP2_VRAM32_ACK <= '1' when VMC32 = VMC32_SP2 and vram32_req_reg = vram32_ack and RAM_REQ_PROGRESS = '1' else '0';
-SP3_VRAM32_ACK <= '1' when VMC32 = VMC32_SP3 and vram32_req_reg = vram32_ack and RAM_REQ_PROGRESS = '1' else '0';
+SP3_VRAM32_ACK <= '1' when VMC32 = VMC32_SP3 and vram32_req_reg = vram32_ack and RAM_REQ_PROGRESS = '1' else SP3_VRAM32_ACK_REG;
 HSC_VRAM32_ACK <= '1' when VMC32 = VMC32_HSC and vram32_req_reg = vram32_ack and RAM_REQ_PROGRESS = '1' else '0';
-BGB_VRAM32_ACK <= '1' when VMC32 = VMC32_BGB and vram32_req_reg = vram32_ack and RAM_REQ_PROGRESS = '1' else '0';
-BGA_VRAM32_ACK <= '1' when VMC32 = VMC32_BGA and vram32_req_reg = vram32_ack and RAM_REQ_PROGRESS = '1' else '0';
+BGB_VRAM32_ACK <= '1' when VMC32 = VMC32_BGB and vram32_req_reg = vram32_ack and RAM_REQ_PROGRESS = '1' else BGB_VRAM32_ACK_REG;
+BGA_VRAM32_ACK <= '1' when VMC32 = VMC32_BGA and vram32_req_reg = vram32_ack and RAM_REQ_PROGRESS = '1' else BGA_VRAM32_ACK_REG;
 
-VMC32_NEXT <= VMC32_SP3 when SP3_SEL = '1' else
+VMC32_NEXT <= VMC32_SP3 when SP3_SEL = '1' and SP3_VRAM32_ACK_REG = '0' else
               VMC32_SP2 when SP2_SEL = '1' else
               VMC32_HSC when HSC_SEL = '1' else
-              VMC32_BGA when BGA_SEL = '1' else
-              VMC32_BGB when BGB_SEL = '1' else
+              VMC32_BGA when BGA_SEL = '1' and BGA_VRAM32_ACK_REG = '0' else
+              VMC32_BGB when BGB_SEL = '1' and BGB_VRAM32_ACK_REG = '0' else
               VMC32_IDLE;
 
-process( RST_N, CLK)
+process( RST_N, CLK, 
+	vram32_req_reg, vram32_ack, RAM_REQ_PROGRESS, VMC32_NEXT,
+	SP2_VRAM_ADDR, SP3_VRAM_ADDR, HSC_VRAM_ADDR, BGB_VRAM_ADDR, BGA_VRAM_ADDR)
 begin
+
+	vram32_a_next <= (others => '0');
+	if vram32_req_reg = vram32_ack and RAM_REQ_PROGRESS = '0' then
+		case VMC32_NEXT is
+		when VMC32_IDLE =>
+			null;
+		when VMC32_SP2 =>
+			vram32_a_next <= SP2_VRAM_ADDR;
+		when VMC32_SP3 =>
+			vram32_a_next <= SP3_VRAM_ADDR;
+		when VMC32_HSC =>
+			vram32_a_next <= HSC_VRAM_ADDR;
+		when VMC32_BGB =>
+			vram32_a_next <= BGB_VRAM_ADDR;
+		when VMC32_BGA =>
+			vram32_a_next <= BGA_VRAM_ADDR;
+		end case;
+	end if;
+
 	if RST_N = '0' then
 
 		vram32_req_reg <= '0';
 
 		VMC32 <= VMC32_IDLE;
 		RAM_REQ_PROGRESS <= '0';
+		SP3_VRAM32_ACK_REG <= '0';
+		BGA_VRAM32_ACK_REG <= '0';
+		BGB_VRAM32_ACK_REG <= '0';
+
 	elsif rising_edge(CLK) then
+		if SP3_SEL = '0' then
+			SP3_VRAM32_ACK_REG <= '0';
+		end if;
+		if BGA_SEL = '0' then
+			BGA_VRAM32_ACK_REG <= '0';
+		end if;
+		if BGB_SEL = '0' then
+			BGB_VRAM32_ACK_REG <= '0';
+		end if;
 
 		if vram32_req_reg = vram32_ack then
 			if RAM_REQ_PROGRESS = '0' then
 				VMC32 <= VMC32_NEXT;
-				case VMC32_NEXT is
-				when VMC32_IDLE =>
-					null;
-				when VMC32_SP2 =>
-					vram32_a <= SP2_VRAM_ADDR;
-				when VMC32_SP3 =>
-					vram32_a <= SP3_VRAM_ADDR;
-				when VMC32_HSC =>
-					vram32_a <= HSC_VRAM_ADDR;
-				when VMC32_BGB =>
-					vram32_a <= BGB_VRAM_ADDR;
-				when VMC32_BGA =>
-					vram32_a <= BGA_VRAM_ADDR;
-				end case;
 				if VMC32_NEXT /= VMC32_IDLE then
+					vram32_a_reg <= vram32_a_next;
 					vram32_req_reg <= not vram32_req_reg;
 					RAM_REQ_PROGRESS <= '1';
 				end if;
@@ -1072,12 +1117,15 @@ begin
 					SP2_VRAM32_DO_REG <= vram32_q;
 				when VMC32_SP3 =>
 					SP3_VRAM32_DO_REG <= vram32_q;
+					SP3_VRAM32_ACK_REG <= '1';
 				when VMC32_HSC =>
 					HSC_VRAM32_DO_REG <= vram32_q;
 				when VMC32_BGB =>
 					BGB_VRAM32_DO_REG <= vram32_q;
+					BGB_VRAM32_ACK_REG <= '1';
 				when VMC32_BGA =>
 					BGA_VRAM32_DO_REG <= vram32_q;
+					BGA_VRAM32_ACK_REG <= '1';
 				end case;
 				RAM_REQ_PROGRESS <= '0';
 			end if;
@@ -1253,7 +1301,7 @@ begin
 				BGBC <= BGBC_BASE_RD;
 
 			when BGBC_BASE_RD =>
-				if BGB_VRAM32_ACK = '1' then
+				if BGB_VRAM32_ACK = '1' and BGB_MAPPING_EN = '1' then
 -- synthesis translate_off					
 					write(L, string'("BGB BASE_RD Y="));
 					hwrite(L, "000000" & BGB_Y(9 downto 0));
@@ -1300,29 +1348,11 @@ begin
 				end if;
 
 				BGB_SEL <= '1';
-				BGBC <= BGBC_TILE_RD2;
-
-			when BGBC_TILE_RD2 =>
-				if BGB_VRAM32_ACK = '1' then
--- synthesis translate_off
-					write(L, string'("BGB TILE_RD Y="));
-					hwrite(L, "000000" & BGB_Y(9 downto 0));
-					write(L, string'(" X="));
-					hwrite(L, "000000" & BGB_X(9 downto 0));
-					write(L, string'(" POS="));
-					hwrite(L, "000000" & BGB_POS(9 downto 0));
-					write(L, string'(" TILE_RD ["));
-					hwrite(L, BGB_VRAM_ADDR & '0');
-					write(L, string'("] = ["));
-					hwrite(L, BGB_VRAM32_DO);
-					write(L, string'("]"));
-					writeline(F,L);
--- synthesis translate_on
-					BGB_SEL <= '0';
-					BGBC <= BGBC_LOOP;
-				end if;
+				BGBC <= BGBC_LOOP;
 
 			when BGBC_LOOP =>
+				if BGB_VRAM32_ACK = '1' or BGB_SEL = '0' then
+					BGB_SEL <= '0';
 
 					BGB_COLINFO_ADDR_A <= BGB_POS(8 downto 0);
 					BGB_COLINFO_WE_A <= '1';
@@ -1391,7 +1421,7 @@ begin
 					else
 						BGBC <= BGBC_LOOP;
 					end if;
-
+				end if;
 			when others =>	-- BGBC_DONE
 				BGB_SEL <= '0';
 				BGB_COLINFO_WE_A <= '0';
@@ -1523,6 +1553,7 @@ begin
 				BGAC <= BGAC_CALC_BASE;
 
 			when BGAC_CALC_BASE =>
+				-- BGA mapping slot
 				if LSM = "11" then
 					y_cells := BGA_Y(10 downto 4);
 				else
@@ -1552,9 +1583,9 @@ begin
 				BGA_VRAM_ADDR <= V_BGA_BASE(15 downto 1);
 				BGA_SEL <= '1';
 				BGAC <= BGAC_BASE_RD;
-				
+
 			when BGAC_BASE_RD =>
-				if BGA_VRAM32_ACK = '1' then
+				if BGA_VRAM32_ACK = '1' and BGA_MAPPING_EN = '1' then
 -- synthesis translate_off					
 					write(L, string'("BGA BASE_RD Y="));
 					hwrite(L, "000000" & BGA_Y(9 downto 0));
@@ -1603,29 +1634,12 @@ begin
 				end if;
 
 				BGA_SEL <= '1';
-				BGAC <= BGAC_TILE_RD2;
-
-			when BGAC_TILE_RD2 =>
-				if BGA_VRAM32_ACK = '1' then
--- synthesis translate_off
-					write(L, string'("BGA TILE_RD Y="));
-					hwrite(L, "000000" & BGA_Y(9 downto 0));
-					write(L, string'(" X="));
-					hwrite(L, "000000" & BGA_X(9 downto 0));
-					write(L, string'(" POS="));
-					hwrite(L, "000000" & BGA_POS(9 downto 0));
-					write(L, string'(" TILE_RD ["));
-					hwrite(L, BGA_VRAM_ADDR & '0');
-					write(L, string'("] = ["));
-					hwrite(L, BGA_VRAM32_DO);
-					write(L, string'("]"));
-					writeline(F,L);
--- synthesis translate_on
-					BGA_SEL <= '0';
-					BGAC <= BGAC_LOOP;
-				end if;
+				BGAC <= BGAC_LOOP;
 
 			when BGAC_LOOP =>
+				if BGA_VRAM32_ACK = '1' or BGA_SEL = '0' then
+					BGA_SEL <= '0';
+
 					BGA_COLINFO_WE_A <= '1';
 					BGA_COLINFO_ADDR_A <= BGA_POS(8 downto 0);
 					if WIN_H = '1' or WIN_V = '1' then
@@ -1716,7 +1730,7 @@ begin
 							BGAC <= BGAC_DONE;
 						end if;
 					end if;
-
+				end if;
 			when others =>	-- BGAC_DONE
 				BGA_SEL <= '0';
 				BGA_COLINFO_WE_A <= '0';
@@ -1729,9 +1743,9 @@ end process;
 -- SPRITE ENGINE
 ----------------------------------------------------------------
 OBJ_MAX_FRAME <= conv_std_logic_vector(OBJ_MAX_FRAME_H40, 7) when H40 = '1' else
-					  conv_std_logic_vector(OBJ_MAX_FRAME_H32, 7);
-OBJ_MAX_LINE  <= conv_std_logic_vector(OBJ_MAX_LINE_H40, 7) when H40 = '1' else
-					  conv_std_logic_vector(OBJ_MAX_LINE_H32, 7);
+                 conv_std_logic_vector(OBJ_MAX_FRAME_H32, 7);
+OBJ_MAX_LINE  <= conv_std_logic_vector(OBJ_MAX_LINE_H40, 5) when H40 = '1' else
+                 conv_std_logic_vector(OBJ_MAX_LINE_H32, 5);
 
 -- Write-through cache for Y, Link and size fields
 process( RST_N, CLK )
@@ -1780,7 +1794,6 @@ begin
 		OBJ_VISINFO_ADDR_WR <= (others => '0');
 
 		SP1_SOVR_SET <= '0';
-		SP1_STOP <= '0';
 
 	elsif rising_edge(CLK) then
 
@@ -1793,16 +1806,20 @@ begin
 				OBJ_NEXT <= (others => '0');
 				OBJ_NB <= (others => '0');
 				OBJ_VISINFO_WE <= '0';
-				SP1_STOP <= '0';
+				SP1_STEPS <= (others => '0');
 				SP1C <= SP1C_Y_RD;
 
 			when SP1C_Y_RD =>
-				if DE='0' then
-					SP1_STOP <= '1';
-				end if;
-				if SP1_EN = '1' then --check one sprite/pixel, this matches the original HW behavior
+				if SP1_EN = '1' and DE = '1' then --check one sprite/pixel, this matches the original HW behavior
 					OBJ_CACHE_ADDR_RD_SP1 <= OBJ_NEXT;
 					SP1C <= SP1C_Y_RD2;
+				end if;
+
+				if SP1_EN = '1' then
+					SP1_STEPS <= SP1_STEPS + 1;
+				end if;
+				if SP1_STEPS = OBJ_MAX_FRAME then
+					SP1C <= SP1C_DONE;
 				end if;
 
 			when SP1C_Y_RD2 =>
@@ -1869,8 +1886,7 @@ begin
 				elsif OBJ_TOT = OBJ_MAX_FRAME - 1  or 
 					 -- the following checks are inspired by the gens-ii emulator
 						OBJ_LINK >= OBJ_MAX_FRAME or
-						OBJ_LINK = "0000000" or
-						SP1_STOP = '1'
+						OBJ_LINK = "0000000"
 				then
 					SP1C <= SP1C_DONE;
 				else
@@ -2360,6 +2376,8 @@ begin
 		VBL_AREA <= '1';
 
 		FIFO_EN <= '0';
+		SLOT_EN <= '0';
+		REFRESH_EN <= '0';
 
 		SP1_EN <= '0';
 		SP2_EN <= '0';
@@ -2375,14 +2393,20 @@ begin
 		VINT_T80_SET <= '0';
 		VINT_T80_CLR <= '0';
 		FIFO_EN <= '0';
+		SLOT_EN <= '0';
+		REFRESH_EN <= '0';
 
 		SP1_EN <= '0';
 		SP2_EN <= '0';
+		BGA_MAPPING_EN <= '0';
+		BGA_PATTERN_EN <= '0';
+		BGB_MAPPING_EN <= '0';
+		BGB_PATTERN_EN <= '0';
 
 		HV_PIXDIV <= HV_PIXDIV + 1;
 		if (RS0 = '1' and H40 = '1' and 
-			((HV_PIXDIV = 8-1 and (HV_HCNT < 336 or HV_HCNT >= H_DISP_START)) or --336-365 - 30
-			(HV_PIXDIV = 10-1 and HV_HCNT >= 336 and HV_HCNT < H_DISP_START))) or --normal H40 - 30*10+390*8=3420 cycles
+			((HV_PIXDIV = 8-1 and (HV_HCNT < H_DISP_START or HV_HCNT >= H_DISP_START + 30)) or --458-487 - 30
+			(HV_PIXDIV = 10-1))) or --normal H40 - 30*10+390*8=3420 cycles
 		   (RS0 = '0' and H40 = '1' and HV_PIXDIV = 8-1) or --fast H40
 		   (RS0 = '0' and H40 = '0' and HV_PIXDIV = 10-1) or --normal H32
 		   (RS0 = '1' and H40 = '0' and HV_PIXDIV = 8-1) then --fast H32
@@ -2479,6 +2503,8 @@ begin
 				end if;
 			end if;
 
+			-- VRAM Access slot enables
+
 			if IN_VBL = '1' or DE = '0'
 			then
 				if REFRESH_SLOT = '0' -- skip refresh slots
@@ -2495,8 +2521,22 @@ begin
 			end if;
 
 			SP1_EN <= '1'; --SP1 Engine checks one sprite/pixel
-			if HV_HCNT(3 downto 0) = "0000" then
-				SP2_EN <= '1'; --Sprite mapping slots in every two cells
+
+			case HV_HCNT(3 downto 0) is
+				when "0010" => BGA_MAPPING_EN <= '1';
+				when "0100" => null; -- external or refresh
+				when "0110" => BGA_PATTERN_EN <= '1';
+				when "1000" => BGA_PATTERN_EN <= '1';
+				when "1010" => BGB_MAPPING_EN <= '1';
+				when "1100" => SP2_EN <= '1';
+				when "1110" => BGB_PATTERN_EN <= '1';
+				when "0000" => BGB_PATTERN_EN <= '1';
+				when others => null;
+			end case;
+
+			SLOT_EN <= not HV_HCNT(0);
+			if REFRESH_SLOT = '1' then
+				REFRESH_EN <= '1';
 			end if;
 
 		end if;
@@ -2513,7 +2553,7 @@ BGEN_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = HSCROLL_READ + 8 else '0'
 -- "Your emulator suxx" in Titan I demo
 SP1E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = H_INT_POS + 1 else '0';
 -- Stage 2 - runs in the active area
-SP2E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = HBLANK_END else '0';
+SP2E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = 0 else '0';
 -- Stage 3 runs during HBLANK, just after the active display
 SP3E_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = HBLANK_END + HBORDER_LEFT + H_DISP_WIDTH else '0';
 DT_ACTIVE <= '1';
@@ -2792,6 +2832,9 @@ end process;
 VBUS_ADDR <= FF_VBUS_ADDR;
 VBUS_SEL <= FF_VBUS_SEL;
 
+FIFO_EMPTY <= '1' when FIFO_QUEUE = 0 and FIFO_PARTIAL = '0' else '0';
+FIFO_FULL <= '1' when (FIFO_QUEUE(2) = '1') or (FIFO_QUEUE = 3 and FIFO_PARTIAL = '1') else '0';
+
 process( RST_N, CLK )
 -- synthesis translate_off
 file F		: text open write_mode is "vdp_dbg.out";
@@ -2810,12 +2853,14 @@ begin
 		
 		FIFO_RD_POS <= "00";
 		FIFO_WR_POS <= "00";
-		FIFO_EMPTY <= '1';
-		FIFO_FULL <= '0';
-		FIFO_SKIP <= '0';
+		FIFO_QUEUE <= "000";
+		FIFO_PARTIAL <= '0';
+
+		REFRESH_FLAG <= '0';
 
 		DT_RD_DTACK_N <= '1';
 		DT_FF_DTACK_N <= '1';
+		DT_VBUS_DTACK_N <= '1';
 
 		FF_VBUS_ADDR <= (others => '0');
 		FF_VBUS_SEL	<= '0';
@@ -2836,21 +2881,14 @@ begin
 
 	elsif rising_edge(CLK) then
 
-		if FIFO_RD_POS = FIFO_WR_POS then
-			FIFO_EMPTY <= '1';
-		else
-			FIFO_EMPTY <= '0';
-		end if;
-		if FIFO_WR_POS + 1 = FIFO_RD_POS then
-			FIFO_FULL <= '1';
-		else
-			FIFO_FULL <= '0';
-		end if;		
 		if DT_RD_SEL = '0' then
 			DT_RD_DTACK_N <= '1';
 		end if;
-		if DT_FF_SEL = '0' and DT_VBUS_SEL = '0' then
+		if DT_FF_SEL = '0' then
 			DT_FF_DTACK_N <= '1';
+		end if;
+		if DT_VBUS_SEL = '0' then
+			DT_VBUS_DTACK_N <= '1';
 		end if;
 		if ADDR_SET_REQ = '0' then
 			ADDR_SET_ACK <= '0';
@@ -2861,20 +2899,31 @@ begin
 
 		CRAM_WE_A <= '0';
 
-		if DT_FF_SEL = '1' and (FIFO_WR_POS + 1 /= FIFO_RD_POS) and DT_FF_DTACK_N = '1' then
+		if SLOT_EN = '1' then
+			if FIFO_DELAY(0) /= "00" then FIFO_DELAY(0) <= FIFO_DELAY(0) - 1; end if;
+			if FIFO_DELAY(1) /= "00" then FIFO_DELAY(1) <= FIFO_DELAY(1) - 1; end if;
+			if FIFO_DELAY(2) /= "00" then FIFO_DELAY(2) <= FIFO_DELAY(2) - 1; end if;
+			if FIFO_DELAY(3) /= "00" then FIFO_DELAY(3) <= FIFO_DELAY(3) - 1; end if;
+		end if;
+
+		if ((DT_FF_SEL = '1' and DT_FF_DTACK_N = '1') or (DT_VBUS_SEL = '1' and DT_VBUS_DTACK_N = '1')) and
+		    FIFO_FULL = '0' and DTC /= DTC_FIFO_RD
+		then
 			FIFO_ADDR( CONV_INTEGER( FIFO_WR_POS ) ) <= ADDR;
-			FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_FF_DATA;
-			FIFO_CODE( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_FF_CODE;
+			if DT_FF_SEL = '1' then
+				FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_FF_DATA;
+				FIFO_CODE( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_FF_CODE;
+				FIFO_DELAY( CONV_INTEGER( FIFO_WR_POS ) ) <= "00"; -- should be delayed, too?
+				DT_FF_DTACK_N <= '0';
+			else
+				FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_DMAV_DATA;
+				FIFO_CODE( CONV_INTEGER( FIFO_WR_POS ) ) <= CODE(3 downto 0);
+				FIFO_DELAY( CONV_INTEGER( FIFO_WR_POS ) ) <= "10";
+				DT_VBUS_DTACK_N <= '0';
+			end if;
 			FIFO_WR_POS <= FIFO_WR_POS + 1;
+			FIFO_QUEUE <= FIFO_QUEUE + 1;
 			ADDR <= ADDR + ADDR_STEP;
-			DT_FF_DTACK_N <= '0';
-		elsif DT_VBUS_SEL = '1' and (FIFO_WR_POS + 1 /= FIFO_RD_POS) and DT_FF_DTACK_N = '1' then
-			FIFO_ADDR( CONV_INTEGER( FIFO_WR_POS ) ) <= ADDR;
-			FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_DMAV_DATA;
-			FIFO_CODE( CONV_INTEGER( FIFO_WR_POS ) ) <= CODE(3 downto 0);
-			FIFO_WR_POS <= FIFO_WR_POS + 1;
-			ADDR <= ADDR + ADDR_STEP;
-			DT_FF_DTACK_N <= '0';
 		end if;
 
 		-- Register set
@@ -2886,22 +2935,24 @@ begin
 			REG_SET_ACK <= '1';
 		end if;
 
+		if SLOT_EN = '1' then
+			if REFRESH_EN = '1' then
+				-- skip the slot after a refresh for DMA
+				REFRESH_FLAG <= DMA_VBUS;
+			else
+				REFRESH_FLAG <= '0';
+			end if;
+		end if;
+
 		if DT_ACTIVE = '1' then
 			case DTC is
 			when DTC_IDLE =>
 				if FIFO_EN = '1' then
-					FIFO_SKIP <= FIFO_SKIP_PRE;
-					FIFO_SKIP_PRE <= '0';
-				end if;
-				-- Direct color DMA hack (correct, but why?)
-				-- Skip the slot after a refresh
-				if FIFO_RD_POS /= FIFO_WR_POS and FIFO_CODE( CONV_INTEGER( FIFO_RD_POS ) ) = "0011" and
-				   DE = '0' and REFRESH_SLOT = '1' then
-					FIFO_SKIP <= '1';
+					FIFO_PARTIAL <= '0';
 				end if;
 
-				if VRAM_SPEED = '0' or (FIFO_EN = '1' and FIFO_SKIP = '0') then
-					if FIFO_RD_POS /= FIFO_WR_POS then
+				if VRAM_SPEED = '0' or (FIFO_EN = '1' and FIFO_PARTIAL = '0' and REFRESH_FLAG = '0') then
+					if FIFO_EMPTY = '0' and FIFO_DELAY( CONV_INTEGER( FIFO_RD_POS ) ) = 0 then
 						DTC <= DTC_FIFO_RD;
 					elsif DT_RD_SEL = '1' and DT_RD_DTACK_N = '1' then
 						case DT_RD_CODE is
@@ -2914,27 +2965,28 @@ begin
 						end case;
 					end if;
 				end if;
-			
+
 			when DTC_FIFO_RD =>
 				DT_WR_ADDR <= FIFO_ADDR( CONV_INTEGER( FIFO_RD_POS ) );
 				DT_WR_DATA <= FIFO_DATA( CONV_INTEGER( FIFO_RD_POS ) );
 				FIFO_RD_POS <= FIFO_RD_POS + 1;
+				FIFO_QUEUE <= FIFO_QUEUE - 1;
 				case FIFO_CODE( CONV_INTEGER( FIFO_RD_POS ) ) is
 				when "0011" => -- CRAM Write
 					DTC <= DTC_CRAM_WR;
 				when "0101" => -- VSRAM Write
 					DTC <= DTC_VSRAM_WR;
 				when "0001" => -- VRAM Write
+					if M128 = '0' then
+						--skip next FIFO slot since we write 16 bit now instead of the original 8
+						FIFO_PARTIAL <= '1';
+					end if;
 					DTC <= DTC_VRAM_WR1;
 				when others => --invalid target
 					DTC <= DTC_WR_END;
 				end case;
 
 			when DTC_VRAM_WR1 =>
-				if M128 = '0' then
-					--skip next FIFO slot since we write 16 bit now instead of the original 8
-					FIFO_SKIP_PRE <= '1';
-				end if;
 -- synthesis translate_off
 				write(L, string'("   VRAM WR ["));
 				hwrite(L, x"00" & DT_WR_ADDR(15 downto 1) & '0');
@@ -3102,7 +3154,7 @@ begin
 				ADDR_SET_ACK <= '1';
 			end if;
 
-			if FIFO_RD_POS = FIFO_WR_POS and DMA_FILL = '1' and DMAF_SET_REQ = '1' then
+			if FIFO_EMPTY = '1' and DMA_FILL = '1' and DMAF_SET_REQ = '1' then
 				if CODE(3 downto 0) = "0011" or CODE(3 downto 0) = "0101" then
 					-- CRAM, VSRAM fill gets its data from the next FIFO write position
 					DT_DMAF_DATA <= FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) );
@@ -3141,7 +3193,7 @@ begin
 				DMAC <= DMA_FILL_START;
 
 			when DMA_FILL_START =>
-				if FIFO_RD_POS = FIFO_WR_POS and DTC = DTC_IDLE and DMAF_SET_REQ = '0' then
+				if FIFO_EMPTY = '1' and DTC = DTC_IDLE and DMAF_SET_REQ = '0' then
 					-- suspend FILL if the FIFO is not empty
 					case CODE(3 downto 0) is
 					when "0011" => -- CRAM Write
@@ -3360,7 +3412,16 @@ begin
 -- synthesis translate_on
 					DMA_LENGTH <= REG(20) & REG(19);
 					DMA_SOURCE <= REG(22) & REG(21);
-					DMAC <= DMA_VBUS_RD;
+					DMA_VBUS_TIMER <= '1';
+					DMAC <= DMA_VBUS_WAIT;
+				end if;
+
+			when DMA_VBUS_WAIT =>
+				if SLOT_EN = '1' then
+					if DMA_VBUS_TIMER = '0' then
+						DMAC <= DMA_VBUS_RD;
+					end if;
+					DMA_VBUS_TIMER <= not DMA_VBUS_TIMER;
 				end if;
 
 			when DMA_VBUS_RD =>
@@ -3384,7 +3445,7 @@ begin
 				end if;
 	
 			when DMA_VBUS_SEL =>
-				if DT_FF_DTACK_N = '1' then
+				if DT_VBUS_DTACK_N = '1' then
 					DT_VBUS_SEL <= '1';
 					DMA_LENGTH <= DMA_LENGTH - 1;
 					DMA_SOURCE <= DMA_SOURCE + 1;
@@ -3392,7 +3453,7 @@ begin
 				end if;
 
 			when DMA_VBUS_LOOP =>
-				if DT_FF_DTACK_N = '0' then
+				if DT_VBUS_DTACK_N = '0' then
 					DT_VBUS_SEL <= '0';
 					REG(20) <= DMA_LENGTH(15 downto 8);
 					REG(19) <= DMA_LENGTH(7 downto 0);
@@ -3417,6 +3478,7 @@ begin
 			-- Do nothing
 		end if;
 	end if;
+
 end process;
 
 ----------------------------------------------------------------

@@ -163,7 +163,7 @@ begin
 	IRAM_SEL <= '1' when SSP_PA(15 downto 10) = "000000" else '0';
 	
 	SSP_PDI <= IRAM_Q when IRAM_SEL = '1' else ROM_DATA;
-	SSP_SS <= EN and not SSP_WAIT;
+	SSP_SS <= EN and not SSP_WAIT and not HALT;
 	SSP_USR01 <= "00";
 
 	DRAM_REQ <= DRAM_REQ_REG;
@@ -172,7 +172,7 @@ begin
 	port map(
 		CLK		=> CLK,
 		RST_N		=> RST_N,
-		ENABLE	=> EN,--ABLE,
+		ENABLE	=> ENABLE,
 		SS			=> SSP_SS,
 		
 		PA			=> SSP_PA,		
@@ -201,10 +201,10 @@ begin
 			CA <= '0';
 			DTACK_N <= '1';
 			BUS_DO <= (others => '0');
-			HALT <= '1';
+			HALT <= '0';
 		elsif rising_edge(CLK) then
-			if EN = '1' then
-				if SSP_ESB = '1' then
+			if ENABLE = '1' then
+				if SSP_ESB = '1' and EN = '1' then
 					if SSP_R_NW = '0' then
 						case SSP_EA is
 							when "011" => 
@@ -317,7 +317,6 @@ begin
 	--PMARs
 	process(CLK, RST_N)
 	variable NEW_MA : std_logic_vector(31 downto 0); 
-	--variable PMAR_ACCESS_END : std_logic; 
 	begin
 		if RST_N = '0' then
 			PMC <= (others => '0');
@@ -332,7 +331,6 @@ begin
 			PMAR_ACTIVE <= '0';
 			MEM_WAIT <= '0';
 		elsif rising_edge(CLK) then
-			PMAR_ACTIVE <= '0';
 			if EN = '1' then
 				SSP_ACTIVE <= '1';
 				if SSP_ESB = '1' then
@@ -378,7 +376,6 @@ begin
 				end if;
 			end if;
 			
-			--PMAR_ACCESS_END := '0';
 			case MAS is
 				when MAS_IDLE =>
 					if PMAR_ACTIVE = '1' then
@@ -404,8 +401,8 @@ begin
 								MAS <= MAS_IRAM_WR;
 							end if;
 						end if;
+						PMAR_ACTIVE <= '0';
 					end if;
-					
 				when MAS_PROM_RD =>
 					if MA_ROM_REQ = ROM_ACK and HALT = '0' then
 						ROM_DATA <= ROM_DI;
@@ -417,7 +414,6 @@ begin
 					if MA_ROM_REQ = ROM_ACK and HALT = '0' then
 						PMARS(to_integer(PMAR_NUM)).DATA <= ROM_DI;
 						MAS <= MAS_IDLE;
-						--PMAR_ACCESS_END := '1';
 					end if;
 				
 				when MAS_DRAM_RD =>
@@ -426,7 +422,6 @@ begin
 					if DRAM_REQ_REG = DRAM_ACK and HALT = '0' then
 						PMARS(to_integer(PMAR_NUM)).DATA <= DRAM_DI;
 						MAS <= MAS_IDLE;
-						--PMAR_ACCESS_END := '1';
 					end if;
 					
 				when MAS_IRAM_RD =>
@@ -434,7 +429,6 @@ begin
 					if MEM_WAIT = '0' then
 						PMARS(to_integer(PMAR_NUM)).DATA <= IRAM_Q;
 						MAS <= MAS_IDLE;
-						--PMAR_ACCESS_END := '1';
 					end if;
 
 				when MAS_DRAM_RDWR =>
@@ -450,13 +444,11 @@ begin
 					if DRAM_REQ_REG = DRAM_ACK and HALT = '0' then
 --					if HALT = '0' then
 						MAS <= MAS_IDLE;
-						--PMAR_ACCESS_END := '1';
 					end if;
 					
 				when MAS_IRAM_WR =>
 					MEM_WAIT <= '0';
 					MAS <= MAS_IDLE;
-					--PMAR_ACCESS_END := '1';
 					
 				when others => null;
 			end case; 

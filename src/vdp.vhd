@@ -1717,6 +1717,9 @@ begin
 						-- window on the left side ends, but not neccessarily on a scroll boundary,
 						-- when it continues to draw a wrong tile ("left window bug")
 						WIN_H <= '0';
+						if WIN_V = '0' and BGA_X(3 downto 0) /= "1111" then
+							BGAC <= BGAC_LOOP;
+						end if;
 					elsif WIN_H = '0' and WRIGT_LATCH = '1' and BGA_POS(3 downto 0) = "1111" and bga_pos_next(8 downto 4) = WHP_LATCH
 					then
 						-- window on the right side starts, cancel rendering the current tile

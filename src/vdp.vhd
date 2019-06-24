@@ -304,7 +304,8 @@ type dmac_t is (
 	DMA_VBUS_RD,
 	DMA_VBUS_RD2,
 	DMA_VBUS_SEL,
-	DMA_VBUS_LOOP
+	DMA_VBUS_LOOP,
+	DMA_VBUS_END
 );
 signal DMAC	: dmac_t;
 
@@ -352,7 +353,7 @@ signal DMA_COPY		: std_logic;
 signal DMA_LENGTH	: std_logic_vector(15 downto 0);
 signal DMA_SOURCE	: std_logic_vector(15 downto 0);
 
-signal DMA_VBUS_TIMER : std_logic;
+signal DMA_VBUS_TIMER : std_logic_vector(1 downto 0);
 ----------------------------------------------------------------
 -- VIDEO COUNTING
 ----------------------------------------------------------------
@@ -3432,16 +3433,16 @@ begin
 -- synthesis translate_on
 					DMA_LENGTH <= REG(20) & REG(19);
 					DMA_SOURCE <= REG(22) & REG(21);
-					DMA_VBUS_TIMER <= '1';
+					DMA_VBUS_TIMER <= "10";
 					DMAC <= DMA_VBUS_WAIT;
 				end if;
 
 			when DMA_VBUS_WAIT =>
 				if SLOT_EN = '1' then
-					if DMA_VBUS_TIMER = '0' then
+					if DMA_VBUS_TIMER = 0 then
 						DMAC <= DMA_VBUS_RD;
 					end if;
-					DMA_VBUS_TIMER <= not DMA_VBUS_TIMER;
+					DMA_VBUS_TIMER <= DMA_VBUS_TIMER - 1;
 				end if;
 
 			when DMA_VBUS_RD =>
@@ -3450,7 +3451,7 @@ begin
 				DMAC <= DMA_VBUS_RD2;
 
 			when DMA_VBUS_RD2 =>
-				if VBUS_DTACK_N = '0' then
+				if SLOT_EN = '1' and VBUS_DTACK_N = '0' then
 					FF_VBUS_SEL <= '0';
 					DT_DMAV_DATA <= VBUS_DATA;
 					DMAC <= DMA_VBUS_SEL;
@@ -3480,9 +3481,8 @@ begin
 					REG(22) <= DMA_SOURCE(15 downto 8);
 					REG(21) <= DMA_SOURCE(7 downto 0);
 					if DMA_LENGTH = 0 then
-						DMA_VBUS <= '0';
-						BGACK_N <= '1';
-						DMAC <= DMA_IDLE;
+						DMA_VBUS_TIMER <= "01";
+						DMAC <= DMA_VBUS_END;
 -- synthesis translate_off										
 						write(L, string'("VDP DMA VBUS END"));
 						writeline(F,L);
@@ -3491,7 +3491,16 @@ begin
 						DMAC <= DMA_VBUS_RD;
 					end if;
 				end if;
-				
+
+			when DMA_VBUS_END =>
+				if SLOT_EN = '1' then
+					DMA_VBUS_TIMER <= DMA_VBUS_TIMER - 1;
+					if DMA_VBUS_TIMER = 0 then
+						DMA_VBUS <= '0';
+						BGACK_N <= '1';
+						DMAC <= DMA_IDLE;
+					end if;
+				end if;
 			when others => null;
 			end case;
 		else	-- DT_ACTIVE = '0'

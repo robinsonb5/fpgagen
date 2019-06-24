@@ -92,6 +92,7 @@ entity vdp is
 		CE_PIX		: buffer std_logic;
 		FIELD_OUT	: out std_logic;
 		INTERLACE	: out std_logic;
+		RESOLUTION  : out std_logic_vector(1 downto 0);
 		HBL			: out std_logic;
 		VBL			: out std_logic;
 
@@ -176,6 +177,7 @@ signal SLOT_EN      : std_logic;
 
 signal IN_DMA		: std_logic;
 signal IN_HBL		: std_logic;
+signal M_HBL		: std_logic;
 signal IN_VBL		: std_logic; -- VBL flag to the CPU
 signal VBL_AREA		: std_logic; -- outside of borders
 
@@ -2374,6 +2376,7 @@ begin
 		VINT_T80_SET <= '0';
 		VINT_T80_CLR <= '0';
 
+		M_HBL <= '0';
 		IN_HBL <= '0';
 		IN_VBL <= '1';
 		VBL_AREA <= '1';
@@ -2488,10 +2491,15 @@ begin
 
 			if HV_HCNT = HBLANK_END then --active display
 				IN_HBL <= '0';
+				M_HBL <= '0';
 			end if;
 
 			if HV_HCNT = HBLANK_START then -- blanking
 				IN_HBL <= '1';
+			end if;
+
+			if HV_HCNT = HBLANK_START-3 then
+				M_HBL <= '1';
 			end if;
 
 			if HV_HCNT = 0 then
@@ -2776,6 +2784,7 @@ G <= FF_G;
 B <= FF_B;
 
 INTERLACE <= LSM(1) and LSM(0);
+RESOLUTION <= V30&H40;
 
 V_DISP_HEIGHT_R <= conv_std_logic_vector(V_DISP_HEIGHT_V30, 9) when V30_R ='1'
               else conv_std_logic_vector(V_DISP_HEIGHT_V28, 9);
@@ -2798,17 +2807,21 @@ begin
 			end if;
 
 			CE_PIX <= '1';
-			if HV_HCNT = HBLANK_END + H_DISP_WIDTH + 1 then
-				HBL <= '1';
-			end if;
-			if HV_HCNT = HBLANK_END + 1 then
-				HBL <= '0';
-			end if;
+			if BORDER_EN = '0' then
+				if ((HV_HCNT - HBLANK_END - HBORDER_LEFT) >= H_DISP_WIDTH) then
+					HBL <= '1';
+				else
+					HBL <= '0';
+				end if;
 
-			if HV_VCNT < V_DISP_HEIGHT_R then
-				VBL <= '0';
+				if HV_VCNT < V_DISP_HEIGHT_R then
+					VBL <= '0';
+				else
+					VBL <= '1';
+				end if;
 			else
-				VBL <= '1';
+				HBL <= M_HBL;
+				VBL <= VBL_AREA;
 			end if;
 		end if;
 	end if;

@@ -478,6 +478,7 @@ signal BGB_VSRAM1_LAST_READ : std_logic_vector(10 downto 0);
 
 signal BGB_MAPPING_EN       : std_logic;
 signal BGB_PATTERN_EN       : std_logic;
+signal BGB_ENABLE           : std_logic;
 
 -- BACKGROUND A
 type bgac_t is (
@@ -528,7 +529,7 @@ signal WIN_H		: std_logic;
 
 signal BGA_MAPPING_EN       : std_logic;
 signal BGA_PATTERN_EN       : std_logic;
-
+signal BGA_ENABLE           : std_logic;
 ----------------------------------------------------------------
 -- SPRITE ENGINE
 ----------------------------------------------------------------
@@ -1195,6 +1196,7 @@ variable L	: line;
 begin
 	if RST_N = '0' then
 		BGB_SEL <= '0';
+		BGB_ENABLE <= '1';
 		BGBC <= BGBC_DONE;
 	elsif rising_edge(CLK) then
 			case BGBC is
@@ -1321,6 +1323,7 @@ begin
 -- synthesis translate_on
 					BGB_SEL <= '0';
 					BGB_NAMETABLE_ITEMS <= BGB_VRAM32_DO;
+					BGB_ENABLE <= DE;
 					BGBC <= BGBC_TILE_RD;
 				end if;
 
@@ -1350,11 +1353,13 @@ begin
 					end if;
 				end if;
 
-				BGB_SEL <= '1';
+				if BGB_ENABLE = '1' then
+					BGB_SEL <= '1';
+				end if;
 				BGBC <= BGBC_LOOP;
 
 			when BGBC_LOOP =>
-				if BGB_VRAM32_ACK = '1' or BGB_SEL = '0' then
+				if BGB_VRAM32_ACK = '1' or BGB_SEL = '0' or BGB_ENABLE = '0' then
 					BGB_SEL <= '0';
 
 					BGB_COLINFO_ADDR_A <= BGB_POS(8 downto 0);
@@ -1410,6 +1415,11 @@ begin
 						end if;
 					when others => null;
 					end case;
+
+					if BGB_ENABLE = '0' then
+						BGB_COLINFO_D_A <= '1' & BGCOL;
+					end if;
+
 					BGB_X <= (BGB_X + 1) and hscroll_mask;
 					BGB_POS <= BGB_POS + 1;
 					if BGB_X(2 downto 0) = "111" then
@@ -1456,6 +1466,7 @@ begin
 	if RST_N = '0' then
 		BGA_SEL <= '0';
 		BGAC <= BGAC_DONE;
+		BGA_ENABLE <= '1';
 	elsif rising_edge(CLK) then
 			case BGAC is
 			when BGAC_DONE =>
@@ -1605,6 +1616,7 @@ begin
 -- synthesis translate_on											
 					BGA_SEL <= '0';
 					BGA_NAMETABLE_ITEMS <= BGA_VRAM32_DO;
+					BGA_ENABLE <= DE;
 					BGAC <= BGAC_TILE_RD;
 				end if;
 
@@ -1636,11 +1648,13 @@ begin
 					end if;
 				end if;
 
-				BGA_SEL <= '1';
+				if BGA_ENABLE = '1' then
+					BGA_SEL <= '1';
+				end if;
 				BGAC <= BGAC_LOOP;
 
 			when BGAC_LOOP =>
-				if BGA_VRAM32_ACK = '1' or BGA_SEL = '0' then
+				if BGA_VRAM32_ACK = '1' or BGA_SEL = '0' or BGA_ENABLE = '0' then
 					BGA_SEL <= '0';
 
 					BGA_COLINFO_WE_A <= '1';
@@ -1701,6 +1715,10 @@ begin
 							end if;
 						when others => null;
 					end case;
+
+					if BGA_ENABLE = '0' then
+						BGA_COLINFO_D_A <= '1' & BGCOL;
+					end if;
 
 					BGA_X <= (BGA_X + 1) and hscroll_mask;
 					bga_pos_next := BGA_POS + 1;
@@ -2632,9 +2650,7 @@ begin
 					end if;
 				end if;
 
-				if DE='0' then
-					col := BGCOL;
-				elsif OBJ_COLINFO_Q_A(3 downto 0) /= "0000" and OBJ_COLINFO_Q_A(6) = '1' and
+				if OBJ_COLINFO_Q_A(3 downto 0) /= "0000" and OBJ_COLINFO_Q_A(6) = '1' and
 					(SHI='0' or OBJ_COLINFO_Q_A(5 downto 1) /= "11111") then
 					col := OBJ_COLINFO_Q_A(5 downto 0);
 				elsif BGA_COLINFO_Q_B(3 downto 0) /= "0000" and BGA_COLINFO_Q_B(6) = '1' then

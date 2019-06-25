@@ -302,7 +302,6 @@ type dmac_t is (
 	DMA_VBUS_INIT,
 	DMA_VBUS_WAIT,
 	DMA_VBUS_RD,
-	DMA_VBUS_RD2,
 	DMA_VBUS_SEL,
 	DMA_VBUS_LOOP,
 	DMA_VBUS_END
@@ -3456,17 +3455,14 @@ begin
 			when DMA_VBUS_WAIT =>
 				if SLOT_EN = '1' then
 					if DMA_VBUS_TIMER = 0 then
+						FF_VBUS_SEL <= '1';
+						FF_VBUS_ADDR <= REG(23)(6 downto 0) & DMA_SOURCE;
 						DMAC <= DMA_VBUS_RD;
 					end if;
 					DMA_VBUS_TIMER <= DMA_VBUS_TIMER - 1;
 				end if;
 
 			when DMA_VBUS_RD =>
-				FF_VBUS_SEL <= '1';
-				FF_VBUS_ADDR <= REG(23)(6 downto 0) & DMA_SOURCE;
-				DMAC <= DMA_VBUS_RD2;
-
-			when DMA_VBUS_RD2 =>
 				if SLOT_EN = '1' and VBUS_DTACK_N = '0' then
 					FF_VBUS_SEL <= '0';
 					DT_DMAV_DATA <= VBUS_DATA;
@@ -3504,6 +3500,8 @@ begin
 						writeline(F,L);
 -- synthesis translate_on										
 					else
+						FF_VBUS_SEL <= '1';
+						FF_VBUS_ADDR <= REG(23)(6 downto 0) & DMA_SOURCE;
 						DMAC <= DMA_VBUS_RD;
 					end if;
 				end if;

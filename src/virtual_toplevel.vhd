@@ -2014,7 +2014,7 @@ begin
 				svp_ram2_u_n <= FX68_UDS_N;
 				svp_ram2_l_n <= FX68_LDS_N;
 				SVPRC <= SVPRC_FX68;
-			elsif DMA_SVP_RAM_SEL = '1' and DMA_SDRAM_DTACK_N = '1' then
+			elsif DMA_SVP_RAM_SEL = '1' and DMA_SVP_RAM_DTACK_N = '1' then
 				svp_ram2_req <= not svp_ram2_req;
 				svp_dma_a := VBUS_ADDR - 1;
 				if VBUS_ADDR(23 downto 16) = x"39" then

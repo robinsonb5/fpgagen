@@ -302,7 +302,6 @@ type dmac_t is (
 	DMA_VBUS_INIT,
 	DMA_VBUS_WAIT,
 	DMA_VBUS_RD,
-	DMA_VBUS_SEL,
 	DMA_VBUS_LOOP,
 	DMA_VBUS_END
 );
@@ -324,8 +323,6 @@ signal DT_FF_DATA       : std_logic_vector(15 downto 0);
 signal DT_FF_CODE       : std_logic_vector(3 downto 0);
 signal DT_FF_SEL        : std_logic;
 signal DT_FF_DTACK_N    : std_logic;
-signal DT_VBUS_SEL      : std_logic;
-signal DT_VBUS_DTACK_N  : std_logic;
 
 signal DT_RD_DATA	: std_logic_vector(15 downto 0);
 signal DT_RD_CODE	: std_logic_vector(3 downto 0);
@@ -2896,11 +2893,9 @@ begin
 
 		DT_RD_DTACK_N <= '1';
 		DT_FF_DTACK_N <= '1';
-		DT_VBUS_DTACK_N <= '1';
 
 		FF_VBUS_ADDR <= (others => '0');
 		FF_VBUS_SEL	<= '0';
-		DT_VBUS_SEL <= '0';
 		
 		DMA_FILL <= '0';
 		DMAF_SET_REQ <= '0';
@@ -2923,9 +2918,6 @@ begin
 		if DT_FF_SEL = '0' then
 			DT_FF_DTACK_N <= '1';
 		end if;
-		if DT_VBUS_SEL = '0' then
-			DT_VBUS_DTACK_N <= '1';
-		end if;
 		if ADDR_SET_REQ = '0' then
 			ADDR_SET_ACK <= '0';
 		end if;
@@ -2942,21 +2934,13 @@ begin
 			if FIFO_DELAY(3) /= "00" then FIFO_DELAY(3) <= FIFO_DELAY(3) - 1; end if;
 		end if;
 
-		if ((DT_FF_SEL = '1' and DT_FF_DTACK_N = '1') or (DT_VBUS_SEL = '1' and DT_VBUS_DTACK_N = '1')) and
-		    FIFO_FULL = '0' and DTC /= DTC_FIFO_RD
+		if DT_FF_SEL = '1' and DT_FF_DTACK_N = '1' and FIFO_FULL = '0' and DTC /= DTC_FIFO_RD
 		then
 			FIFO_ADDR( CONV_INTEGER( FIFO_WR_POS ) ) <= ADDR;
-			if DT_FF_SEL = '1' then
-				FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_FF_DATA;
-				FIFO_CODE( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_FF_CODE;
-				FIFO_DELAY( CONV_INTEGER( FIFO_WR_POS ) ) <= "00"; -- should be delayed, too?
-				DT_FF_DTACK_N <= '0';
-			else
-				FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_DMAV_DATA;
-				FIFO_CODE( CONV_INTEGER( FIFO_WR_POS ) ) <= CODE(3 downto 0);
-				FIFO_DELAY( CONV_INTEGER( FIFO_WR_POS ) ) <= "10";
-				DT_VBUS_DTACK_N <= '0';
-			end if;
+			FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_FF_DATA;
+			FIFO_CODE( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_FF_CODE;
+			FIFO_DELAY( CONV_INTEGER( FIFO_WR_POS ) ) <= "00"; -- should be delayed, too?
+			DT_FF_DTACK_N <= '0';
 			FIFO_WR_POS <= FIFO_WR_POS + 1;
 			FIFO_QUEUE <= FIFO_QUEUE + 1;
 			ADDR <= ADDR + ADDR_STEP;
@@ -3463,47 +3447,46 @@ begin
 				end if;
 
 			when DMA_VBUS_RD =>
-				if VBUS_DTACK_N = '0' then
+				if VBUS_DTACK_N = '0' or FF_VBUS_SEL = '0' then
 					FF_VBUS_SEL <= '0';
-					DT_DMAV_DATA <= VBUS_DATA;
-					DMAC <= DMA_VBUS_SEL;
--- synthesis translate_off					
-					write(L, string'("   VBUS RD ["));
-					hwrite(L, REG(23)(6 downto 0) & DMA_SOURCE & '0');
-					write(L, string'("] = ["));
-					hwrite(L, VBUS_DATA);
-					write(L, string'("]"));
-					writeline(F,L);									
--- synthesis translate_on					
-				end if;
-	
-			when DMA_VBUS_SEL =>
-				if DT_VBUS_DTACK_N = '1' then
-					DT_VBUS_SEL <= '1';
-					DMA_LENGTH <= DMA_LENGTH - 1;
-					DMA_SOURCE <= DMA_SOURCE + 1;
-					DMAC <= DMA_VBUS_LOOP;
+					if FF_VBUS_SEL = '1' then
+						DT_DMAV_DATA <= VBUS_DATA;
+					end if;
+					if FIFO_FULL = '0' and DTC /= DTC_FIFO_RD then
+						FIFO_ADDR( CONV_INTEGER( FIFO_WR_POS ) ) <= ADDR;
+						if FF_VBUS_SEL = '1' then
+							FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) ) <= VBUS_DATA;
+						else
+							FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_DMAV_DATA;
+						end if;
+						FIFO_CODE( CONV_INTEGER( FIFO_WR_POS ) ) <= CODE(3 downto 0);
+						FIFO_DELAY( CONV_INTEGER( FIFO_WR_POS ) ) <= "10";
+						FIFO_WR_POS <= FIFO_WR_POS + 1;
+						FIFO_QUEUE <= FIFO_QUEUE + 1;
+						ADDR <= ADDR + ADDR_STEP;
+
+						DMA_LENGTH <= DMA_LENGTH - 1;
+						DMA_SOURCE <= DMA_SOURCE + 1;
+						DMAC <= DMA_VBUS_LOOP;
+					end if;
 				end if;
 
 			when DMA_VBUS_LOOP =>
-				if DT_VBUS_DTACK_N = '0' or DT_VBUS_SEL = '0' then
-					DT_VBUS_SEL <= '0';
-					REG(20) <= DMA_LENGTH(15 downto 8);
-					REG(19) <= DMA_LENGTH(7 downto 0);
-					REG(22) <= DMA_SOURCE(15 downto 8);
-					REG(21) <= DMA_SOURCE(7 downto 0);
-					if DMA_LENGTH = 0 then
-						DMA_VBUS_TIMER <= "01";
-						DMAC <= DMA_VBUS_END;
+				REG(20) <= DMA_LENGTH(15 downto 8);
+				REG(19) <= DMA_LENGTH(7 downto 0);
+				REG(22) <= DMA_SOURCE(15 downto 8);
+				REG(21) <= DMA_SOURCE(7 downto 0);
+				if DMA_LENGTH = 0 then
+					DMA_VBUS_TIMER <= "01";
+					DMAC <= DMA_VBUS_END;
 -- synthesis translate_off										
-						write(L, string'("VDP DMA VBUS END"));
-						writeline(F,L);
+					write(L, string'("VDP DMA VBUS END"));
+					writeline(F,L);
 -- synthesis translate_on										
-					elsif SLOT_EN = '1' then
-						FF_VBUS_SEL <= '1';
-						FF_VBUS_ADDR <= REG(23)(6 downto 0) & DMA_SOURCE;
-						DMAC <= DMA_VBUS_RD;
-					end if;
+				elsif SLOT_EN = '1' then
+					FF_VBUS_SEL <= '1';
+					FF_VBUS_ADDR <= REG(23)(6 downto 0) & DMA_SOURCE;
+					DMAC <= DMA_VBUS_RD;
 				end if;
 
 			when DMA_VBUS_END =>

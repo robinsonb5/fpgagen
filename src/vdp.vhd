@@ -3463,7 +3463,7 @@ begin
 				end if;
 
 			when DMA_VBUS_RD =>
-				if SLOT_EN = '1' and VBUS_DTACK_N = '0' then
+				if VBUS_DTACK_N = '0' then
 					FF_VBUS_SEL <= '0';
 					DT_DMAV_DATA <= VBUS_DATA;
 					DMAC <= DMA_VBUS_SEL;
@@ -3486,7 +3486,7 @@ begin
 				end if;
 
 			when DMA_VBUS_LOOP =>
-				if DT_VBUS_DTACK_N = '0' then
+				if DT_VBUS_DTACK_N = '0' or DT_VBUS_SEL = '0' then
 					DT_VBUS_SEL <= '0';
 					REG(20) <= DMA_LENGTH(15 downto 8);
 					REG(19) <= DMA_LENGTH(7 downto 0);
@@ -3499,7 +3499,7 @@ begin
 						write(L, string'("VDP DMA VBUS END"));
 						writeline(F,L);
 -- synthesis translate_on										
-					else
+					elsif SLOT_EN = '1' then
 						FF_VBUS_SEL <= '1';
 						FF_VBUS_ADDR <= REG(23)(6 downto 0) & DMA_SOURCE;
 						DMAC <= DMA_VBUS_RD;

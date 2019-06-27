@@ -1093,7 +1093,7 @@ begin
 		-- (From Titan 2 tech doc)
 		if VCLKCNT = "110" then
 			RFRSH_CNT <= RFRSH_CNT + 1;
-			if RFRSH_CNT(7) = '1' and RFRSH_CNT(0) = '1' then
+			if (RFRSH_CNT(7) = '1' and RFRSH_CNT(0) = '1') or VDP_BGACK_N = '0' then
 				RFRSH_CNT <= (others => '0');
 			end if;
 		end if;

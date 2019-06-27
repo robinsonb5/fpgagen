@@ -157,7 +157,6 @@ type sdrc_t is ( SDRC_IDLE,
 	SDRC_T80_BR,
 	SDRC_T80);
 signal SDRC : sdrc_t;
-signal SDRC_READY : std_logic;
 
 -- SRAM
 signal sram_req : std_logic := '0';
@@ -296,10 +295,12 @@ signal T80_DO              : std_logic_vector(7 downto 0);
 signal FCLK_EN		: std_logic;
 
 -- CLOCK GENERATION
-signal VCLKCNT		: std_logic_vector(2 downto 0);
-signal ZCLK_ENA   : std_logic;
+signal VCLKCNT     : std_logic_vector(2 downto 0);
+signal ZCLK_ENA    : std_logic;
 signal ZCLK_nENA   : std_logic;
-signal ZCLKCNT		: std_logic_vector(3 downto 0);
+signal ZCLKCNT     : std_logic_vector(3 downto 0);
+signal RFRSH_CNT   : std_logic_vector(7 downto 0);
+signal RFRSH_DELAY : std_logic;
 
 -- FLASH CONTROL
 signal FX68_FLASH_SEL		: std_logic;
@@ -1054,6 +1055,8 @@ begin
 	if MRST_N = '0' then
 		VCLKCNT <= "001"; -- important for SDRAM controller (EDIT: not needed anymore)
 		ZCLKCNT <= (others => '0');
+		RFRSH_CNT <= (others => '0');
+		RFRSH_DELAY <= '0';
 		SVP_CLKEN <= '0';
 	elsif rising_edge(MCLK) then
 		ZCLKCNT <= ZCLKCNT + 1;
@@ -1083,13 +1086,33 @@ begin
 			FCLK_EN <= '0';
 		end if;
 
-		if VCLKCNT = "011" or (CPU_TURBO = '1' and VCLKCNT = "110") then
+		-- "The 68k is a bit slower than expected because something on the bus steals 2 out of every 128 cycles.
+		-- This is visible when measuring the bus because every time 128 cycles have passed the next bus access is
+		-- slowed down by 2 cycles.
+		-- Interestingly if this hits when the 68k is writing to the VDP (no matter which port) then the slowdown doesn't happen."
+		-- (From Titan 2 tech doc)
+		if VCLKCNT = "110" then
+			RFRSH_CNT <= RFRSH_CNT + 1;
+			if RFRSH_CNT(7) = '1' and RFRSH_CNT(0) = '1' then
+				RFRSH_CNT <= (others => '0');
+			end if;
+		end if;
+
+		if VCLKCNT = "000" then
+			if RFRSH_CNT(7) = '1' and FX68_VDP_SEL = '0' then
+				RFRSH_DELAY <= '1';
+			else
+				RFRSH_DELAY <= '0';
+			end if;
+		end if;
+
+		if (VCLKCNT = "011" and RFRSH_DELAY = '0') or (CPU_TURBO = '1' and VCLKCNT = "110") then
 			FX68_PHI1 <= '1';
 		else
 			FX68_PHI1 <= '0';
 		end if;
 
-		if VCLKCNT = "001" or (CPU_TURBO = '1' and VCLKCNT = "100") then
+		if (VCLKCNT = "001" and RFRSH_DELAY = '0') or (CPU_TURBO = '1' and VCLKCNT = "100") then
 			FX68_PHI2 <= '1';
 		else
 			FX68_PHI2 <= '0';
@@ -1749,7 +1772,6 @@ begin
 		when SDRC_IDLE =>
 			--if VCLKCNT = "001" then
 				if FX68_SDRAM_SEL = '1' and FX68_SDRAM_DTACK_N = '1' then
-					SDRC_READY <= '0';
 					ram68k_req <= not ram68k_req;
 					ram68k_a <= FX68_A(15 downto 1);
 					ram68k_d <= FX68_DO;
@@ -1777,8 +1799,7 @@ begin
 			--end if;
 
 		when SDRC_FX68 =>
-			if FX68_PHI1 = '1' then SDRC_READY <= '1'; end if;
-			if (FX68_PHI1 = '1' or SDRC_READY = '1') and ram68k_req = ram68k_ack then
+			if ram68k_req = ram68k_ack then
 				FX68_SDRAM_D <= ram68k_q;
 				FX68_SDRAM_DTACK_N <= '0';
 				SDRC <= SDRC_IDLE;
@@ -1993,7 +2014,7 @@ begin
 				svp_ram2_u_n <= FX68_UDS_N;
 				svp_ram2_l_n <= FX68_LDS_N;
 				SVPRC <= SVPRC_FX68;
-			elsif DMA_SVP_RAM_SEL = '1' and DMA_SDRAM_DTACK_N = '1' then
+			elsif DMA_SVP_RAM_SEL = '1' and DMA_SVP_RAM_DTACK_N = '1' then
 				svp_ram2_req <= not svp_ram2_req;
 				svp_dma_a := VBUS_ADDR - 1;
 				if VBUS_ADDR(23 downto 16) = x"39" then

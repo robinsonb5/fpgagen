@@ -405,17 +405,6 @@ begin
 				nextRamCol <= vram32_a(addr_colbits);
 				nextLdqm <= '0';
 				nextUdqm <= '0';
-			elsif (svp_ram1_req /= svp_ram1_ackReg) and (currentPort /= PORT_SVP_RAM1) then
-				nextRamState <= RAM_READ_1;
-				if svp_ram1_we = '1' then
-					nextRamState <= RAM_WRITE_1;
-				end if;
-				nextRamPort <= PORT_SVP_RAM1;
-				nextRamBank <= svp_ram1_a(addr_bankbits);
-				nextRamRow <= svp_ram1_a(addr_rowbits);
-				nextRamCol <= svp_ram1_a(addr_colbits);
-				nextLdqm <= '0';
-				nextUdqm <= '0';
 			elsif (svp_ram2_req /= svp_ram2_ackReg) and (currentPort /= PORT_SVP_RAM2) then
 				nextRamState <= RAM_READ_1;
 				if svp_ram2_we = '1' then
@@ -427,6 +416,17 @@ begin
 				nextRamCol <= svp_ram2_a(addr_colbits);
 				nextLdqm <= svp_ram2_l_n;
 				nextUdqm <= svp_ram2_u_n;
+			elsif (svp_ram1_req /= svp_ram1_ackReg) and (currentPort /= PORT_SVP_RAM1) then
+				nextRamState <= RAM_READ_1;
+				if svp_ram1_we = '1' then
+					nextRamState <= RAM_WRITE_1;
+				end if;
+				nextRamPort <= PORT_SVP_RAM1;
+				nextRamBank <= svp_ram1_a(addr_bankbits);
+				nextRamRow <= svp_ram1_a(addr_rowbits);
+				nextRamCol <= svp_ram1_a(addr_colbits);
+				nextLdqm <= '0';
+				nextUdqm <= '0';
 			elsif (svp_rom_req /= svp_rom_ackReg) and (currentPort /= PORT_SVP_ROM) then
 				nextRamState <= RAM_READ_1;
 				nextRamPort <= PORT_SVP_ROM;

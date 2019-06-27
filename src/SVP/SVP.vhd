@@ -81,7 +81,9 @@ architecture rtl of SVP is
 		MAS_PROM_RD,
 		MAS_ROM_RD,
 		MAS_DRAM_RD,
+		MAS_DRAM_RD_RDY,
 		MAS_DRAM_RDWR,
+		MAS_DRAM_RDWR_RDY,
 		MAS_DRAM_WR,
 		MAS_IRAM_RD,
 		MAS_IRAM_WR
@@ -392,7 +394,6 @@ begin
 							else
 								MAS <= MAS_DRAM_RDWR;
 							end if;
-							DRAM_REQ_REG <= not DRAM_ACK;
 						elsif MEM_ADDR(20 downto 15) = "111001" then		--IRAM 390000-3907FF (1C8000-1C83FF)
 							if PMAR_NUM(3) = '1' then
 								MAS <= MAS_IRAM_RD;
@@ -417,13 +418,17 @@ begin
 					end if;
 				
 				when MAS_DRAM_RD =>
-					MEM_WAIT <= '0';
---					if MEM_WAIT = '0' and HALT = '0' then
+					if HALT = '0' then
+						DRAM_REQ_REG <= not DRAM_ACK;
+						MAS <= MAS_DRAM_RD_RDY;
+					end if;
+
+				when MAS_DRAM_RD_RDY =>
 					if DRAM_REQ_REG = DRAM_ACK and HALT = '0' then
 						PMARS(to_integer(PMAR_NUM)).DATA <= DRAM_DI;
 						MAS <= MAS_IDLE;
 					end if;
-					
+
 				when MAS_IRAM_RD =>
 					MEM_WAIT <= '0';
 					if MEM_WAIT = '0' then
@@ -432,6 +437,12 @@ begin
 					end if;
 
 				when MAS_DRAM_RDWR =>
+					if HALT = '0' then
+						DRAM_REQ_REG <= not DRAM_ACK;
+						MAS <= MAS_DRAM_RDWR_RDY;
+					end if;
+
+				when MAS_DRAM_RDWR_RDY =>
 					if DRAM_REQ_REG = DRAM_ACK then
 						DRAM_WE <= '1';
 						DRAM_DO <= OverWrite(PMARS(to_integer(PMAR_NUM)), DRAM_DI);
@@ -455,10 +466,8 @@ begin
 			
 			if MAS = MAS_IDLE or 
 				(MAS = MAS_ROM_RD and MA_ROM_REQ = ROM_ACK and HALT = '0') or 
-				(MAS = MAS_DRAM_RD and DRAM_REQ_REG = DRAM_ACK and HALT = '0') or 
---				(MAS = MAS_DRAM_RD and MEM_WAIT = '0' and HALT = '0') or 
+				(MAS = MAS_DRAM_RD_RDY and DRAM_REQ_REG = DRAM_ACK and HALT = '0') or 
 				(MAS = MAS_IRAM_RD and MEM_WAIT = '0') or 
---				(MAS = MAS_DRAM_WR and HALT = '0') or (MAS = MAS_IRAM_WR) then
 				(MAS = MAS_DRAM_WR and DRAM_REQ_REG = DRAM_ACK and HALT = '0') or (MAS = MAS_IRAM_WR) then
 				if PMAR_ACTIVE = '0' and SSP_ACTIVE = '1' then
 					if IRAM_SEL = '0' then

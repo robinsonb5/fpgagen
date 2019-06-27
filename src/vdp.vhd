@@ -92,6 +92,7 @@ entity vdp is
 		CE_PIX		: buffer std_logic;
 		FIELD_OUT	: out std_logic;
 		INTERLACE	: out std_logic;
+		RESOLUTION  : out std_logic_vector(1 downto 0);
 		HBL			: out std_logic;
 		VBL			: out std_logic;
 
@@ -176,6 +177,7 @@ signal SLOT_EN      : std_logic;
 
 signal IN_DMA		: std_logic;
 signal IN_HBL		: std_logic;
+signal M_HBL		: std_logic;
 signal IN_VBL		: std_logic; -- VBL flag to the CPU
 signal VBL_AREA		: std_logic; -- outside of borders
 
@@ -300,9 +302,8 @@ type dmac_t is (
 	DMA_VBUS_INIT,
 	DMA_VBUS_WAIT,
 	DMA_VBUS_RD,
-	DMA_VBUS_RD2,
-	DMA_VBUS_SEL,
-	DMA_VBUS_LOOP
+	DMA_VBUS_LOOP,
+	DMA_VBUS_END
 );
 signal DMAC	: dmac_t;
 
@@ -322,8 +323,6 @@ signal DT_FF_DATA       : std_logic_vector(15 downto 0);
 signal DT_FF_CODE       : std_logic_vector(3 downto 0);
 signal DT_FF_SEL        : std_logic;
 signal DT_FF_DTACK_N    : std_logic;
-signal DT_VBUS_SEL      : std_logic;
-signal DT_VBUS_DTACK_N  : std_logic;
 
 signal DT_RD_DATA	: std_logic_vector(15 downto 0);
 signal DT_RD_CODE	: std_logic_vector(3 downto 0);
@@ -350,7 +349,7 @@ signal DMA_COPY		: std_logic;
 signal DMA_LENGTH	: std_logic_vector(15 downto 0);
 signal DMA_SOURCE	: std_logic_vector(15 downto 0);
 
-signal DMA_VBUS_TIMER : std_logic;
+signal DMA_VBUS_TIMER : std_logic_vector(1 downto 0);
 ----------------------------------------------------------------
 -- VIDEO COUNTING
 ----------------------------------------------------------------
@@ -475,6 +474,7 @@ signal BGB_VSRAM1_LAST_READ : std_logic_vector(10 downto 0);
 
 signal BGB_MAPPING_EN       : std_logic;
 signal BGB_PATTERN_EN       : std_logic;
+signal BGB_ENABLE           : std_logic;
 
 -- BACKGROUND A
 type bgac_t is (
@@ -525,7 +525,7 @@ signal WIN_H		: std_logic;
 
 signal BGA_MAPPING_EN       : std_logic;
 signal BGA_PATTERN_EN       : std_logic;
-
+signal BGA_ENABLE           : std_logic;
 ----------------------------------------------------------------
 -- SPRITE ENGINE
 ----------------------------------------------------------------
@@ -1192,6 +1192,7 @@ variable L	: line;
 begin
 	if RST_N = '0' then
 		BGB_SEL <= '0';
+		BGB_ENABLE <= '1';
 		BGBC <= BGBC_DONE;
 	elsif rising_edge(CLK) then
 			case BGBC is
@@ -1318,6 +1319,7 @@ begin
 -- synthesis translate_on
 					BGB_SEL <= '0';
 					BGB_NAMETABLE_ITEMS <= BGB_VRAM32_DO;
+					BGB_ENABLE <= DE;
 					BGBC <= BGBC_TILE_RD;
 				end if;
 
@@ -1347,11 +1349,13 @@ begin
 					end if;
 				end if;
 
-				BGB_SEL <= '1';
+				if BGB_ENABLE = '1' then
+					BGB_SEL <= '1';
+				end if;
 				BGBC <= BGBC_LOOP;
 
 			when BGBC_LOOP =>
-				if BGB_VRAM32_ACK = '1' or BGB_SEL = '0' then
+				if BGB_VRAM32_ACK = '1' or BGB_SEL = '0' or BGB_ENABLE = '0' then
 					BGB_SEL <= '0';
 
 					BGB_COLINFO_ADDR_A <= BGB_POS(8 downto 0);
@@ -1407,6 +1411,11 @@ begin
 						end if;
 					when others => null;
 					end case;
+
+					if BGB_ENABLE = '0' then
+						BGB_COLINFO_D_A <= '1' & BGCOL;
+					end if;
+
 					BGB_X <= (BGB_X + 1) and hscroll_mask;
 					BGB_POS <= BGB_POS + 1;
 					if BGB_X(2 downto 0) = "111" then
@@ -1453,6 +1462,7 @@ begin
 	if RST_N = '0' then
 		BGA_SEL <= '0';
 		BGAC <= BGAC_DONE;
+		BGA_ENABLE <= '1';
 	elsif rising_edge(CLK) then
 			case BGAC is
 			when BGAC_DONE =>
@@ -1602,6 +1612,7 @@ begin
 -- synthesis translate_on											
 					BGA_SEL <= '0';
 					BGA_NAMETABLE_ITEMS <= BGA_VRAM32_DO;
+					BGA_ENABLE <= DE;
 					BGAC <= BGAC_TILE_RD;
 				end if;
 
@@ -1633,11 +1644,13 @@ begin
 					end if;
 				end if;
 
-				BGA_SEL <= '1';
+				if BGA_ENABLE = '1' then
+					BGA_SEL <= '1';
+				end if;
 				BGAC <= BGAC_LOOP;
 
 			when BGAC_LOOP =>
-				if BGA_VRAM32_ACK = '1' or BGA_SEL = '0' then
+				if BGA_VRAM32_ACK = '1' or BGA_SEL = '0' or BGA_ENABLE = '0' then
 					BGA_SEL <= '0';
 
 					BGA_COLINFO_WE_A <= '1';
@@ -1699,6 +1712,10 @@ begin
 						when others => null;
 					end case;
 
+					if BGA_ENABLE = '0' then
+						BGA_COLINFO_D_A <= '1' & BGCOL;
+					end if;
+
 					BGA_X <= (BGA_X + 1) and hscroll_mask;
 					bga_pos_next := BGA_POS + 1;
 					BGA_POS <= bga_pos_next;
@@ -1717,6 +1734,9 @@ begin
 						-- window on the left side ends, but not neccessarily on a scroll boundary,
 						-- when it continues to draw a wrong tile ("left window bug")
 						WIN_H <= '0';
+						if WIN_V = '0' and BGA_X(3 downto 0) /= "1111" then
+							BGAC <= BGAC_LOOP;
+						end if;
 					elsif WIN_H = '0' and WRIGT_LATCH = '1' and BGA_POS(3 downto 0) = "1111" and bga_pos_next(8 downto 4) = WHP_LATCH
 					then
 						-- window on the right side starts, cancel rendering the current tile
@@ -2371,6 +2391,7 @@ begin
 		VINT_T80_SET <= '0';
 		VINT_T80_CLR <= '0';
 
+		M_HBL <= '0';
 		IN_HBL <= '0';
 		IN_VBL <= '1';
 		VBL_AREA <= '1';
@@ -2403,9 +2424,13 @@ begin
 		BGB_MAPPING_EN <= '0';
 		BGB_PATTERN_EN <= '0';
 
+		-- H40 slow slots during HSYNC in BlastEm: {19, 20, 20, 20, 18, 20, 20, 20, 18, 20, 20, 20, 18, 20, 20, 20, 19};
+		-- 10, 10, 10, 10, 10, 10, 10, 10, 10, 8, 10, 10, 10, 10, 10, 10, 10, 8, 10, 10, 10, 10, 10, 10, 10, 8, 10, 10, 10, 10, 10, 10, 10, 8
+		-- 460                               469                            477                            485                            493
+
 		HV_PIXDIV <= HV_PIXDIV + 1;
 		if (RS0 = '1' and H40 = '1' and 
-			((HV_PIXDIV = 8-1 and (HV_HCNT < H_DISP_START or HV_HCNT >= H_DISP_START + 30)) or --458-487 - 30
+			((HV_PIXDIV = 8-1 and (HV_HCNT < 460 or HV_HCNT >= 493 or HV_HCNT = 469 or HV_HCNT = 477 or HV_HCNT = 485)) or
 			(HV_PIXDIV = 10-1))) or --normal H40 - 30*10+390*8=3420 cycles
 		   (RS0 = '0' and H40 = '1' and HV_PIXDIV = 8-1) or --fast H40
 		   (RS0 = '0' and H40 = '0' and HV_PIXDIV = 10-1) or --normal H32
@@ -2485,10 +2510,15 @@ begin
 
 			if HV_HCNT = HBLANK_END then --active display
 				IN_HBL <= '0';
+				M_HBL <= '0';
 			end if;
 
 			if HV_HCNT = HBLANK_START then -- blanking
 				IN_HBL <= '1';
+			end if;
+
+			if HV_HCNT = HBLANK_START-3 then
+				M_HBL <= '1';
 			end if;
 
 			if HV_HCNT = 0 then
@@ -2616,9 +2646,7 @@ begin
 					end if;
 				end if;
 
-				if DE='0' then
-					col := BGCOL;
-				elsif OBJ_COLINFO_Q_A(3 downto 0) /= "0000" and OBJ_COLINFO_Q_A(6) = '1' and
+				if OBJ_COLINFO_Q_A(3 downto 0) /= "0000" and OBJ_COLINFO_Q_A(6) = '1' and
 					(SHI='0' or OBJ_COLINFO_Q_A(5 downto 1) /= "11111") then
 					col := OBJ_COLINFO_Q_A(5 downto 0);
 				elsif BGA_COLINFO_Q_B(3 downto 0) /= "0000" and BGA_COLINFO_Q_B(6) = '1' then
@@ -2773,6 +2801,7 @@ G <= FF_G;
 B <= FF_B;
 
 INTERLACE <= LSM(1) and LSM(0);
+RESOLUTION <= V30&H40;
 
 V_DISP_HEIGHT_R <= conv_std_logic_vector(V_DISP_HEIGHT_V30, 9) when V30_R ='1'
               else conv_std_logic_vector(V_DISP_HEIGHT_V28, 9);
@@ -2795,17 +2824,21 @@ begin
 			end if;
 
 			CE_PIX <= '1';
-			if HV_HCNT = HBLANK_END + H_DISP_WIDTH + 1 then
-				HBL <= '1';
-			end if;
-			if HV_HCNT = HBLANK_END + 1 then
-				HBL <= '0';
-			end if;
+			if BORDER_EN = '0' then
+				if ((HV_HCNT - HBLANK_END - HBORDER_LEFT) >= H_DISP_WIDTH) then
+					HBL <= '1';
+				else
+					HBL <= '0';
+				end if;
 
-			if HV_VCNT < V_DISP_HEIGHT_R then
-				VBL <= '0';
+				if HV_VCNT < V_DISP_HEIGHT_R then
+					VBL <= '0';
+				else
+					VBL <= '1';
+				end if;
 			else
-				VBL <= '1';
+				HBL <= M_HBL;
+				VBL <= VBL_AREA;
 			end if;
 		end if;
 	end if;
@@ -2860,11 +2893,9 @@ begin
 
 		DT_RD_DTACK_N <= '1';
 		DT_FF_DTACK_N <= '1';
-		DT_VBUS_DTACK_N <= '1';
 
 		FF_VBUS_ADDR <= (others => '0');
 		FF_VBUS_SEL	<= '0';
-		DT_VBUS_SEL <= '0';
 		
 		DMA_FILL <= '0';
 		DMAF_SET_REQ <= '0';
@@ -2887,9 +2918,6 @@ begin
 		if DT_FF_SEL = '0' then
 			DT_FF_DTACK_N <= '1';
 		end if;
-		if DT_VBUS_SEL = '0' then
-			DT_VBUS_DTACK_N <= '1';
-		end if;
 		if ADDR_SET_REQ = '0' then
 			ADDR_SET_ACK <= '0';
 		end if;
@@ -2906,21 +2934,13 @@ begin
 			if FIFO_DELAY(3) /= "00" then FIFO_DELAY(3) <= FIFO_DELAY(3) - 1; end if;
 		end if;
 
-		if ((DT_FF_SEL = '1' and DT_FF_DTACK_N = '1') or (DT_VBUS_SEL = '1' and DT_VBUS_DTACK_N = '1')) and
-		    FIFO_FULL = '0' and DTC /= DTC_FIFO_RD
+		if DT_FF_SEL = '1' and DT_FF_DTACK_N = '1' and FIFO_FULL = '0' and DTC /= DTC_FIFO_RD
 		then
 			FIFO_ADDR( CONV_INTEGER( FIFO_WR_POS ) ) <= ADDR;
-			if DT_FF_SEL = '1' then
-				FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_FF_DATA;
-				FIFO_CODE( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_FF_CODE;
-				FIFO_DELAY( CONV_INTEGER( FIFO_WR_POS ) ) <= "00"; -- should be delayed, too?
-				DT_FF_DTACK_N <= '0';
-			else
-				FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_DMAV_DATA;
-				FIFO_CODE( CONV_INTEGER( FIFO_WR_POS ) ) <= CODE(3 downto 0);
-				FIFO_DELAY( CONV_INTEGER( FIFO_WR_POS ) ) <= "10";
-				DT_VBUS_DTACK_N <= '0';
-			end if;
+			FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_FF_DATA;
+			FIFO_CODE( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_FF_CODE;
+			FIFO_DELAY( CONV_INTEGER( FIFO_WR_POS ) ) <= "00"; -- should be delayed, too?
+			DT_FF_DTACK_N <= '0';
 			FIFO_WR_POS <= FIFO_WR_POS + 1;
 			FIFO_QUEUE <= FIFO_QUEUE + 1;
 			ADDR <= ADDR + ADDR_STEP;
@@ -3412,66 +3432,72 @@ begin
 -- synthesis translate_on
 					DMA_LENGTH <= REG(20) & REG(19);
 					DMA_SOURCE <= REG(22) & REG(21);
-					DMA_VBUS_TIMER <= '1';
+					DMA_VBUS_TIMER <= "10";
 					DMAC <= DMA_VBUS_WAIT;
 				end if;
 
 			when DMA_VBUS_WAIT =>
 				if SLOT_EN = '1' then
-					if DMA_VBUS_TIMER = '0' then
+					if DMA_VBUS_TIMER = 0 then
+						FF_VBUS_SEL <= '1';
+						FF_VBUS_ADDR <= REG(23)(6 downto 0) & DMA_SOURCE;
 						DMAC <= DMA_VBUS_RD;
 					end if;
-					DMA_VBUS_TIMER <= not DMA_VBUS_TIMER;
+					DMA_VBUS_TIMER <= DMA_VBUS_TIMER - 1;
 				end if;
 
 			when DMA_VBUS_RD =>
-				FF_VBUS_SEL <= '1';
-				FF_VBUS_ADDR <= REG(23)(6 downto 0) & DMA_SOURCE;
-				DMAC <= DMA_VBUS_RD2;
-
-			when DMA_VBUS_RD2 =>
-				if VBUS_DTACK_N = '0' then
+				if VBUS_DTACK_N = '0' or FF_VBUS_SEL = '0' then
 					FF_VBUS_SEL <= '0';
-					DT_DMAV_DATA <= VBUS_DATA;
-					DMAC <= DMA_VBUS_SEL;
--- synthesis translate_off					
-					write(L, string'("   VBUS RD ["));
-					hwrite(L, REG(23)(6 downto 0) & DMA_SOURCE & '0');
-					write(L, string'("] = ["));
-					hwrite(L, VBUS_DATA);
-					write(L, string'("]"));
-					writeline(F,L);									
--- synthesis translate_on					
-				end if;
-	
-			when DMA_VBUS_SEL =>
-				if DT_VBUS_DTACK_N = '1' then
-					DT_VBUS_SEL <= '1';
-					DMA_LENGTH <= DMA_LENGTH - 1;
-					DMA_SOURCE <= DMA_SOURCE + 1;
-					DMAC <= DMA_VBUS_LOOP;
+					if FF_VBUS_SEL = '1' then
+						DT_DMAV_DATA <= VBUS_DATA;
+					end if;
+					if FIFO_FULL = '0' and DTC /= DTC_FIFO_RD then
+						FIFO_ADDR( CONV_INTEGER( FIFO_WR_POS ) ) <= ADDR;
+						if FF_VBUS_SEL = '1' then
+							FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) ) <= VBUS_DATA;
+						else
+							FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_DMAV_DATA;
+						end if;
+						FIFO_CODE( CONV_INTEGER( FIFO_WR_POS ) ) <= CODE(3 downto 0);
+						FIFO_DELAY( CONV_INTEGER( FIFO_WR_POS ) ) <= "10";
+						FIFO_WR_POS <= FIFO_WR_POS + 1;
+						FIFO_QUEUE <= FIFO_QUEUE + 1;
+						ADDR <= ADDR + ADDR_STEP;
+
+						DMA_LENGTH <= DMA_LENGTH - 1;
+						DMA_SOURCE <= DMA_SOURCE + 1;
+						DMAC <= DMA_VBUS_LOOP;
+					end if;
 				end if;
 
 			when DMA_VBUS_LOOP =>
-				if DT_VBUS_DTACK_N = '0' then
-					DT_VBUS_SEL <= '0';
-					REG(20) <= DMA_LENGTH(15 downto 8);
-					REG(19) <= DMA_LENGTH(7 downto 0);
-					REG(22) <= DMA_SOURCE(15 downto 8);
-					REG(21) <= DMA_SOURCE(7 downto 0);
-					if DMA_LENGTH = 0 then
+				REG(20) <= DMA_LENGTH(15 downto 8);
+				REG(19) <= DMA_LENGTH(7 downto 0);
+				REG(22) <= DMA_SOURCE(15 downto 8);
+				REG(21) <= DMA_SOURCE(7 downto 0);
+				if DMA_LENGTH = 0 then
+					DMA_VBUS_TIMER <= "01";
+					DMAC <= DMA_VBUS_END;
+-- synthesis translate_off										
+					write(L, string'("VDP DMA VBUS END"));
+					writeline(F,L);
+-- synthesis translate_on										
+				elsif SLOT_EN = '1' then
+					FF_VBUS_SEL <= '1';
+					FF_VBUS_ADDR <= REG(23)(6 downto 0) & DMA_SOURCE;
+					DMAC <= DMA_VBUS_RD;
+				end if;
+
+			when DMA_VBUS_END =>
+				if SLOT_EN = '1' then
+					DMA_VBUS_TIMER <= DMA_VBUS_TIMER - 1;
+					if DMA_VBUS_TIMER = 0 then
 						DMA_VBUS <= '0';
 						BGACK_N <= '1';
 						DMAC <= DMA_IDLE;
--- synthesis translate_off										
-						write(L, string'("VDP DMA VBUS END"));
-						writeline(F,L);
--- synthesis translate_on										
-					else
-						DMAC <= DMA_VBUS_RD;
 					end if;
 				end if;
-				
 			when others => null;
 			end case;
 		else	-- DT_ACTIVE = '0'

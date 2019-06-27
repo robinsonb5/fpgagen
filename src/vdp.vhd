@@ -151,8 +151,6 @@ signal FF_DO		: std_logic_vector(15 downto 0);
 type reg_t is array(0 to 31) of std_logic_vector(7 downto 0);
 signal REG			: reg_t;
 signal PENDING		: std_logic;
-signal ADDR_LATCH	: std_logic_vector(16 downto 0);
-signal REG_LATCH	: std_logic_vector(15 downto 0);
 signal CODE			: std_logic_vector(5 downto 0);
 
 type fifo_addr_t is array(0 to 3) of std_logic_vector(16 downto 0);
@@ -262,8 +260,6 @@ signal SATB			: std_logic_vector(7 downto 0);
 ----------------------------------------------------------------
 -- DATA TRANSFER CONTROLLER
 ----------------------------------------------------------------
-signal DT_ACTIVE	: std_logic;
-
 type dtc_t is (
 	DTC_IDLE,
 	DTC_FIFO_RD,
@@ -319,21 +315,12 @@ signal DT_VRAM_LDS_N    : std_logic;
 signal DT_WR_ADDR       : std_logic_vector(16 downto 0);
 signal DT_WR_DATA       : std_logic_vector(15 downto 0);
 
-signal DT_FF_DATA       : std_logic_vector(15 downto 0);
-signal DT_FF_CODE       : std_logic_vector(3 downto 0);
-signal DT_FF_SEL        : std_logic;
-signal DT_FF_DTACK_N    : std_logic;
-
 signal DT_RD_DATA	: std_logic_vector(15 downto 0);
 signal DT_RD_CODE	: std_logic_vector(3 downto 0);
 signal DT_RD_SEL	: std_logic;
 signal DT_RD_DTACK_N	: std_logic;
 
 signal ADDR			: std_logic_vector(16 downto 0);
-signal ADDR_SET_REQ	: std_logic;
-signal ADDR_SET_ACK : std_logic;
-signal REG_SET_REQ	: std_logic;
-signal REG_SET_ACK : std_logic;
 
 signal DT_DMAF_DATA	: std_logic_vector(15 downto 0);
 signal DT_DMAV_DATA	: std_logic_vector(15 downto 0);
@@ -893,143 +880,6 @@ STATUS <= "111111" & FIFO_EMPTY & FIFO_FULL & VINT_TG68_PENDING & SOVR & SCOL & 
 ----------------------------------------------------------------
 -- CPU INTERFACE
 ----------------------------------------------------------------
-
-DTACK_N <= FF_DTACK_N;
-DO <= FF_DO;
-process( RST_N, CLK )
-begin
-	if RST_N = '0' then
-		FF_DTACK_N <= '1';
-		FF_DO <= (others => '1');
-
-		PENDING <= '0';
-		ADDR_LATCH <= (others => '0');
-		ADDR_SET_REQ <= '0';
-		REG_SET_REQ <= '0';
-		CODE <= (others => '0');
-		
-		DT_RD_SEL <= '0';
-		DT_FF_SEL <= '0';
-		
-		SOVR_CLR <= '0';
-		SCOL_CLR <= '0';
-
-		DBG <= (others => '0');
-
-	elsif rising_edge(CLK) then
-		SOVR_CLR <= '0';
-		SCOL_CLR <= '0';
-
-		if SEL = '0' then
-			FF_DTACK_N <= '1';
-		elsif SEL = '1' and FF_DTACK_N = '1' then			
-			if RNW = '0' then -- Write
-				if A(4 downto 2) = "000" then
-					-- Data Port
-					PENDING <= '0';
-
-					DT_FF_DATA <= DI;
-					DT_FF_CODE <= CODE(3 downto 0);
-
-					if DT_FF_DTACK_N = '1' then
-						DT_FF_SEL <= '1';
-					else
-						DT_FF_SEL <= '0';
-						FF_DTACK_N <= '0';
-					end if;
-
-				elsif A(4 downto 2) = "001" then
-					-- Control Port
-					if PENDING = '1' then
-						CODE(4 downto 2) <= DI(6 downto 4);
-						if DMA = '1' then
-							CODE(5) <= DI(7);
-						end if;
-						ADDR_LATCH <= DI(2 downto 0) & ADDR(13 downto 0);
-
-						if ADDR_SET_ACK = '0' then
-							ADDR_SET_REQ <= '1';
-						else
-							ADDR_SET_REQ <= '0';
-							FF_DTACK_N <= '0';
-							PENDING <= '0';
-						end if;
-					else						
-						CODE(1 downto 0) <= DI(15 downto 14);
-						if DI(15 downto 14) = "10" then
-							-- Register Set
-							REG_LATCH <= DI;
-							if REG_SET_ACK = '0' then
-								REG_SET_REQ <= '1';
-							else
-								REG_SET_REQ <= '0';
-								FF_DTACK_N <= '0';
-							end if;							
-						else
-							-- Address Set
-							ADDR_LATCH(13 downto 0) <= DI(13 downto 0);
-							if ADDR_SET_ACK = '0' then
-								ADDR_SET_REQ <= '1';
-							else
-								ADDR_SET_REQ <= '0';
-								FF_DTACK_N <= '0';
-								PENDING <= '1';
-								CODE(5 downto 4) <= "00"; -- attempt to fix lotus i
-							end if;
-						end if;
-						-- Note : Genesis Plus does address setting
-						-- even in Register Set mode. Normal ?
-					end if;
-				elsif A(4 downto 2) = "111" then
-					DBG <= DI;
-					FF_DTACK_N <= '0';
-				elsif A(4 downto 3) = "10" then
-					-- PSG
-					FF_DTACK_N <= '0';
-				else
-					-- Unused (Lock-up)
-					FF_DTACK_N <= '0';
-				end if;			
-			else -- Read
-				if A(4 downto 2) = "000" then
-					PENDING <= '0';
-					-- Data Port
-					if CODE = "001000" -- CRAM Read
-					or CODE = "000100" -- VSRAM Read
-					or CODE = "000000" -- VRAM Read
-					or CODE = "001100" -- VRAM Read 8 bit
-					then
-						if DT_RD_DTACK_N = '1' then
-							DT_RD_SEL <= '1';
-							DT_RD_CODE <= CODE(3 downto 0);
-						else
-							DT_RD_SEL <= '0';
-							FF_DO <= DT_RD_DATA;
-							FF_DTACK_N <= '0';
-						end if;
-					else
-						FF_DTACK_N <= '0';
-					end if;
-				elsif A(4 downto 2) = "001" then
-					-- Control Port (Read Status Register)
-					PENDING <= '0';
-					FF_DO <= STATUS;
-					SOVR_CLR <= '1';
-					SCOL_CLR <= '1';
-					FF_DTACK_N <= '0';
-				elsif A(4 downto 3) = "01" then
-					-- HV Counter
-					FF_DO <= HV;
-					FF_DTACK_N <= '0';
-				elsif A(4) = '1' then
-					-- unused, PSG, DBG
-					FF_DO <= x"FFFF";
-					FF_DTACK_N <= '0';
-				end if;
-			end if;
-		end if;
-	end if;
-end process;
 
 ----------------------------------------------------------------
 -- VRAM CONTROLLER
@@ -2586,7 +2436,6 @@ SP1E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = H_INT_POS + 1 else '0
 SP2E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = 0 else '0';
 -- Stage 3 runs during HBLANK, just after the active display
 SP3E_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = HBLANK_END + HBORDER_LEFT + H_DISP_WIDTH else '0';
-DT_ACTIVE <= '1';
 
 -- PIXEL COUNTER AND OUTPUT
 -- ALSO CLEARS THE SPRITE COLINFO BUFFER RIGHT AFTER RENDERING
@@ -2860,8 +2709,11 @@ end process;
 -- synthesis translate_on
 
 ----------------------------------------------------------------
--- DATA TRANSFER CONTROLLER
+-- CPU INTERFACE & DATA TRANSFER CONTROLLER
 ----------------------------------------------------------------
+DTACK_N <= FF_DTACK_N;
+DO <= FF_DO;
+
 VBUS_ADDR <= FF_VBUS_ADDR;
 VBUS_SEL <= FF_VBUS_SEL;
 
@@ -2876,11 +2728,23 @@ variable L	: line;
 begin
 	if RST_N = '0' then
 
+		FF_DTACK_N <= '1';
+		FF_DO <= (others => '1');
+
+		PENDING <= '0';
+		CODE <= (others => '0');
+
+		DT_RD_SEL <= '0';
+		DT_RD_DTACK_N <= '1';
+
+		SOVR_CLR <= '0';
+		SCOL_CLR <= '0';
+
+		DBG <= (others => '0');
+
 		REG <= (others => (others => '0'));
 
 		ADDR <= (others => '0');
-		ADDR_SET_ACK <= '0';
-		REG_SET_ACK <= '0';
 		
 		DT_VRAM_SEL <= '0';
 		
@@ -2890,9 +2754,6 @@ begin
 		FIFO_PARTIAL <= '0';
 
 		REFRESH_FLAG <= '0';
-
-		DT_RD_DTACK_N <= '1';
-		DT_FF_DTACK_N <= '1';
 
 		FF_VBUS_ADDR <= (others => '0');
 		FF_VBUS_SEL	<= '0';
@@ -2915,17 +2776,6 @@ begin
 		if DT_RD_SEL = '0' then
 			DT_RD_DTACK_N <= '1';
 		end if;
-		if DT_FF_SEL = '0' then
-			DT_FF_DTACK_N <= '1';
-		end if;
-		if ADDR_SET_REQ = '0' then
-			ADDR_SET_ACK <= '0';
-		end if;
-		if REG_SET_REQ = '0' then
-			REG_SET_ACK <= '0';
-		end if;
-
-		CRAM_WE_A <= '0';
 
 		if SLOT_EN = '1' then
 			if FIFO_DELAY(0) /= "00" then FIFO_DELAY(0) <= FIFO_DELAY(0) - 1; end if;
@@ -2934,25 +2784,119 @@ begin
 			if FIFO_DELAY(3) /= "00" then FIFO_DELAY(3) <= FIFO_DELAY(3) - 1; end if;
 		end if;
 
-		if DT_FF_SEL = '1' and DT_FF_DTACK_N = '1' and FIFO_FULL = '0' and DTC /= DTC_FIFO_RD
-		then
-			FIFO_ADDR( CONV_INTEGER( FIFO_WR_POS ) ) <= ADDR;
-			FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_FF_DATA;
-			FIFO_CODE( CONV_INTEGER( FIFO_WR_POS ) ) <= DT_FF_CODE;
-			FIFO_DELAY( CONV_INTEGER( FIFO_WR_POS ) ) <= "00"; -- should be delayed, too?
-			DT_FF_DTACK_N <= '0';
-			FIFO_WR_POS <= FIFO_WR_POS + 1;
-			FIFO_QUEUE <= FIFO_QUEUE + 1;
-			ADDR <= ADDR + ADDR_STEP;
-		end if;
+		CRAM_WE_A <= '0';
 
-		-- Register set
-		if REG_SET_REQ = '1' and REG_SET_ACK = '0' then
-			if (M5 = '1' or REG_LATCH(12 downto 8) <= 10) then
-				-- mask registers above 10 in Mode4
-				REG( CONV_INTEGER( REG_LATCH(12 downto 8)) ) <= REG_LATCH(7 downto 0);
+		SOVR_CLR <= '0';
+		SCOL_CLR <= '0';
+
+		if SEL = '0' then
+			FF_DTACK_N <= '1';
+		elsif SEL = '1' and FF_DTACK_N = '1' then
+			if RNW = '0' then -- Write
+				if A(4 downto 2) = "000" then
+					-- Data Port
+					PENDING <= '0';
+
+					if FIFO_FULL = '0' and DTC /= DTC_FIFO_RD and FF_DTACK_N = '1' then
+						FIFO_ADDR( CONV_INTEGER( FIFO_WR_POS ) ) <= ADDR;
+						FIFO_DATA( CONV_INTEGER( FIFO_WR_POS ) ) <= DI;
+						FIFO_CODE( CONV_INTEGER( FIFO_WR_POS ) ) <= CODE(3 downto 0);
+						FIFO_DELAY( CONV_INTEGER( FIFO_WR_POS ) ) <= "00"; -- should be delayed, too?
+						FIFO_WR_POS <= FIFO_WR_POS + 1;
+						FIFO_QUEUE <= FIFO_QUEUE + 1;
+						ADDR <= ADDR + ADDR_STEP;
+						FF_DTACK_N <= '0';
+					end if;
+
+				elsif A(4 downto 2) = "001" then
+					-- Control Port
+					if PENDING = '1' then
+						CODE(4 downto 2) <= DI(6 downto 4);
+						ADDR <= DI(2 downto 0) & ADDR(13 downto 0);
+
+						if DMA = '1' then
+							CODE(5) <= DI(7);
+							if DI(7) = '1' then
+								if REG(23)(7) = '0' then
+									DMA_VBUS <= '1';
+									BR_N <= '0';
+								else
+									if REG(23)(6) = '0' then
+										DMA_FILL <= '1';
+									else
+										DMA_COPY <= '1';
+									end if;
+								end if;
+							end if;
+						end if;
+						FF_DTACK_N <= '0';
+						PENDING <= '0';
+					else
+						CODE(1 downto 0) <= DI(15 downto 14);
+						if DI(15 downto 14) = "10" then
+							-- Register Set
+							if (M5 = '1' or DI(12 downto 8) <= 10) then
+								-- mask registers above 10 in Mode4
+								REG( CONV_INTEGER( DI(12 downto 8)) ) <= DI(7 downto 0);
+							end if;
+							FF_DTACK_N <= '0';
+						else
+							-- Address Set
+							ADDR(13 downto 0) <= DI(13 downto 0);
+							FF_DTACK_N <= '0';
+							PENDING <= '1';
+							CODE(5 downto 4) <= "00"; -- attempt to fix lotus i
+						end if;
+						-- Note : Genesis Plus does address setting
+						-- even in Register Set mode. Normal ?
+					end if;
+				elsif A(4 downto 2) = "111" then
+					DBG <= DI;
+					FF_DTACK_N <= '0';
+				elsif A(4 downto 3) = "10" then
+					-- PSG
+					FF_DTACK_N <= '0';
+				else
+					-- Unused (Lock-up)
+					FF_DTACK_N <= '0';
+				end if;
+			else -- Read
+				if A(4 downto 2) = "000" then
+					PENDING <= '0';
+					-- Data Port
+					if CODE = "001000" -- CRAM Read
+					or CODE = "000100" -- VSRAM Read
+					or CODE = "000000" -- VRAM Read
+					or CODE = "001100" -- VRAM Read 8 bit
+					then
+						if DT_RD_DTACK_N = '1' then
+							DT_RD_SEL <= '1';
+							DT_RD_CODE <= CODE(3 downto 0);
+						else
+							DT_RD_SEL <= '0';
+							FF_DO <= DT_RD_DATA;
+							FF_DTACK_N <= '0';
+						end if;
+					else
+						FF_DTACK_N <= '0';
+					end if;
+				elsif A(4 downto 2) = "001" then
+					-- Control Port (Read Status Register)
+					PENDING <= '0';
+					FF_DO <= STATUS;
+					SOVR_CLR <= '1';
+					SCOL_CLR <= '1';
+					FF_DTACK_N <= '0';
+				elsif A(4 downto 3) = "01" then
+					-- HV Counter
+					FF_DO <= HV;
+					FF_DTACK_N <= '0';
+				elsif A(4) = '1' then
+					-- unused, PSG, DBG
+					FF_DO <= x"FFFF";
+					FF_DTACK_N <= '0';
+				end if;
 			end if;
-			REG_SET_ACK <= '1';
 		end if;
 
 		if SLOT_EN = '1' then
@@ -2964,8 +2908,7 @@ begin
 			end if;
 		end if;
 
-		if DT_ACTIVE = '1' then
-			case DTC is
+		case DTC is
 			when DTC_IDLE =>
 				if FIFO_EN = '1' then
 					FIFO_PARTIAL <= '0';
@@ -3152,28 +3095,11 @@ begin
 				DTC <= DTC_IDLE;
 
 			when others => null;
-			end case;
+		end case;
 
 ----------------------------------------------------------------
 -- DMA ENGINE
 ----------------------------------------------------------------
-			if ADDR_SET_REQ = '1' and ADDR_SET_ACK = '0' then
-				ADDR <= ADDR_LATCH;
-				if CODE(5) = '1' and PENDING = '1' then
-					if REG(23)(7) = '0' then
-						DMA_VBUS <= '1';
-						BR_N <= '0';
-					else
-						if REG(23)(6) = '0' then
-							DMA_FILL <= '1';
-						else
-							DMA_COPY <= '1';
-						end if;
-					end if;
-				end if;
-				ADDR_SET_ACK <= '1';
-			end if;
-
 			if FIFO_EMPTY = '1' and DMA_FILL = '1' and DMAF_SET_REQ = '1' then
 				if CODE(3 downto 0) = "0011" or CODE(3 downto 0) = "0101" then
 					-- CRAM, VSRAM fill gets its data from the next FIFO write position
@@ -3184,7 +3110,7 @@ begin
 				DMAF_SET_REQ <= '0';
 			end if;
 
-			case DMAC is
+		case DMAC is
 			when DMA_IDLE =>
 				if DMA_VBUS = '1' then
 					DMAC <= DMA_VBUS_INIT;
@@ -3499,10 +3425,7 @@ begin
 					end if;
 				end if;
 			when others => null;
-			end case;
-		else	-- DT_ACTIVE = '0'
-			-- Do nothing
-		end if;
+		end case;
 	end if;
 
 end process;

@@ -1459,9 +1459,12 @@ begin
 		when VDPC_FX68_ACC =>
 			if VDP_DTACK_N = '0' then
 				VDP_SEL <= '0';
-				if VDP_A(3 downto 2) = "01" then
+				if VDP_A(4 downto 2) = "001" then
 					-- status register
 					FX68_VDP_D <= NO_DATA(15 downto 10) & VDP_DO(9 downto 0);
+				elsif VDP_A(4) = '1' then
+					-- unused, PSG, debug register
+					FX68_VDP_D <= NO_DATA;
 				else
 					FX68_VDP_D <= VDP_DO;
 				end if;

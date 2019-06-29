@@ -345,7 +345,7 @@ begin
 
 		FILL2:
 		begin
-			cpu_ack<=cpu_req; // Maintain ack signal if necessary
+			cpu_ack<=1; // Maintain ack signal if necessary
 			// write second word to Cache...
 			readword_burst<=1'b1;
 			readword<=readword+1'b1;
@@ -357,7 +357,7 @@ begin
 
 		FILL3:
 		begin
-			cpu_ack<=cpu_req; // Maintain ack signal if necessary
+			//cpu_ack<=cpu_req; // Maintain ack signal if necessary
 			// write third word to Cache...
 			readword_burst<=1'b1;
 			readword<=readword+1'b1;
@@ -369,7 +369,7 @@ begin
 
 		FILL4:
 		begin
-			cpu_ack<=1'b1;
+			//cpu_ack<=1'b1;
 			readword_burst<=1'b1;
 			readword<=readword+1'b1;
 			data_ports_w<={2'b11,data_from_sdram};

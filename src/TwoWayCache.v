@@ -34,7 +34,7 @@ module TwoWayCache
 	input [15:0] data_from_cpu,
 	output reg [15:0] data_to_cpu,
 	input [15:0] data_from_sdram,
-	output sdram_req,
+	output reg sdram_req,
 	input sdram_fill
 );
 
@@ -164,9 +164,6 @@ assign data_port1_addr = init ? {1'b0,initctr} :
 			readword_burst ? {1'b0,latched_cpuaddr,readword} : cacheline1;
 assign data_port2_addr = init ? {1'b1,initctr} :
 			readword_burst ? {1'b1,latched_cpuaddr,readword} : cacheline2;
-
-reg sdram_req_reg;
-assign sdram_req = state == WAITRD ? ~(tag_hit1 && data_valid1 || tag_hit2 && data_valid2) : sdram_req_reg;
 
 always @(posedge clk)
 begin
@@ -314,7 +311,7 @@ begin
 					// FIXME - might be simpler to just write every cycle and switch between new and old data.
 //					tag_wren2<=tag_port1_r[15];
 
-					sdram_req_reg<=1'b1;
+					sdram_req<=1'b1;
 					state<=WAITFILL;
 				end
 			end
@@ -334,7 +331,7 @@ begin
 
 			if (sdram_fill==1'b1)
 			begin
-				sdram_req_reg<=1'b0;
+				sdram_req<=1'b0;
 				data_to_cpu <= data_from_sdram;
 				cpu_ack<=1'b1; // Too soon?
 

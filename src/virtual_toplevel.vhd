@@ -1020,7 +1020,7 @@ begin
 	end if;
 end process;
 
-FX68_SEL <= '1' when FX68_IO_READY = '1' and FX68_AS_N = '0' and (FX68_UDS_N = '0' or FX68_LDS_N = '0') else '0';
+FX68_SEL <= '1' when FX68_AS_N = '0' and (FX68_UDS_N = '0' or FX68_LDS_N = '0') else '0';
 
 ----------------------------------------------------------------
 -- INTERRUPTS CONTROL
@@ -1817,7 +1817,7 @@ begin
 					ram68k_req <= not ram68k_req;
 					ram68k_a <= FX68_A(15 downto 1);
 					ram68k_d <= FX68_DO;
-					ram68k_we <= not FX68_RNW;
+					ram68k_we <= not FX68_RNW and FX68_IO_READY;
 					ram68k_u_n <= FX68_UDS_N;
 					ram68k_l_n <= FX68_LDS_N;
 					SDRC_DELAY <= "00";

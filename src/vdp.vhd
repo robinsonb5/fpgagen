@@ -1132,27 +1132,34 @@ begin
 				BGBC <= BGBC_CALC_BASE;
 
 			when BGBC_CALC_BASE =>
-				-- BGB mapping slot
-				if LSM = "11" then
-					y_cells := BGB_Y(10 downto 4);
-				else
-					y_cells := BGB_Y(9 downto 3);
+				if BGB_MAPPING_EN = '1' then
+					-- BGB mapping slot
+					if LSM = "11" then
+						y_cells := BGB_Y(10 downto 4);
+					else
+						y_cells := BGB_Y(9 downto 3);
+					end if;
+					case HSIZE is
+					when "00"|"10" => -- HS 32 cells
+						V_BGB_BASE := (NTBB & "0000000000000") + (BGB_X(9 downto 3) & "0") + (y_cells & "00000" & "0");
+					when "01" => -- HS 64 cells
+						V_BGB_BASE := (NTBB & "0000000000000") + (BGB_X(9 downto 3) & "0") + (y_cells & "000000" & "0");
+					when "11" => -- HS 128 cells
+						V_BGB_BASE := (NTBB & "0000000000000") + (BGB_X(9 downto 3) & "0") + (y_cells & "0000000" & "0");
+					when others => null;
+					end case;
+					BGB_VRAM_ADDR <= V_BGB_BASE(15 downto 1);
+					BGB_ENABLE <= DE;
+					if DE = '1' then
+						BGB_SEL <= '1';
+						BGBC <= BGBC_BASE_RD;
+					else
+						BGBC <= BGBC_LOOP;
+					end if;
 				end if;
-				case HSIZE is
-				when "00"|"10" => -- HS 32 cells
-					V_BGB_BASE := (NTBB & "0000000000000") + (BGB_X(9 downto 3) & "0") + (y_cells & "00000" & "0");
-				when "01" => -- HS 64 cells
-					V_BGB_BASE := (NTBB & "0000000000000") + (BGB_X(9 downto 3) & "0") + (y_cells & "000000" & "0");
-				when "11" => -- HS 128 cells
-					V_BGB_BASE := (NTBB & "0000000000000") + (BGB_X(9 downto 3) & "0") + (y_cells & "0000000" & "0");
-				when others => null;
-				end case;
-				BGB_VRAM_ADDR <= V_BGB_BASE(15 downto 1);
-				BGB_SEL <= '1';
-				BGBC <= BGBC_BASE_RD;
 
 			when BGBC_BASE_RD =>
-				if BGB_VRAM32_ACK = '1' and BGB_MAPPING_EN = '1' then
+				if BGB_VRAM32_ACK = '1' then
 -- synthesis translate_off					
 					write(L, string'("BGB BASE_RD Y="));
 					hwrite(L, "000000" & BGB_Y(9 downto 0));
@@ -1169,7 +1176,6 @@ begin
 -- synthesis translate_on
 					BGB_SEL <= '0';
 					BGB_NAMETABLE_ITEMS <= BGB_VRAM32_DO;
-					BGB_ENABLE <= DE;
 					BGBC <= BGBC_TILE_RD;
 				end if;
 
@@ -1413,39 +1419,46 @@ begin
 				BGAC <= BGAC_CALC_BASE;
 
 			when BGAC_CALC_BASE =>
-				-- BGA mapping slot
-				if LSM = "11" then
-					y_cells := BGA_Y(10 downto 4);
-				else
-					y_cells := BGA_Y(9 downto 3);
-				end if;
-
-				if WIN_H = '1' or WIN_V = '1' then
-					V_BGA_XBASE := (NTWB & "00000000000") + (BGA_POS(9 downto 3) & "0");
-					if H40 = '0' then -- WIN is 32 tiles wide in H32 mode
-						V_BGA_BASE := V_BGA_XBASE + (y_cells & "00000" & "0");
-					else              -- WIN is 64 tiles wide in H40 mode
-						V_BGA_BASE := V_BGA_XBASE + (y_cells & "000000" & "0");
+				if BGA_MAPPING_EN = '1' then
+					-- BGA mapping slot
+					if LSM = "11" then
+						y_cells := BGA_Y(10 downto 4);
+					else
+						y_cells := BGA_Y(9 downto 3);
 					end if;
-			   else
-					V_BGA_XBASE := (NTAB & "0000000000000") + (BGA_X(9 downto 3) & "0");
-					case HSIZE is
-					when "00"|"10" => -- HS 32 cells
-						V_BGA_BASE := V_BGA_XBASE + (y_cells & "00000" & "0");
-					when "01" => -- HS 64 cells
-						V_BGA_BASE := V_BGA_XBASE + (y_cells & "000000" & "0");
-					when "11" => -- HS 128 cells
-						V_BGA_BASE := V_BGA_XBASE + (y_cells & "0000000" & "0");
-					when others => null;
-					end case;
-				end if;
 
-				BGA_VRAM_ADDR <= V_BGA_BASE(15 downto 1);
-				BGA_SEL <= '1';
-				BGAC <= BGAC_BASE_RD;
+					if WIN_H = '1' or WIN_V = '1' then
+						V_BGA_XBASE := (NTWB & "00000000000") + (BGA_POS(9 downto 3) & "0");
+						if H40 = '0' then -- WIN is 32 tiles wide in H32 mode
+							V_BGA_BASE := V_BGA_XBASE + (y_cells & "00000" & "0");
+						else              -- WIN is 64 tiles wide in H40 mode
+							V_BGA_BASE := V_BGA_XBASE + (y_cells & "000000" & "0");
+						end if;
+					else
+						V_BGA_XBASE := (NTAB & "0000000000000") + (BGA_X(9 downto 3) & "0");
+						case HSIZE is
+						when "00"|"10" => -- HS 32 cells
+							V_BGA_BASE := V_BGA_XBASE + (y_cells & "00000" & "0");
+						when "01" => -- HS 64 cells
+							V_BGA_BASE := V_BGA_XBASE + (y_cells & "000000" & "0");
+						when "11" => -- HS 128 cells
+							V_BGA_BASE := V_BGA_XBASE + (y_cells & "0000000" & "0");
+						when others => null;
+						end case;
+					end if;
+
+					BGA_VRAM_ADDR <= V_BGA_BASE(15 downto 1);
+					BGA_ENABLE <= DE;
+					if DE = '1' then
+						BGA_SEL <= '1';
+						BGAC <= BGAC_BASE_RD;
+					else
+						BGAC <= BGAC_LOOP;
+					end if;
+				end if;
 
 			when BGAC_BASE_RD =>
-				if BGA_VRAM32_ACK = '1' and BGA_MAPPING_EN = '1' then
+				if BGA_VRAM32_ACK = '1' then
 -- synthesis translate_off					
 					write(L, string'("BGA BASE_RD Y="));
 					hwrite(L, "000000" & BGA_Y(9 downto 0));
@@ -1462,7 +1475,6 @@ begin
 -- synthesis translate_on											
 					BGA_SEL <= '0';
 					BGA_NAMETABLE_ITEMS <= BGA_VRAM32_DO;
-					BGA_ENABLE <= DE;
 					BGAC <= BGAC_TILE_RD;
 				end if;
 

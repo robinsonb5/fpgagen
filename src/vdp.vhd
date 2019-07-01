@@ -2427,7 +2427,7 @@ begin
 			end case;
 
 			SLOT_EN <= not HV_HCNT(0);
-			if REFRESH_SLOT = '1' then
+			if (IN_VBL = '1' or DE = '0') and REFRESH_SLOT = '1' then
 				REFRESH_EN <= '1';
 			end if;
 
@@ -2912,9 +2912,9 @@ begin
 		end if;
 
 		if SLOT_EN = '1' then
-			if REFRESH_EN = '1' then
-				-- skip the slot after a refresh for DMA
-				REFRESH_FLAG <= DMA_VBUS;
+			if REFRESH_EN = '1' and DMA_VBUS = '1' and CODE(3 downto 0) /= "0001" then
+				-- skip the slot after a refresh for DMA (except for VRAM write)
+				REFRESH_FLAG <= '1';
 			else
 				REFRESH_FLAG <= '0';
 			end if;

@@ -303,7 +303,6 @@ signal ZCLK_nENA   : std_logic;
 signal ZCLKCNT     : std_logic_vector(3 downto 0);
 signal RFRSH_CNT   : std_logic_vector(7 downto 0);
 signal RFRSH_DELAY : std_logic;
-signal MCLKCNT     : std_logic_vector(11 downto 0);
 
 -- FLASH CONTROL
 signal FX68_FLASH_SEL		: std_logic;
@@ -1067,7 +1066,6 @@ begin
 		RFRSH_CNT <= (others => '0');
 		RFRSH_DELAY <= '0';
 		SVP_CLKEN <= '0';
-		MCLKCNT <= (others => '0');
 
 	elsif rising_edge(MCLK) then
 		ZCLKCNT <= ZCLKCNT + 1;
@@ -1087,14 +1085,8 @@ begin
 			ZCLK_nENA <= '0';
 		end if;
 
-		-- hack for syncing VDP and CPU, until the original timings can be fully reached
-		MCLKCNT <= MCLKCNT + 1;
-		if MCLKCNT = 3419 then
-			MCLKCNT <= (others => '0');
-		end if;
-
 		VCLKCNT <= VCLKCNT + 1;
-		if VCLKCNT = "110" or MCLKCNT >= 3416 then
+		if VCLKCNT = "110" then
 			VCLKCNT <= "000";
 		end if;
 		if VCLKCNT = "011" then

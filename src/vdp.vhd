@@ -2285,15 +2285,15 @@ begin
 		BGA_PATTERN_EN <= '0';
 		BGB_MAPPING_EN <= '0';
 		BGB_PATTERN_EN <= '0';
-
-		-- H40 slow slots during HSYNC in BlastEm: {19, 20, 20, 20, 18, 20, 20, 20, 18, 20, 20, 20, 18, 20, 20, 20, 19};
-		-- 10, 10, 10, 10, 10, 10, 10, 10, 10, 8, 10, 10, 10, 10, 10, 10, 10, 8, 10, 10, 10, 10, 10, 10, 10, 8, 10, 10, 10, 10, 10, 10, 10, 8
-		-- 460                               469                            477                            485                            493
+		-- H40 slow slots: 8aaaaaaa99aaaaaaa8aaaaaaa99aaaaaaa
+		-- 8, 10, 10, 10, 10, 10, 10, 10, 9, 9, 10, 10, 10, 10, 10, 10, 10, 8, 10, 10, 10, 10, 10, 10, 10, 9, 9, 10, 10, 10, 10, 10, 10, 10
+		-- 460                           468                               477                            485                            493
 
 		HV_PIXDIV <= HV_PIXDIV + 1;
 		if (RS0 = '1' and H40 = '1' and 
-			((HV_PIXDIV = 8-1 and (HV_HCNT < 460 or HV_HCNT >= 493 or HV_HCNT = 469 or HV_HCNT = 477 or HV_HCNT = 485)) or
-			(HV_PIXDIV = 10-1))) or --normal H40 - 30*10+390*8=3420 cycles
+			((HV_PIXDIV = 8-1 and (HV_HCNT <= 460 or HV_HCNT > 493 or HV_HCNT = 477)) or
+			((HV_PIXDIV = 9-1 and (HV_HCNT = 468 or HV_HCNT = 469 or HV_HCNT = 485 or HV_HCNT = 486))) or
+			(HV_PIXDIV = 10-1))) or --normal H40 - 28*10+4*9+388*8=3420 cycles
 		   (RS0 = '0' and H40 = '1' and HV_PIXDIV = 8-1) or --fast H40
 		   (RS0 = '0' and H40 = '0' and HV_PIXDIV = 10-1) or --normal H32
 		   (RS0 = '1' and H40 = '0' and HV_PIXDIV = 8-1) then --fast H32

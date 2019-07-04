@@ -2102,6 +2102,7 @@ end process;
 FL_DQ <= ext_data;
 
 process( SDR_CLK )
+variable rom_last_addr: unsigned(23 downto 1);
 begin
 	if rising_edge( SDR_CLK ) then
 		if ext_reset_n = '0' then
@@ -2127,12 +2128,13 @@ begin
 					end if;
 					if ext_bootdone = '1' then
 						ext_data_req <= '0';
+						rom_last_addr := romwr_a - 1;
 						-- enable SRAM for carts < 2 MB
-						if romwr_a(23 downto 21) = 0 then
+						if rom_last_addr(23 downto 21) = 0 then
 							SRAM_EN_AUTO <= '1';
 						end if;
 						-- enable ROM paging for carts > 4 MB
-						if romwr_a(23 downto 22) /= 0 then
+						if rom_last_addr(23 downto 22) /= 0 then
 							BIG_CART <= '1';
 						end if;
 						bootState <= BOOT_DONE;

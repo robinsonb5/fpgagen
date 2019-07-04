@@ -2552,7 +2552,7 @@ begin
 				CRAM_ADDR_B <= col;
 
 			when "0101" =>
-				if (x >= H_DISP_WIDTH or V_ACTIVE_DISP = '0') and BORDER_EN = '0' then
+				if (x >= H_DISP_WIDTH or V_ACTIVE_DISP = '0') and (BORDER_EN = '0' or DBG(8 downto 7) /= "00") then
 					-- disabled border
 					FF_B <= (others => '0');
 					FF_G <= (others => '0');

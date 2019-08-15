@@ -63,6 +63,7 @@ component vdp
                 CE_PIX          : buffer std_logic;
                 FIELD_OUT       : out std_logic;
                 INTERLACE       : out std_logic;
+                RESOLUTION      : out std_logic_vector(1 downto 0);
                 HBL             : out std_logic;
                 VBL             : out std_logic;
 

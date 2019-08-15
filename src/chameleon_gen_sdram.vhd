@@ -218,6 +218,10 @@ architecture rtl of chameleon_sdram is
 	signal svp_ram2_qReg : std_logic_vector(15 downto 0);
 	signal svp_rom_qReg : std_logic_vector(15 downto 0);
 
+	signal romrd_ready : std_logic := '0';
+	signal vram32_ready : std_logic := '0';
+	signal ram68k_ready : std_logic := '0';
+
 	signal initDoneReg : std_logic := '0';
 
 -- Active rows in SDRAM
@@ -807,42 +811,46 @@ begin
 	romwr_ack <= romwr_ackReg;
 	romwr_q <= romwr_qReg; --GE
 
-	process(clk)
-	begin
-		if rising_edge(clk) then
-			if (currentPort = PORT_ROMRD and rom_cache_ack = '1')
-			or (rom_cache_valid = '1' and rom_cache_ack = '1') then
-				romrd_ackReg <= not romrd_ackReg;
-			end if;
-		end if;
-	end process;
-	romrd_ack <= romrd_ackReg;
-	romrd_q <= rom_cache_q;
+	romrd_ready <= '1' when (currentPort = PORT_ROMRD and rom_cache_ack = '1')
+			or (rom_cache_valid = '1' and rom_cache_ack = '1') else '0';
 
 	process(clk)
 	begin
 		if rising_edge(clk) then
-			if currentPort = PORT_VRAM32
-			and ramState = RAM_READ_3 then
+			if romrd_ready = '1' then
+				romrd_ackReg <= not romrd_ackReg;
+			end if;
+		end if;
+	end process;
+	romrd_ack <= not romrd_ackReg when romrd_ready = '1' else romrd_ackReg;
+	romrd_q <= rom_cache_q;
+
+	vram32_ready <= '1' when currentPort = PORT_VRAM32 and ramState = RAM_READ_3 else '0';
+
+	process(clk)
+	begin
+		if rising_edge(clk) then
+			if vram32_ready = '1' then
 				vram32_ackReg <= not vram32_ackReg;
 				vram32_qReg <= ram_data_reg & currentRdData(15 downto 0);
 			end if;
 		end if;
 	end process;
-	vram32_ack <= vram32_ackReg;
-	vram32_q <= vram32_qReg;
+	vram32_ack <= not vram32_ackReg when vram32_ready = '1' else vram32_ackReg;
+	vram32_q <= ram_data_reg & currentRdData(15 downto 0) when vram32_ready = '1' else vram32_qReg;
+
+	ram68k_ready <= '1' when (currentPort = PORT_RAM68K and (ramState = RAM_WRITE_1 or (ram68k_we='0' and ram68k_cache_ack = '1')))
+			or (ram68k_cache_valid = '1' and ram68k_cache_ack = '1' and ram68k_we = '0') else '0';
 
 	process(clk)
 	begin
 		if rising_edge(clk) then
-			if (currentPort = PORT_RAM68K and (ramState = RAM_WRITE_1 or (ram68k_we='0' and ram68k_cache_ack = '1')))
-			or (ram68k_cache_valid = '1' and ram68k_cache_ack = '1' and ram68k_we = '0')
-			then
+			if ram68k_ready = '1' then
 				ram68k_ackReg <= not ram68k_ackReg;
 			end if;
 		end if;
 	end process;
-	ram68k_ack <= ram68k_ackReg;
+	ram68k_ack <= not ram68k_ackReg when ram68k_ready = '1' else ram68k_ackReg;
 	ram68k_q <= ram68k_cache_q;
 
 	process(clk)

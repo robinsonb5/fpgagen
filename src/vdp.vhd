@@ -556,6 +556,12 @@ signal OBJ_COLINFO_WE_REND      : std_logic;
 signal OBJ_COLINFO_D_SP3        : std_logic_vector(6 downto 0);
 signal OBJ_COLINFO_D_REND       : std_logic_vector(6 downto 0);
 
+signal OBJ_COLINFO2_ADDR_RD : std_logic_vector(8 downto 0);
+signal OBJ_COLINFO2_ADDR_WR : std_logic_vector(8 downto 0);
+signal OBJ_COLINFO2_D       : std_logic_vector(6 downto 0);
+signal OBJ_COLINFO2_WE      : std_logic;
+signal OBJ_COLINFO2_Q       : std_logic_vector(6 downto 0);
+
 -- PART 1
 signal SP1E_ACTIVATE	: std_logic;
 
@@ -723,6 +729,23 @@ OBJ_COLINFO_ADDR_B <= OBJ_COLINFO_ADDR_WR_SP3 when SP3C /= SP3C_DONE else OBJ_CO
 OBJ_COLINFO_WE_A <= '0';
 OBJ_COLINFO_WE_B <= OBJ_COLINFO_WE_SP3 when SP3C /= SP3C_DONE else OBJ_COLINFO_WE_REND;
 OBJ_COLINFO_D_B <= OBJ_COLINFO_D_SP3 when SP3C /= SP3C_DONE else OBJ_COLINFO_D_REND;
+
+obj_ci2 : entity work.DualPortRAM
+generic map (
+	addrbits    => 9,
+	databits    => 7
+)
+port map(
+	address_a   => OBJ_COLINFO2_ADDR_RD,
+	address_b   => OBJ_COLINFO2_ADDR_WR,
+	clock       => CLK,
+	data_a      => (others => '0'),
+	data_b      => OBJ_COLINFO2_D,
+	wren_a      => '0',
+	wren_b      => OBJ_COLINFO2_WE,
+	q_a         => OBJ_COLINFO2_Q,
+	q_b         => open
+);
 
 obj_cache : entity work.obj_cache
 port map(
@@ -1272,8 +1295,8 @@ begin
 					when others => null;
 					end case;
 
-					if BGB_ENABLE = '0' then
-						BGB_COLINFO_D_A <= '1' & BGCOL;
+					if BGB_ENABLE = '0' or DE = '0' then
+						BGB_COLINFO_D_A <= '0' & BGCOL;
 					end if;
 
 					BGB_X <= (BGB_X + 1) and hscroll_mask;
@@ -1578,8 +1601,8 @@ begin
 						when others => null;
 					end case;
 
-					if BGA_ENABLE = '0' then
-						BGA_COLINFO_D_A <= '1' & BGCOL;
+					if BGA_ENABLE = '0' or DE = '0' then
+						BGA_COLINFO_D_A <= '0' & BGCOL;
 					end if;
 
 					BGA_X <= (BGA_X + 1) and hscroll_mask;
@@ -2450,22 +2473,60 @@ BGEN_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = HSCROLL_READ + 8 else '0'
 SP1E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = H_INT_POS + 1 else '0';
 -- Stage 2 - runs in the active area
 SP2E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = 0 else '0';
--- Stage 3 runs during HBLANK, just after the active display
-SP3E_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = HBLANK_END + HBORDER_LEFT + H_DISP_WIDTH else '0';
+-- Stage 3 runs 3 slots after the background rendering ends
+SP3E_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = H_DISP_WIDTH + 5 else '0';
+
+process( CLK )
+	variable x : std_logic_vector(8 downto 0);
+begin
+	OBJ_COLINFO_D_REND <= (others => '0');
+	if rising_edge(CLK) then
+
+		if VBL_AREA = '0' then
+			-- As displaying and sprite rendering (part 3) overlap,
+			-- copy and clear the sprite buffer a bit sooner.
+			-- also apply DE for the sprite layer here and 
+			-- clear the colinfo buffer after rendering
+			--
+			-- A smaller buffer would be enough for the second copy, but
+			-- it still uses only 1 BRAM block, and makes the logic simpler
+			--
+			case HV_PIXDIV is
+			when "0000" =>
+				x := HV_HCNT;
+				OBJ_COLINFO_ADDR_RD_REND <= x;
+				OBJ_COLINFO_ADDR_WR_REND <= x;
+				OBJ_COLINFO2_ADDR_WR <= x;
+				OBJ_COLINFO_WE_REND <= '0';
+			when "0010" =>
+				OBJ_COLINFO2_WE <= '1';
+				if DE = '1' then
+					OBJ_COLINFO2_D <= OBJ_COLINFO_Q_A;
+				else
+					OBJ_COLINFO2_D <= '0' & BGCOL;
+				end if;
+				OBJ_COLINFO_WE_REND <= '1';
+
+			when "0011" =>
+				OBJ_COLINFO2_WE <= '0';
+				OBJ_COLINFO_WE_REND <= '0';
+			when others => null;
+			end case;
+		end if;
+	end if;
+end process;
 
 -- PIXEL COUNTER AND OUTPUT
--- ALSO CLEARS THE SPRITE COLINFO BUFFER RIGHT AFTER RENDERING
 process( RST_N, CLK )
 	variable col : std_logic_vector(5 downto 0);
 	variable cold: std_logic_vector(5 downto 0);
 	variable x   : std_logic_vector(8 downto 0);
 begin
-	OBJ_COLINFO_D_REND <= (others => '0');
 	if rising_edge(CLK) then
+
 		if IN_HBL = '1' or VBL_AREA = '1' then
 				BGB_COLINFO_ADDR_B <= (others => '0');
 				BGA_COLINFO_ADDR_B <= (others => '0');
-				OBJ_COLINFO_WE_REND <= '0';
 				if HV_PIXDIV = "0101" then
 					FF_R <= (others => '0');
 					FF_G <= (others => '0');
@@ -2477,9 +2538,7 @@ begin
 				x := HV_HCNT - HBLANK_END - HBORDER_LEFT;
 				BGB_COLINFO_ADDR_B <= x;
 				BGA_COLINFO_ADDR_B <= x;
-				OBJ_COLINFO_ADDR_RD_REND <= x;
-				OBJ_COLINFO_ADDR_WR_REND <= x;
-				OBJ_COLINFO_WE_REND <= '0';
+				OBJ_COLINFO2_ADDR_RD <= x;
 
 			when "0010" =>
 				if SHI = '1' and BGA_COLINFO_Q_B(6) = '0' and BGB_COLINFO_Q_B(6) = '0' then
@@ -2490,37 +2549,37 @@ begin
 				end if;
 
 			when "0011" =>
-				if SHI = '1' and (OBJ_COLINFO_Q_A(6) = '1' or
+				if SHI = '1' and (OBJ_COLINFO2_Q(6) = '1' or
 					((BGA_COLINFO_Q_B(6) = '0' or BGA_COLINFO_Q_B(3 downto 0) = "0000") and
 					 (BGB_COLINFO_Q_B(6) = '0' or BGB_COLINFO_Q_B(3 downto 0) = "0000"))) then
 					--sprite is visible
-					if OBJ_COLINFO_Q_A(5 downto 0) = "111110" then
+					if OBJ_COLINFO2_Q(5 downto 0) = "111110" then
 						--if sprite is palette 3/color 14 increase intensity
 						if PIX_MODE = PIX_SHADOW then 
 							PIX_MODE <= PIX_NORMAL;
 						else
 							PIX_MODE <= PIX_HIGHLIGHT;
 						end if;
-					elsif OBJ_COLINFO_Q_A(5 downto 0) = "111111" then
+					elsif OBJ_COLINFO2_Q(5 downto 0) = "111111" then
 						-- if sprite is visible and palette 3/color 15, decrease intensity
 						PIX_MODE <= PIX_SHADOW;
-					elsif (OBJ_COLINFO_Q_A(6) = '1' and OBJ_COLINFO_Q_A(3 downto 0) /= "0000") or 
-					       OBJ_COLINFO_Q_A(3 downto 0) = "1110" then
+					elsif (OBJ_COLINFO2_Q(6) = '1' and OBJ_COLINFO2_Q(3 downto 0) /= "0000") or 
+					       OBJ_COLINFO2_Q(3 downto 0) = "1110" then
 						--sprite color 14 or high prio always shows up normal
 						PIX_MODE <= PIX_NORMAL;
 					end if;
 				end if;
 
-				if OBJ_COLINFO_Q_A(3 downto 0) /= "0000" and OBJ_COLINFO_Q_A(6) = '1' and
-					(SHI='0' or OBJ_COLINFO_Q_A(5 downto 1) /= "11111") then
-					col := OBJ_COLINFO_Q_A(5 downto 0);
+				if OBJ_COLINFO2_Q(3 downto 0) /= "0000" and OBJ_COLINFO2_Q(6) = '1' and
+					(SHI='0' or OBJ_COLINFO2_Q(5 downto 1) /= "11111") then
+					col := OBJ_COLINFO2_Q(5 downto 0);
 				elsif BGA_COLINFO_Q_B(3 downto 0) /= "0000" and BGA_COLINFO_Q_B(6) = '1' then
 					col := BGA_COLINFO_Q_B(5 downto 0);
 				elsif BGB_COLINFO_Q_B(3 downto 0) /= "0000" and BGB_COLINFO_Q_B(6) = '1' then
 					col := BGB_COLINFO_Q_B(5 downto 0);
-				elsif OBJ_COLINFO_Q_A(3 downto 0) /= "0000" and
-					(SHI='0' or OBJ_COLINFO_Q_A(5 downto 1) /= "11111") then
-					col := OBJ_COLINFO_Q_A(5 downto 0);
+				elsif OBJ_COLINFO2_Q(3 downto 0) /= "0000" and
+					(SHI='0' or OBJ_COLINFO2_Q(5 downto 1) /= "11111") then
+					col := OBJ_COLINFO2_Q(5 downto 0);
 				elsif BGA_COLINFO_Q_B(3 downto 0) /= "0000" then
 					col := BGA_COLINFO_Q_B(5 downto 0);
 				elsif BGB_COLINFO_Q_B(3 downto 0) /= "0000" then
@@ -2531,7 +2590,7 @@ begin
 
 				case DBG(8 downto 7) is
 					when "00" => cold := BGCOL;
-					when "01" => cold := OBJ_COLINFO_Q_A(5 downto 0);
+					when "01" => cold := OBJ_COLINFO2_Q(5 downto 0);
 					when "10" => cold := BGA_COLINFO_Q_B(5 downto 0);
 					when "11" => cold := BGB_COLINFO_Q_B(5 downto 0);
 					when others => null;
@@ -2577,11 +2636,7 @@ begin
 						FF_R <= '0' & CRAM_Q_B(2 downto 0) + 7;
 					end case;
 				end if;
-				OBJ_COLINFO_WE_REND <= '1';
 
-			when "0111" =>
-				OBJ_COLINFO_WE_REND <= '0';
-			
 			when others => null;
 			end case;
 

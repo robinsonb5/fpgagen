@@ -180,8 +180,7 @@ signal IN_VBL		: std_logic; -- VBL flag to the CPU
 signal VBL_AREA		: std_logic; -- outside of borders
 
 signal SOVR			: std_logic;
-signal SP1_SOVR_SET	: std_logic;
-signal SP3_SOVR_SET	: std_logic;
+signal SOVR_SET     : std_logic;
 signal SOVR_CLR		: std_logic;
 
 signal SCOL			: std_logic;
@@ -1702,11 +1701,7 @@ begin
 
 		OBJ_VISINFO_ADDR_WR <= (others => '0');
 
-		SP1_SOVR_SET <= '0';
-
 	elsif rising_edge(CLK) then
-
-		SP1_SOVR_SET <= '0';
 
 		case SP1C is
 			when SP1C_INIT =>
@@ -1790,7 +1785,6 @@ begin
 				-- limit number of sprites per line to 20 / 16
 				if OBJ_NB = OBJ_MAX_LINE then
 					SP1C <= SP1C_DONE;
-					SP1_SOVR_SET <= '1';
 				-- check a total of 80 sprites in H40 mode and 64 sprites in H32 mode
 				elsif OBJ_TOT = OBJ_MAX_FRAME - 1  or 
 					 -- the following checks are inspired by the gens-ii emulator
@@ -1950,12 +1944,12 @@ begin
 		OBJ_DOT_OVERFLOW <= '0';
 
 		SCOL_SET <= '0';
-		SP3_SOVR_SET <= '0';
+		SOVR_SET <= '0';
 
 	elsif rising_edge(CLK) then
 
 		SCOL_SET <= '0';
-		SP3_SOVR_SET <= '0';
+		SOVR_SET <= '0';
 
 		case SP3C is
 			when SP3C_INIT =>
@@ -2177,7 +2171,7 @@ begin
 				if OBJ_PIX = H_DISP_WIDTH then
 					OBJ_DOT_OVERFLOW <= '1';
 					SP3C <= SP3C_DONE;
-					SP3_SOVR_SET <= '1';
+					SOVR_SET <= '1';
 				end if;
 
 			when others => -- SP3C_DONE
@@ -3598,7 +3592,7 @@ begin
 	if RST_N = '0' then
 		SOVR <= '0';
 	elsif rising_edge( CLK) then
-		if SP1_SOVR_SET = '1' or SP3_SOVR_SET = '1' then
+		if SOVR_SET = '1' then
 			SOVR <= '1';
 		elsif SOVR_CLR = '1' then
 			SOVR <= '0';

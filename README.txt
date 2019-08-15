@@ -1,11 +1,7 @@
 This is a port of fpgagen - Genesis/Megadrive core to additional platform(s)
 MiST, Turbo Chameleon 64, Altera/Terasic DE2 board
 
-The core shall be considered a work in progress as there are multiple issues:
-1. Sprite flickering on heavy scenes, or on large sprites
-2. No LFO modulation of the FM sound
-3. Rom file formats supported are .bin and .gen, no support for .smd files
-4. The design does not fit on the Altera/Terasic DE1 board anymore
+Currently only the MiST port is maintained here.
 
 ==== Installing the core ====
 If you are not buidling the core, copy the following files to the root of your sdcard:

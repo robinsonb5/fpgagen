@@ -41,20 +41,17 @@ use IEEE.STD_LOGIC_UNSIGNED.ALL;
 use IEEE.STD_LOGIC_TEXTIO.all;
 use work.jt12.all;
 use work.jt89.all;
+use work.sdram.all;
 
 entity Virtual_Toplevel is
-	generic (
-		colAddrBits : integer := 9;
-		rowAddrBits : integer := 13;
-		rasCasTiming : integer := 2;
-		prechargeTiming: integer := 2
-	);
 	port(
 		reset : in std_logic;
 		MCLK : in std_logic;		-- 54MHz
 		SDR_CLK : in std_logic;		-- 108MHz
 
-		DRAM_ADDR	: out std_logic_vector(rowAddrBits-1 downto 0);
+		FPGA_INIT_N : in std_logic;
+
+		DRAM_ADDR	: out std_logic_vector(12 downto 0);
 		DRAM_BA_0	: out std_logic;
 		DRAM_BA_1	: out std_logic;
 		DRAM_CAS_N	: out std_logic;
@@ -118,8 +115,7 @@ end entity;
 
 architecture rtl of Virtual_Toplevel is
 
-constant addrwidth : integer := rowAddrBits+colAddrBits+2;
-
+signal SDRAM_BA : std_logic_vector(1 downto 0);
 -- "FLASH"
 signal romwr_req : std_logic := '0';
 signal romwr_ack : std_logic;
@@ -569,7 +565,7 @@ begin
 process(MRST_N,MCLK)
 begin
 	if rising_edge(MCLK) then
-		MRST_N <= SDR_INIT_DONE and reset and ext_bootdone and ext_reset_n;
+		MRST_N <= reset and ext_bootdone and ext_reset_n;
 		if bootState = BOOT_DONE then
 			VDP_RST_N <= '1';
 		else
@@ -624,41 +620,39 @@ LED <= '0';
 -- -----------------------------------------------------------------------
 -- SDRAM Controller
 -- -----------------------------------------------------------------------		
-sdc : entity work.chameleon_sdram generic map (
-	colAddrBits => colAddrBits,
-	rowAddrBits => rowAddrBits,
-	prechargeTiming => prechargeTiming,
-	rasCasTiming => rasCasTiming
-) port map(
-	clk         => SDR_CLK,
-	reset_n     => ext_reset_n,
+DRAM_BA_0 <= SDRAM_BA(0);
+DRAM_BA_1 <= SDRAM_BA(1);
 
-	std_logic_vector(sd_data)	=> DRAM_DQ,
-	std_logic_vector(sd_addr)	=> DRAM_ADDR,
-	sd_we_n						=> DRAM_WE_N,
-	sd_ras_n					=> DRAM_RAS_N,
-	sd_cas_n					=> DRAM_CAS_N,
-	sd_ba_0						=> DRAM_BA_0,
-	sd_ba_1						=> DRAM_BA_1,
-	sd_ldqm						=> DRAM_LDQM,
-	sd_udqm						=> DRAM_UDQM,
+sdc : sdram
+port map(
+	clk         => SDR_CLK,
+	init_n      => FPGA_INIT_N,
+
+	std_logic_vector(SDRAM_DQ)	=> DRAM_DQ,
+	std_logic_vector(SDRAM_A)	=> DRAM_ADDR,
+	SDRAM_nWE					=> DRAM_WE_N,
+	SDRAM_nRAS					=> DRAM_RAS_N,
+	SDRAM_nCAS					=> DRAM_CAS_N,
+	SDRAM_BA					=> SDRAM_BA,
+	SDRAM_DQML					=> DRAM_LDQM,
+	SDRAM_DQMH					=> DRAM_UDQM,
 
 	romwr_req	=> romwr_req,
 	romwr_ack	=> romwr_ack,
 	romwr_we 	=> romwr_we,
-	romwr_a		=> conv_std_logic_vector(0, addrwidth - 23) & std_logic_vector(romwr_a),
+	romwr_a		=> std_logic_vector(romwr_a),
 	romwr_d		=> romwr_d,
 	romwr_q		=> romwr_q,
 
 	romrd_req	=> romrd_req,
 	romrd_ack	=> romrd_ack,
-	romrd_a		=> conv_std_logic_vector(0, addrwidth - 23) & romrd_a,
+	romrd_a		=> romrd_a,
 	romrd_q		=> romrd_q,
 
 	ram68k_req	=> ram68k_req,
 	ram68k_ack	=> ram68k_ack,
 	ram68k_we	=> ram68k_we,
-	ram68k_a	=> conv_std_logic_vector(2#111111000#, addrwidth - 15) & ram68k_a,
+	ram68k_a	=> ram68k_a,
 	ram68k_d	=> ram68k_d,
 	ram68k_q	=> ram68k_q,
 	ram68k_u_n	=> ram68k_u_n,
@@ -667,7 +661,7 @@ sdc : entity work.chameleon_sdram generic map (
 	sram_req	=> sram_req,
 	sram_ack	=> sram_ack,
 	sram_we	=> sram_we,
-	sram_a		=> conv_std_logic_vector(2#111111010#, addrwidth - 15) & sram_a,
+	sram_a		=> sram_a,
 	sram_d		=> sram_d,
 	sram_q		=> sram_q,
 	sram_u_n	=> sram_u_n,
@@ -676,7 +670,7 @@ sdc : entity work.chameleon_sdram generic map (
 	vram_req	=> vram_req,
 	vram_ack => vram_ack,
 	vram_we	=> vram_we,
-	vram_a	=> conv_std_logic_vector(2#111111100#, addrwidth - 15) & vram_a,
+	vram_a	=> vram_a,
 	vram_d	=> vram_d,
 	vram_q	=> vram_q,
 	vram_u_n => vram_u_n,
@@ -684,20 +678,20 @@ sdc : entity work.chameleon_sdram generic map (
 
 	vram32_req => vram32_req,
 	vram32_ack => vram32_ack,
-	vram32_a   => conv_std_logic_vector(2#111111100#, addrwidth - 15) & vram32_a,
+	vram32_a   => vram32_a,
 	vram32_q   => vram32_q,
 
 	svp_ram1_req => svp_ram1_req,
 	svp_ram1_ack => svp_ram1_ack,
 	svp_ram1_we  => svp_ram1_we,
-	svp_ram1_a   => conv_std_logic_vector(2#11111111#, addrwidth - 16) & svp_ram1_a,
+	svp_ram1_a   => svp_ram1_a,
 	svp_ram1_d   => svp_ram1_d,
 	svp_ram1_q   => svp_ram1_q,
 
 	svp_ram2_req => svp_ram2_req,
 	svp_ram2_ack => svp_ram2_ack,
 	svp_ram2_we  => svp_ram2_we,
-	svp_ram2_a   => conv_std_logic_vector(2#11111111#, addrwidth - 16) & svp_ram2_a,
+	svp_ram2_a   => svp_ram2_a,
 	svp_ram2_d   => svp_ram2_d,
 	svp_ram2_q   => svp_ram2_q,
 	svp_ram2_u_n => svp_ram2_u_n,
@@ -705,10 +699,8 @@ sdc : entity work.chameleon_sdram generic map (
 
 	svp_rom_req	=> svp_rom_req,
 	svp_rom_ack	=> svp_rom_ack,
-	svp_rom_a	=> conv_std_logic_vector(0, addrwidth - 20) & svp_rom_a,
-	svp_rom_q	=> svp_rom_q,
-
-	initDone 	=> SDR_INIT_DONE
+	svp_rom_a	=> "000" & svp_rom_a,
+	svp_rom_q	=> svp_rom_q
 );
 
 -- -----------------------------------------------------------------------

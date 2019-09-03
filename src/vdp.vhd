@@ -620,7 +620,6 @@ signal SP3E_ACTIVATE	: std_logic;
 type sp3c_t is (
 	SP3C_INIT,
 	SP3C_NEXT,
-	SP3C_TILE_RD,
 	SP3C_LOOP,
 	SP3C_PLOT,
 	SP3C_DONE
@@ -633,8 +632,10 @@ signal SP3_VRAM32_DO_REG: std_logic_vector(31 downto 0);
 signal SP3_VRAM32_ACK   : std_logic;
 signal SP3_VRAM32_ACK_REG: std_logic;
 signal SP3_SEL          : std_logic;
+signal SP3_EN           : std_logic;
+signal SP3_EN_LATE      : std_logic;
 
-signal OBJ_PIX          : std_logic_vector(8 downto 0);
+signal OBJ_TILE_NO      : std_logic_vector(5 downto 0);
 signal OBJ_NO			: std_logic_vector(4 downto 0);
 
 signal OBJ_LINK			: std_logic_vector(6 downto 0);
@@ -1955,10 +1956,11 @@ begin
 			when SP3C_INIT =>
 				OBJ_NO <= (others => '0');
 				OBJ_SPINFO_ADDR_RD <= (others => '0');
-				OBJ_PIX <= (others => '0');
+				OBJ_TILE_NO <= (others => '0');
 				OBJ_MASKED <= '0';
 				OBJ_VALID_X <= OBJ_DOT_OVERFLOW;
 				OBJ_DOT_OVERFLOW <= '0';
+				SP3_EN_LATE <= '0';
 				SP3C <= SP3C_NEXT;
 
 			when SP3C_NEXT =>
@@ -1966,8 +1968,9 @@ begin
 				OBJ_COLINFO_WE_SP3 <= '0';
 
 				SP3C <= SP3C_LOOP;
-				if OBJ_NO = OBJ_IDX	then
-					SP3C <= SP3C_DONE;
+
+				if SP3_EN = '1' then
+					SP3_EN_LATE <= '1';
 				end if;
 
 				obj_vs_var := OBJ_SPINFO_Q(7 downto 6);
@@ -2090,88 +2093,94 @@ begin
 					end case;
 				end if;
 
-				SP3_SEL <= '1';
-				SP3C <= SP3C_TILE_RD;
-
-			when SP3C_TILE_RD =>
-				if SP3_VRAM32_ACK = '1' then
-					SP3_SEL <= '0';
+				-- limit total tiles per line
+				if OBJ_TILE_NO(5 downto 1) = OBJ_MAX_LINE then
+					SP3C <= SP3C_DONE;
+					if OBJ_NO <= OBJ_IDX then
+						-- no more slots, but still tiles to draw
+						OBJ_DOT_OVERFLOW <= '1';
+						SOVR_SET <= '1';
+					end if;
+				elsif SP3_EN = '1' or SP3_EN_LATE = '1' then
+					OBJ_TILE_NO <= OBJ_TILE_NO + 1;
+					SP3_EN_LATE <= '0'; -- hack if the memory cycle is a bit long
+					SP3_SEL <= '1';
 					SP3C <= SP3C_PLOT;
 				end if;
 
 			-- loop over all sprite pixels on the current line
 			when SP3C_PLOT =>
-				case OBJ_X_OFS(2 downto 0) is
-				when "100" =>
-					obj_color := SP3_VRAM32_DO(31 downto 28);
-				when "101" =>
-					obj_color := SP3_VRAM32_DO(27 downto 24);
-				when "110" =>
-					obj_color := SP3_VRAM32_DO(23 downto 20);
-				when "111" =>
-					obj_color := SP3_VRAM32_DO(19 downto 16);
-				when "000" =>
-					obj_color := SP3_VRAM32_DO(15 downto 12);
-				when "001" =>
-					obj_color := SP3_VRAM32_DO(11 downto  8);
-				when "010" =>
-					obj_color := SP3_VRAM32_DO( 7 downto  4);
-				when "011" =>
-					obj_color := SP3_VRAM32_DO( 3 downto  0);
-				when others => null;
-				end case;
-
-				OBJ_COLINFO_WE_SP3 <= '0';
-				if OBJ_POS < 320 then
-					if OBJ_COLINFO_Q_A(3 downto 0) = "0000" then
-						if OBJ_MASKED = '0' then
-							OBJ_COLINFO_WE_SP3 <= '1';
-							OBJ_COLINFO_ADDR_WR_SP3 <= OBJ_POS;
-							OBJ_COLINFO_D_SP3 <= OBJ_PRI & OBJ_PAL & obj_color;
-						end if;
-					else
-						if obj_color /= "0000" then
-							SCOL_SET <= '1';
-						end if;
+				if SP3_VRAM32_ACK = '1' or SP3_SEL = '0' then
+					SP3_SEL <= '0';
+					if SP3_EN = '1' then
+						SP3_EN_LATE <= '1';
 					end if;
-				end if;
 
-				OBJ_POS <= OBJ_POS + 1;
-				OBJ_PIX <= OBJ_PIX + 1;
-				OBJ_COLINFO_ADDR_RD_SP3 <= OBJ_POS + 1;
-				if OBJ_HF = '1' then
-					if OBJ_X_OFS = "00000" then
-						SP3C <= SP3C_NEXT;
-					else
-						OBJ_X_OFS <= OBJ_X_OFS - 1;
-						if OBJ_X_OFS(2 downto 0) = "000" then
-							SP3C <= SP3C_LOOP; -- fetch the next tile
+					case OBJ_X_OFS(2 downto 0) is
+					when "100" =>
+						obj_color := SP3_VRAM32_DO(31 downto 28);
+					when "101" =>
+						obj_color := SP3_VRAM32_DO(27 downto 24);
+					when "110" =>
+						obj_color := SP3_VRAM32_DO(23 downto 20);
+					when "111" =>
+						obj_color := SP3_VRAM32_DO(19 downto 16);
+					when "000" =>
+						obj_color := SP3_VRAM32_DO(15 downto 12);
+					when "001" =>
+						obj_color := SP3_VRAM32_DO(11 downto  8);
+					when "010" =>
+						obj_color := SP3_VRAM32_DO( 7 downto  4);
+					when "011" =>
+						obj_color := SP3_VRAM32_DO( 3 downto  0);
+					when others => null;
+					end case;
+
+					OBJ_COLINFO_WE_SP3 <= '0';
+					if OBJ_NO <= OBJ_IDX and OBJ_POS < 320 then
+						if OBJ_COLINFO_Q_A(3 downto 0) = "0000" then
+							if OBJ_MASKED = '0' then
+								OBJ_COLINFO_WE_SP3 <= '1';
+								OBJ_COLINFO_ADDR_WR_SP3 <= OBJ_POS;
+								OBJ_COLINFO_D_SP3 <= OBJ_PRI & OBJ_PAL & obj_color;
+							end if;
 						else
-							SP3C <= SP3C_PLOT;
+							if obj_color /= "0000" then
+								SCOL_SET <= '1';
+							end if;
 						end if;
 					end if;
-				else
-					if (OBJ_X_OFS = "00111" and OBJ_HS = "00")
-					or (OBJ_X_OFS = "01111" and OBJ_HS = "01")
-					or (OBJ_X_OFS = "11111" and OBJ_HS = "11")
-					or (OBJ_X_OFS = "10111" and OBJ_HS = "10")
-					then
-						SP3C <= SP3C_NEXT;
-					else
-						OBJ_X_OFS <= OBJ_X_OFS + 1;
-						if OBJ_X_OFS(2 downto 0) = "111" then
-							SP3C <= SP3C_LOOP; -- fetch the next tile
-						else
-							SP3C <= SP3C_PLOT;
-						end if;
-					end if;
-				end if;
 
-				-- limit total sprite pixels per line
-				if OBJ_PIX = H_DISP_WIDTH then
-					OBJ_DOT_OVERFLOW <= '1';
-					SP3C <= SP3C_DONE;
-					SOVR_SET <= '1';
+					OBJ_POS <= OBJ_POS + 1;
+					OBJ_COLINFO_ADDR_RD_SP3 <= OBJ_POS + 1;
+					if OBJ_HF = '1' then
+						if OBJ_X_OFS = "00000" then
+							SP3C <= SP3C_NEXT;
+						else
+							OBJ_X_OFS <= OBJ_X_OFS - 1;
+							if OBJ_X_OFS(2 downto 0) = "000" then
+								SP3C <= SP3C_LOOP; -- fetch the next tile
+							else
+								SP3C <= SP3C_PLOT;
+							end if;
+						end if;
+					else
+						if (OBJ_X_OFS = "00111" and OBJ_HS = "00")
+						or (OBJ_X_OFS = "01111" and OBJ_HS = "01")
+						or (OBJ_X_OFS = "11111" and OBJ_HS = "11")
+						or (OBJ_X_OFS = "10111" and OBJ_HS = "10")
+						then
+							SP3C <= SP3C_NEXT;
+						else
+							OBJ_X_OFS <= OBJ_X_OFS + 1;
+							if OBJ_X_OFS(2 downto 0) = "111" then
+								SP3C <= SP3C_LOOP; -- fetch the next tile
+							else
+								SP3C <= SP3C_PLOT;
+							end if;
+						end if;
+					end if;
+
 				end if;
 
 			when others => -- SP3C_DONE
@@ -2302,6 +2311,7 @@ begin
 
 		SP1_EN <= '0';
 		SP2_EN <= '0';
+		SP3_EN <= '0';
 		BGA_MAPPING_EN <= '0';
 		BGA_PATTERN_EN <= '0';
 		BGB_MAPPING_EN <= '0';
@@ -2446,6 +2456,15 @@ begin
 				when "0000" => BGB_PATTERN_EN <= '1';
 				when others => null;
 			end case;
+
+			if HV_HCNT(0) = '0' and
+				((H40 = '1' and HV_HCNT /= 322 and HV_HCNT /= 324 and HV_HCNT /= 464) or
+				(H40 = '0' and HV_HCNT /= 290 and HV_HCNT /= 486 and HV_HCNT /= 258 and HV_HCNT /= 260)) and -- external slots
+				HV_HCNT /= 488 and -- hscroll read slot
+				HV_HCNT /= 498 and HV_HCNT /= 502 and HV_HCNT /= 504 and HV_HCNT /= 506 and HV_HCNT /= 510 -- rendering slots
+			then
+				SP3_EN <= '1';
+			end if;
 
 			SLOT_EN <= not HV_HCNT(0);
 			if (IN_VBL = '1' or DE = '0') and REFRESH_SLOT = '1' then

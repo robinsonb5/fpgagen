@@ -1433,7 +1433,7 @@ end process;
 -- 7F = 01111111 000
 -- FF = 11111111 000
 -- VDP AREA
-FX68_VDP_SEL <= '1' when ((FX68_AS_N = '0' and FX68_RNW = '0') or FX68_SEL = '1') and
+FX68_VDP_SEL <= '1' when FX68_AS_N = '0' and
 	((FX68_A(23 downto 21) = "110" and FX68_A(18 downto 16) = "000") or
 	 (FX68_A(23 downto 16) = x"A0" and FX68_A(14 downto 5) = "1111111" & "000")) -- Z80 Address space
 	else '0';
@@ -1667,8 +1667,8 @@ ROM_PAGE_A <= FX68_A(23 downto 19) when FX68_FLASH_SEL = '1' and FX68_DTACK_N = 
 -- Z80  : 000000 - 9fffff
 -- DMA  : 000000 - 9fffff
 
-FX68_FLASH_SEL <= '1' when (FX68_A(23) = '0' or FX68_A(23 downto 21) = "100") and FX68_SEL = '1' and
-	FX68_SRAM_SEL = '0' and FX68_SRAM_SEL = '0' and FX68_EEPROM_SEL = '0' and FX68_SVP_RAM_SEL = '0' and CART_EN = '1' else '0';
+FX68_FLASH_SEL <= '1' when (FX68_A(23) = '0' or FX68_A(23 downto 21) = "100") and FX68_AS_N = '0' and
+	FX68_SRAM_SEL = '0' and FX68_EEPROM_SEL = '0' and FX68_SVP_RAM_SEL = '0' and CART_EN = '1' else '0';
 T80_FLASH_SEL <= '1' when T80_A(15) = '1' and T80_MREQ_N = '0' and T80_RD_N = '0' and (BAR(23) = '0' or BAR(23 downto 21) = "100")
 	else '0';
 DMA_FLASH_SEL <= '1' when (VBUS_ADDR(23) = '0' or VBUS_ADDR(23 downto 21) = "100") and VBUS_SEL = '1' and DMA_SVP_RAM_SEL = '0' else '0';
@@ -1900,8 +1900,8 @@ end process;
 -- EEPROM at 0x200000
 SRAM_EN <= (SRAM_EN_AUTO or SRAM_EN_PAGEIN) and not SVP_ENABLE;
 
-FX68_SRAM_SEL <= '1' when SRAM_EN = '1' and FX68_SEL = '1' and FX68_A(23 downto 16) = x"20" and FX68_EEPROM_SEL = '0' else '0';
-FX68_EEPROM_SEL <= '1' when EEPROM_EN = '1' and FX68_SEL = '1' and FX68_A(23 downto 4) = x"20000" and FX68_A(3 downto 1) = "000" else '0';
+FX68_SRAM_SEL <= '1' when SRAM_EN = '1' and FX68_AS_N = '0' and FX68_A(23 downto 16) = x"20" and FX68_EEPROM_SEL = '0' else '0';
+FX68_EEPROM_SEL <= '1' when EEPROM_EN = '1' and FX68_AS_N = '1' and FX68_A(23 downto 4) = x"20000" and FX68_A(3 downto 1) = "000" else '0';
 
 -- SRAM CONTROL
 process( MRST_N, MCLK )
@@ -1933,8 +1933,8 @@ begin
 					sram_a <= FX68_A(15 downto 1);
 					sram_d <= FX68_DO;
 					sram_we <= not FX68_RNW;
-					sram_u_n <= FX68_UDS_N;
-					sram_l_n <= FX68_LDS_N;
+					sram_u_n <= '1';
+					sram_l_n <= '0';
 					SRAMRC <= SRAMRC_FX68;
 				end if;
 			--end if;

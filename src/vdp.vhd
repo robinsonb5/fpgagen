@@ -620,8 +620,8 @@ signal SP3E_ACTIVATE	: std_logic;
 type sp3c_t is (
 	SP3C_INIT,
 	SP3C_NEXT,
-	SP3C_LOOP,
 	SP3C_PLOT,
+	SP3C_LAST_PIX,
 	SP3C_DONE
 );
 signal SP3C		: SP3C_t;
@@ -632,6 +632,7 @@ signal SP3_VRAM32_DO_REG: std_logic_vector(31 downto 0);
 signal SP3_VRAM32_ACK   : std_logic;
 signal SP3_VRAM32_ACK_REG: std_logic;
 signal SP3_SEL          : std_logic;
+signal SP3_WAIT_EN		: std_logic;
 signal SP3_EN           : std_logic;
 signal SP3_EN_LATE      : std_logic;
 
@@ -641,7 +642,6 @@ signal OBJ_NO			: std_logic_vector(4 downto 0);
 signal OBJ_LINK			: std_logic_vector(6 downto 0);
 
 signal OBJ_HS			: std_logic_vector(1 downto 0);
-signal OBJ_VS			: std_logic_vector(1 downto 0);
 signal OBJ_MASKED		: std_logic;
 signal OBJ_VALID_X	: std_logic;
 signal OBJ_DOT_OVERFLOW	: std_logic;
@@ -650,7 +650,7 @@ signal OBJ_PRI			: std_logic;
 signal OBJ_PAL			: std_logic_vector(1 downto 0);
 signal OBJ_HF			: std_logic;
 signal OBJ_POS			: std_logic_vector(8 downto 0);
-signal OBJ_TILEBASE		: std_logic_vector(14 downto 0);
+signal OBJ_ADDR_INC		: std_logic_vector(7 downto 0);
 
 ----------------------------------------------------------------
 -- VIDEO OUTPUT
@@ -1930,6 +1930,7 @@ variable obj_hf_var	: std_logic;
 variable obj_vf_var	: std_logic;
 variable obj_x_var	: std_logic_vector(8 downto 0);
 variable obj_y_ofs_var: std_logic_vector(5 downto 0);
+variable obj_x_pos      : std_logic_vector(4 downto 0);
 variable obj_pat_var	: std_logic_vector(10 downto 0);
 variable obj_color	: std_logic_vector(3 downto 0);
 
@@ -1961,20 +1962,14 @@ begin
 				OBJ_VALID_X <= OBJ_DOT_OVERFLOW;
 				OBJ_DOT_OVERFLOW <= '0';
 				SP3_EN_LATE <= '0';
+				SP3_WAIT_EN <= '0';
 				SP3C <= SP3C_NEXT;
 
 			when SP3C_NEXT =>
 
 				OBJ_COLINFO_WE_SP3 <= '0';
 
-				SP3C <= SP3C_LOOP;
-
-				if SP3_EN = '1' then
-					SP3_EN_LATE <= '1';
-				end if;
-
 				obj_vs_var := OBJ_SPINFO_Q(7 downto 6);
-				OBJ_VS <= obj_vs_var;
 				obj_hs_var := OBJ_SPINFO_Q(9 downto 8);
 				OBJ_HS <= obj_hs_var;
 				obj_x_var := OBJ_SPINFO_Q(18 downto 10);
@@ -1991,9 +1986,6 @@ begin
 				OBJ_PAL <= OBJ_SPINFO_Q(33 downto 32);
 				OBJ_PRI <= OBJ_SPINFO_Q(34);
 
-				OBJ_SPINFO_ADDR_RD <= OBJ_NO + 1;
-				OBJ_NO <= OBJ_NO + 1;
-
 				-- sprite masking algorithm as implemented by gens-ii
 				if obj_x_var = "000000000" and OBJ_VALID_X = '1' then
 					OBJ_MASKED <= '1';
@@ -2004,16 +1996,17 @@ begin
 				end if;
 
 				OBJ_X_OFS <= "00000";
+				obj_x_pos := "00000";
 				if obj_hf_var = '1' then
 					case obj_hs_var is
 					when "00" =>	-- 8 pixels
-						OBJ_X_OFS <= "00111";
+						obj_x_pos := "00111";
 					when "01" =>	-- 16 pixels
-						OBJ_X_OFS <= "01111";
+						obj_x_pos := "01111";
 					when "11" =>	-- 32 pixels
-						OBJ_X_OFS <= "11111";
+						obj_x_pos := "11111";
 					when others =>	-- 24 pixels
-						OBJ_X_OFS <= "10111";
+						obj_x_pos := "10111";
 					end case;
 				end if;
 
@@ -2043,65 +2036,39 @@ begin
 					end case;
 				end if;
 
-				OBJ_POS <= obj_x_var - "010000000";
-				OBJ_TILEBASE <= (obj_pat_var & "0000") + ("000" & obj_y_ofs_var & "0");
-
-			-- loop over all tiles of the sprite
-			when SP3C_LOOP =>
-				OBJ_COLINFO_WE_SP3 <= '0';
-				OBJ_COLINFO_ADDR_RD_SP3 <= OBJ_POS;
-
+				-- VRAM address increment to the next tile on the current line
 				if LSM = "11" then
-					case OBJ_VS is
+					case obj_vs_var is
 					when "00" =>	-- 2*8 pixels
-						SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "00000");
+						OBJ_ADDR_INC <= "00100000";
 					when "01" =>	-- 2*16 pixels
-						SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "000000");
+						OBJ_ADDR_INC <= "01000000";
 					when "11" =>	-- 2*32 pixels
-						SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "0000000");
+						OBJ_ADDR_INC <= "10000000";
 					when others =>	-- 2*24 pixels
-						case OBJ_X_OFS(4 downto 3) is
-						when "00" =>
-							SP3_VRAM_ADDR <= OBJ_TILEBASE;
-						when "01" =>
-							SP3_VRAM_ADDR <= OBJ_TILEBASE + "001100000";
-						when "11" =>
-							SP3_VRAM_ADDR <= OBJ_TILEBASE + "100100000";
-						when others =>
-							SP3_VRAM_ADDR <= OBJ_TILEBASE + "011000000";
-						end case;
+						OBJ_ADDR_INC <= "01100000";
 					end case;
 				else
-					case OBJ_VS is
+					case obj_vs_var is
 					when "00" =>	-- 8 pixels
-						SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "0000");
+						OBJ_ADDR_INC <= "00010000";
 					when "01" =>	-- 16 pixels
-						SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "00000");
+						OBJ_ADDR_INC <= "00100000";
 					when "11" =>	-- 32 pixels
-						SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "000000");
+						OBJ_ADDR_INC <= "01000000";
 					when others =>	-- 24 pixels
-						case OBJ_X_OFS(4 downto 3) is
-						when "00" =>
-							SP3_VRAM_ADDR <= OBJ_TILEBASE;
-						when "01" =>
-							SP3_VRAM_ADDR <= OBJ_TILEBASE + "00110000";
-						when "11" =>
-							SP3_VRAM_ADDR <= OBJ_TILEBASE + "10010000";
-						when others =>
-							SP3_VRAM_ADDR <= OBJ_TILEBASE + "01100000";
-						end case;
+						OBJ_ADDR_INC <= "00110000";
 					end case;
 				end if;
 
-				-- limit total tiles per line
-				if OBJ_TILE_NO(5 downto 1) = OBJ_MAX_LINE then
-					SP3C <= SP3C_DONE;
-					if OBJ_NO <= OBJ_IDX then
-						-- no more slots, but still tiles to draw
-						OBJ_DOT_OVERFLOW <= '1';
-						SOVR_SET <= '1';
-					end if;
-				elsif SP3_EN = '1' or SP3_EN_LATE = '1' then
+				obj_x_var := obj_x_var - "010000000" + obj_x_pos;
+				OBJ_POS <= obj_x_var;
+				OBJ_COLINFO_ADDR_RD_SP3 <= obj_x_var;
+				SP3_VRAM_ADDR <= (obj_pat_var & "0000") + ("000" & obj_y_ofs_var & "0");
+
+				if SP3_EN = '1' or SP3_EN_LATE = '1' then
+					OBJ_SPINFO_ADDR_RD <= OBJ_NO + 1;
+					OBJ_NO <= OBJ_NO + 1;
 					OBJ_TILE_NO <= OBJ_TILE_NO + 1;
 					SP3_EN_LATE <= '0'; -- hack if the memory cycle is a bit long
 					SP3_SEL <= '1';
@@ -2110,7 +2077,8 @@ begin
 
 			-- loop over all sprite pixels on the current line
 			when SP3C_PLOT =>
-				if SP3_VRAM32_ACK = '1' or SP3_SEL = '0' then
+				OBJ_COLINFO_WE_SP3 <= '0';
+				if (SP3_VRAM32_ACK = '1' or SP3_SEL = '0') and SP3_WAIT_EN = '0' then
 					SP3_SEL <= '0';
 					if SP3_EN = '1' then
 						SP3_EN_LATE <= '1';
@@ -2151,37 +2119,50 @@ begin
 						end if;
 					end if;
 
-					OBJ_POS <= OBJ_POS + 1;
-					OBJ_COLINFO_ADDR_RD_SP3 <= OBJ_POS + 1;
 					if OBJ_HF = '1' then
-						if OBJ_X_OFS = "00000" then
-							SP3C <= SP3C_NEXT;
-						else
-							OBJ_X_OFS <= OBJ_X_OFS - 1;
-							if OBJ_X_OFS(2 downto 0) = "000" then
-								SP3C <= SP3C_LOOP; -- fetch the next tile
-							else
-								SP3C <= SP3C_PLOT;
-							end if;
-						end if;
+						OBJ_POS <= OBJ_POS - 1;
+						OBJ_COLINFO_ADDR_RD_SP3 <= OBJ_POS - 1;
 					else
-						if (OBJ_X_OFS = "00111" and OBJ_HS = "00")
-						or (OBJ_X_OFS = "01111" and OBJ_HS = "01")
-						or (OBJ_X_OFS = "11111" and OBJ_HS = "11")
-						or (OBJ_X_OFS = "10111" and OBJ_HS = "10")
-						then
-							SP3C <= SP3C_NEXT;
-						else
-							OBJ_X_OFS <= OBJ_X_OFS + 1;
-							if OBJ_X_OFS(2 downto 0) = "111" then
-								SP3C <= SP3C_LOOP; -- fetch the next tile
-							else
-								SP3C <= SP3C_PLOT;
-							end if;
-						end if;
+						OBJ_POS <= OBJ_POS + 1;
+						OBJ_COLINFO_ADDR_RD_SP3 <= OBJ_POS + 1;
+					end if;
+
+					if OBJ_X_OFS(2 downto 0) /= "111" then
+						OBJ_X_OFS <= OBJ_X_OFS + 1;
 					end if;
 
 				end if;
+
+				if OBJ_X_OFS(2 downto 0) = "111" then
+					-- limit total tiles per line
+					if OBJ_TILE_NO(5 downto 1) = OBJ_MAX_LINE then
+						SP3C <= SP3C_LAST_PIX;
+						if OBJ_NO <= OBJ_IDX then
+							-- no more slots, but still tiles to draw
+							OBJ_DOT_OVERFLOW <= '1';
+							SOVR_SET <= '1';
+						end if;
+					elsif (OBJ_X_OFS(4 downto 3) = OBJ_HS)	then
+						-- fetch next sprite
+						SP3C <= SP3C_NEXT;
+					else
+						-- fetch next tile
+						SP3_WAIT_EN <= '1';
+						if SP3_EN = '1' or SP3_EN_LATE = '1' then
+							OBJ_X_OFS <= OBJ_X_OFS + 1;
+							SP3_WAIT_EN <= '0';
+							OBJ_TILE_NO <= OBJ_TILE_NO + 1;
+							SP3_EN_LATE <= '0'; -- hack if the memory cycle is a bit long
+							SP3_VRAM_ADDR <= SP3_VRAM_ADDR + OBJ_ADDR_INC;
+							SP3_SEL <= '1';
+						end if;
+
+					end if;
+				end if;
+
+			when SP3C_LAST_PIX =>
+				OBJ_COLINFO_WE_SP3 <= '0';
+				SP3C <= SP3C_DONE;
 
 			when others => -- SP3C_DONE
 				SP3_SEL <= '0';

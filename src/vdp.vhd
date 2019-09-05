@@ -223,9 +223,7 @@ signal VSCR 		: std_logic;
 signal WVP			: std_logic_vector(4 downto 0);
 signal WDOWN		: std_logic;
 signal WHP			: std_logic_vector(4 downto 0);
-signal WHP_LATCH    : std_logic_vector(4 downto 0);
 signal WRIGT		: std_logic;
-signal WRIGT_LATCH  : std_logic;
 
 signal BGCOL		: std_logic_vector(5 downto 0);
 
@@ -462,6 +460,7 @@ signal BGB_VSRAM1_LAST_READ : std_logic_vector(10 downto 0);
 
 signal BGB_MAPPING_EN       : std_logic;
 signal BGB_PATTERN_EN       : std_logic;
+signal BGB_PATTERN_EN_LATE  : std_logic;
 signal BGB_ENABLE           : std_logic;
 
 -- BACKGROUND A
@@ -513,6 +512,7 @@ signal WIN_H		: std_logic;
 
 signal BGA_MAPPING_EN       : std_logic;
 signal BGA_PATTERN_EN       : std_logic;
+signal BGA_PATTERN_EN_LATE  : std_logic;
 signal BGA_ENABLE           : std_logic;
 ----------------------------------------------------------------
 -- SPRITE ENGINE
@@ -1075,6 +1075,7 @@ begin
 			case BGBC is
 			when BGBC_DONE =>
 				VSRAM1_ADDR_B <= (others => '0');
+				BGB_PATTERN_EN_LATE <= '0';
 				if HV_HCNT = H_INT_POS and HV_PIXDIV = 0 and VSCR = '0' then
 					BGB_VSRAM1_LATCH <= VSRAM1_Q_B;
 					BGB_VSRAM1_LAST_READ <= VSRAM1_Q_B;
@@ -1101,11 +1102,9 @@ begin
 				end if;
 
 				V_BGB_XSTART := "0000000000" - HSC_VRAM32_DO(25 downto 16);
+				BGB_POS <= "1111110000";
 				if V_BGB_XSTART(3 downto 0) = "0000" then
 					V_BGB_XSTART := V_BGB_XSTART - 16;
-					BGB_POS <= "1111110000";
-				else
-					BGB_POS <= "0000000000" - ( "000000" & V_BGB_XSTART(3 downto 0) );
 				end if;
 				BGB_X <= ( V_BGB_XSTART(9 downto 4) & "0000" ) and hscroll_mask;
 				BGB_COL <= "1111110"; -- -2
@@ -1210,7 +1209,7 @@ begin
 				-- BGB pattern slot
 				BGB_COLINFO_WE_A <= '0';
 
-				if BGB_X(3) = '0' then
+				if BGB_POS(3) = '0' then
 					bgb_nametable_item := BGB_NAMETABLE_ITEMS(15 downto 0);
 				else
 					bgb_nametable_item := BGB_NAMETABLE_ITEMS(31 downto 16);
@@ -1232,18 +1231,25 @@ begin
 					end if;
 				end if;
 
-				if BGB_ENABLE = '1' then
-					BGB_SEL <= '1';
+				if BGB_PATTERN_EN = '1' or BGB_PATTERN_EN_LATE = '1' then
+					BGB_PATTERN_EN_LATE <= '0';
+					if BGB_ENABLE = '1' then
+						BGB_SEL <= '1';
+					end if;
+					BGBC <= BGBC_LOOP;
 				end if;
-				BGBC <= BGBC_LOOP;
 
 			when BGBC_LOOP =>
 				if BGB_VRAM32_ACK = '1' or BGB_SEL = '0' or BGB_ENABLE = '0' then
 					BGB_SEL <= '0';
 
-					BGB_COLINFO_ADDR_A <= BGB_POS(8 downto 0);
+					if BGB_PATTERN_EN = '1' then
+						BGB_PATTERN_EN_LATE <= '1';
+					end if;
+
+					BGB_COLINFO_ADDR_A <= BGB_POS(8 downto 0) + HSC_VRAM32_DO(19 downto 16);
 					BGB_COLINFO_WE_A <= '1';
-					case BGB_X(2 downto 0) is
+					case BGB_POS(2 downto 0) is
 					when "100" =>
 						if BGB_HF = '1' then
 							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO( 3 downto  0);
@@ -1301,11 +1307,11 @@ begin
 
 					BGB_X <= (BGB_X + 1) and hscroll_mask;
 					BGB_POS <= BGB_POS + 1;
-					if BGB_X(2 downto 0) = "111" then
+					if BGB_POS(2 downto 0) = "111" then
 						BGB_COL <= BGB_COL + 1;
 						if (H40 = '0' and BGB_COL = 31) or (H40 = '1' and BGB_COL = 39) then
 							BGBC <= BGBC_DONE;
-						elsif BGB_X(3) = '0' then
+						elsif BGB_POS(3) = '0' then
 							BGBC <= BGBC_TILE_RD;
 						else
 							BGBC <= BGBC_GET_VSCROLL;
@@ -1331,12 +1337,12 @@ variable V_BGA_XBASE		: std_logic_vector(15 downto 0);
 variable V_BGA_BASE		: std_logic_vector(15 downto 0);
 variable bga_pos_next   : std_logic_vector(9 downto 0);
 variable bga_nametable_item : std_logic_vector(15 downto 0);
-variable tile_pos       : std_logic_vector(3 downto 0);
 variable vscroll_mask	: std_logic_vector(10 downto 0);
 variable hscroll_mask	: std_logic_vector(9 downto 0);
 variable vscroll_val    : std_logic_vector(10 downto 0);
 variable vscroll_index  : std_logic_vector(4 downto 0);
 variable y_cells    : std_logic_vector(6 downto 0);
+
 -- synthesis translate_off
 file F		: text open write_mode is "bga_dbg.out";
 variable L	: line;
@@ -1350,13 +1356,12 @@ begin
 			case BGAC is
 			when BGAC_DONE =>
 				VSRAM0_ADDR_B <= (others => '0');
+				BGA_PATTERN_EN_LATE <= '0';
 				if HV_HCNT = H_INT_POS and HV_PIXDIV = 0 then
 					if VSCR = '0' then
 						BGA_VSRAM0_LATCH <= VSRAM0_Q_B;
 						BGA_VSRAM0_LAST_READ <= VSRAM0_Q_B;
 					end if;
-					WRIGT_LATCH <= WRIGT;
-					WHP_LATCH <= WHP;
 				end if;
 				BGA_SEL <= '0';
 				BGA_COLINFO_ADDR_A <= (others => '0');
@@ -1384,18 +1389,16 @@ begin
 					WIN_V <= WDOWN;
 				end if;
 
-				if WHP_LATCH = "00000" then
-					WIN_H <= WRIGT_LATCH;
+				if WHP = "00000" then
+					WIN_H <= WRIGT;
 				else
-					WIN_H <= not WRIGT_LATCH;
+					WIN_H <= not WRIGT;
 				end if;
 
 				V_BGA_XSTART := "0000000000" - HSC_VRAM32_DO(9 downto 0);
+				BGA_POS <= "1111110000";
 				if V_BGA_XSTART(3 downto 0) = "0000" then
 					V_BGA_XSTART := V_BGA_XSTART - 16;
-					BGA_POS <= "1111110000";
-				else
-					BGA_POS <= "0000000000" - ( "000000" & V_BGA_XSTART(3 downto 0) );
 				end if;
 
 				BGA_X <= ( V_BGA_XSTART(9 downto 4) & "0000" ) and hscroll_mask;
@@ -1509,8 +1512,7 @@ begin
 				-- BGA pattern slot
 				BGA_COLINFO_WE_A <= '0';
 
-				if ((WIN_H = '1' or WIN_V = '1') and BGA_POS(3) = '0') or
-				   (WIN_H = '0' and WIN_V = '0' and BGA_X(3) = '0') then
+				if BGA_POS(3) = '0' then
 					bga_nametable_item := BGA_NAMETABLE_ITEMS(15 downto 0);
 				else
 					bga_nametable_item := BGA_NAMETABLE_ITEMS(31 downto 16);
@@ -1533,23 +1535,29 @@ begin
 					end if;
 				end if;
 
-				if BGA_ENABLE = '1' then
-					BGA_SEL <= '1';
+				if BGA_PATTERN_EN = '1' or BGA_PATTERN_EN_LATE = '1' then
+					BGA_PATTERN_EN_LATE <= '0';
+					if BGA_ENABLE = '1' then
+						BGA_SEL <= '1';
+					end if;
+					BGAC <= BGAC_LOOP;
 				end if;
-				BGAC <= BGAC_LOOP;
 
 			when BGAC_LOOP =>
 				if BGA_VRAM32_ACK = '1' or BGA_SEL = '0' or BGA_ENABLE = '0' then
 					BGA_SEL <= '0';
 
-					BGA_COLINFO_WE_A <= '1';
-					BGA_COLINFO_ADDR_A <= BGA_POS(8 downto 0);
-					if WIN_H = '1' or WIN_V = '1' then
-						tile_pos := BGA_POS(3 downto 0);
-					else
-						tile_pos := BGA_X(3 downto 0);
+					if BGA_PATTERN_EN = '1' then
+						BGA_PATTERN_EN_LATE <= '1';
 					end if;
-					case tile_pos(2 downto 0) is
+
+					BGA_COLINFO_WE_A <= '1';
+					if WIN_H = '1' or WIN_V = '1' then
+						BGA_COLINFO_ADDR_A <= BGA_POS(8 downto 0);
+					else
+						BGA_COLINFO_ADDR_A <= BGA_POS(8 downto 0) + HSC_VRAM32_DO(3 downto 0);
+					end if;
+					case BGA_POS(2 downto 0) is
 						when "100" =>
 							if BGA_HF = '1' then
 								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM32_DO( 3 downto  0);
@@ -1608,8 +1616,8 @@ begin
 					BGA_X <= (BGA_X + 1) and hscroll_mask;
 					bga_pos_next := BGA_POS + 1;
 					BGA_POS <= bga_pos_next;
-					if tile_pos(2 downto 0) = "111" then
-						if tile_pos(3) = '0' then
+					if BGA_POS(2 downto 0) = "111" then
+						if BGA_POS(3) = '0' then
 							BGAC <= BGAC_TILE_RD;
 						else
 							BGAC <= BGAC_GET_VSCROLL;
@@ -1618,27 +1626,24 @@ begin
 						BGAC <= BGAC_LOOP;
 					end if;
 
-					if WIN_H = '1' and WRIGT_LATCH = '0' and BGA_POS(3 downto 0) = "1111" and bga_pos_next(8 downto 4) = WHP_LATCH
+					if WIN_H = '1' and WRIGT = '0' and BGA_POS(3 downto 0) = "1111" and bga_pos_next(8 downto 4) = WHP
 					then
 						-- window on the left side ends, but not neccessarily on a scroll boundary,
 						-- when it continues to draw a wrong tile ("left window bug")
 						WIN_H <= '0';
-						if WIN_V = '0' and BGA_X(3 downto 0) /= "1111" then
-							BGAC <= BGAC_LOOP;
-						end if;
-					elsif WIN_H = '0' and WRIGT_LATCH = '1' and BGA_POS(3 downto 0) = "1111" and bga_pos_next(8 downto 4) = WHP_LATCH
+					elsif WIN_H = '0' and WRIGT = '1' and BGA_POS(3 downto 0) = "1111" and bga_pos_next(8 downto 4) = WHP
 					then
-						-- window on the right side starts, cancel rendering the current tile
+						-- window on the right side starts
 						WIN_H <= '1';
-						BGAC <= BGAC_GET_VSCROLL;
 					end if;
 
-					if BGA_X(2 downto 0) = "111" then
+					if BGA_POS(2 downto 0) = "111" then
 						BGA_COL <= BGA_COL + 1;
 						if (H40 = '0' and BGA_COL = 31) or (H40 = '1' and BGA_COL = 39) then
 							BGAC <= BGAC_DONE;
 						end if;
 					end if;
+
 				end if;
 			when others =>	-- BGAC_DONE
 				BGA_SEL <= '0';

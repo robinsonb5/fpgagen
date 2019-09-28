@@ -23,10 +23,8 @@ component sdram
 -- SDRAM ports
 		romwr_req : in std_logic;
 		romwr_ack : out std_logic;
-		romwr_we : in std_logic;
 		romwr_a : in std_logic_vector(23 downto 1);
 		romwr_d : in std_logic_vector(15 downto 0);
-		romwr_q : out std_logic_vector(15 downto 0);
 
 		romrd_req : in std_logic;
 		romrd_ack : out std_logic;

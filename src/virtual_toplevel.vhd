@@ -119,10 +119,8 @@ signal SDRAM_BA : std_logic_vector(1 downto 0);
 -- "FLASH"
 signal romwr_req : std_logic := '0';
 signal romwr_ack : std_logic;
-signal romwr_we  : std_logic := '1';
 signal romwr_a : unsigned(23 downto 1);
 signal romwr_d : std_logic_vector(15 downto 0);
-signal romwr_q : std_logic_vector(15 downto 0);
 
 signal romrd_req : std_logic := '0';
 signal romrd_ack : std_logic;
@@ -645,10 +643,8 @@ port map(
 
 	romwr_req	=> romwr_req,
 	romwr_ack	=> romwr_ack,
-	romwr_we 	=> romwr_we,
 	romwr_a		=> std_logic_vector(romwr_a),
 	romwr_d		=> romwr_d,
-	romwr_q		=> romwr_q,
 
 	romrd_req	=> romrd_req,
 	romrd_ack	=> romrd_ack,

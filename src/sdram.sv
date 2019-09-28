@@ -40,10 +40,8 @@ module sdram (
 
 	input             romwr_req,
 	output reg        romwr_ack,
-	input             romwr_we,
 	input      [23:1] romwr_a,
 	input      [15:0] romwr_d,
-	output     [15:0] romwr_q,
 
 	input             romrd_req,
 	output reg        romrd_ack,
@@ -104,7 +102,7 @@ module sdram (
 	output     [15:0] svp_rom_q
 );
 
-localparam RASCAS_DELAY   = 3'd3;   // tRCD=20ns -> 3 cycles@128MHz
+localparam RASCAS_DELAY   = 3'd3;   // tRCD=20ns -> 3 cycles@108MHz
 localparam BURST_LENGTH   = 3'b001; // 000=1, 001=2, 010=4, 011=8
 localparam ACCESS_TYPE    = 1'b0;   // 0=sequential, 1=interleaved
 localparam CAS_LATENCY    = 3'd3;   // 2/3 allowed
@@ -112,6 +110,9 @@ localparam OP_MODE        = 2'b00;  // only 00 (standard operation) allowed
 localparam NO_WRITE_BURST = 1'b1;   // 0= write burst enabled, 1=only single access write
 
 localparam MODE = { 3'b000, NO_WRITE_BURST, OP_MODE, CAS_LATENCY, ACCESS_TYPE, BURST_LENGTH}; 
+
+// 64ms/8192 rows = 7.8us -> 842 cycles@108MHz
+localparam RFRSH_CYCLES = 10'd842;
 
 // ---------------------------------------------------------------------
 // ------------------------ cycle state machine ------------------------
@@ -158,6 +159,7 @@ reg [3:0] t;
 
 always @(posedge clk) begin
 	t <= t + 1'd1;
+	if (t == 4'd3 && !oe_latch && !we_latch && !refresh && !init) t <= STATE_RAS0;
 	if (t == STATE_LAST) t <= STATE_RAS0;
 end
 
@@ -168,10 +170,15 @@ end
 // wait 1ms (32 8Mhz cycles) after FPGA config is done before going
 // into normal operation. Initialize the ram in the last 16 reset cycles (cycles 15-0)
 reg [4:0]  reset;
+reg        init = 1'b1;
 always @(posedge clk, negedge init_n) begin
-	if(!init_n) reset <= 5'h1f;
-	else if((t == STATE_LAST) && (reset != 0))
-		reset <= reset - 5'd1;
+	if(!init_n) begin
+		reset <= 5'h1f;
+		init <= 1'b1;
+	end else begin
+		if((t == STATE_LAST) && (reset != 0)) reset <= reset - 5'd1;
+		init <= !(reset == 0);
+	end
 end
 
 // ---------------------------------------------------------------------
@@ -200,8 +207,8 @@ assign SDRAM_nWE  = sd_cmd[0];
 reg [24:1] addr_latch[2];
 reg [24:1] addr_latch_next[2];
 reg [15:0] din_latch[2];
-reg        oe_latch[2];
-reg        we_latch[2];
+reg  [1:0] oe_latch;
+reg  [1:0] we_latch;
 reg  [1:0] ds[2];
 
 localparam PORT_NONE   = 4'd0;
@@ -217,6 +224,10 @@ localparam PORT_ROMWR  = 4'd9;
 
 reg[3:0] port[2];
 reg[3:0] next_port[2];
+
+reg        refresh;
+reg [10:0] refresh_cnt;
+wire       need_refresh = (refresh_cnt >= RFRSH_CYCLES);
 
 // ROM: bank 0,1
 // SRAM, RAM68k, SVPRAM: bank 2
@@ -268,8 +279,9 @@ always @(posedge clk) begin
 	SDRAM_DQ <= 16'bZZZZZZZZZZZZZZZZ;
 	{ SDRAM_DQMH, SDRAM_DQML } <= 2'b11;
 	sd_cmd <= CMD_NOP;  // default: idle
+	refresh_cnt <= refresh_cnt + 1'd1;
 
-	if(reset != 0) begin
+	if(init) begin
 		// initialization takes place at the end of the reset phase
 		if(t == STATE_RAS0) begin
 
@@ -342,6 +354,7 @@ always @(posedge clk) begin
 
 		// bank3 - VRAM
 		if(t == STATE_RAS1) begin
+			refresh <= 1'b0;
 			port[1] <= next_port[1];
 			addr_latch[1] <= addr_latch_next[1];
 			if (next_port[1] != PORT_NONE) begin
@@ -366,7 +379,11 @@ always @(posedge clk) begin
 
 			endcase
 
-			if (next_port[1] == PORT_NONE && !we_latch[0] && !oe_latch[0]) sd_cmd <= CMD_AUTO_REFRESH;
+			if (next_port[1] == PORT_NONE && need_refresh && !we_latch[0] && !oe_latch[0]) begin
+				refresh <= 1'b1;
+				refresh_cnt <= 0;
+				sd_cmd <= CMD_AUTO_REFRESH;
+			end
 		end
 
 		// CAS phase
@@ -374,8 +391,7 @@ always @(posedge clk) begin
 			sd_cmd <= we_latch[0]?CMD_WRITE:CMD_READ;
 			if (we_latch[0]) begin
 				SDRAM_DQ <= din_latch[0];
-				SDRAM_DQML <= ~ds[0][0];
-				SDRAM_DQMH <= ~ds[0][1];
+				{ SDRAM_DQMH, SDRAM_DQML } <= ~ds[0];
 				case (port[0])
 					PORT_ROMWR:  romwr_ack <= romwr_req;
 					PORT_SRAM:   sram_ack <= sram_req;
@@ -394,8 +410,7 @@ always @(posedge clk) begin
 			sd_cmd <= we_latch[1]?CMD_WRITE:CMD_READ;
 			if (we_latch[1]) begin
 				SDRAM_DQ <= din_latch[1];
-				SDRAM_DQML <= ~ds[1][0];
-				SDRAM_DQMH <= ~ds[1][1];
+				{ SDRAM_DQMH, SDRAM_DQML } <= ~ds[1];
 				if (port[1] == PORT_VRAM) vram_ack <= vram_req;
 			end
 			SDRAM_A <= { 4'b0010, addr_latch[1][9:1] };  // auto precharge
@@ -403,10 +418,7 @@ always @(posedge clk) begin
 		end
 
 		// read phase
-		if(t == STATE_DS0 && oe_latch[0]) begin
-			SDRAM_DQML <= ~ds[0][0];
-			SDRAM_DQMH <= ~ds[0][1];
-		end
+		if(t == STATE_DS0 && oe_latch[0]) { SDRAM_DQMH, SDRAM_DQML } <= ~ds[0];
 
 		if(t == STATE_READ0 && oe_latch[0]) begin
 			case (port[0])
@@ -421,10 +433,7 @@ always @(posedge clk) begin
 		end
 
 		// VRAM
-		if((t == STATE_DS1 || t == STATE_DS1b) && oe_latch[1]) begin
-			SDRAM_DQML <= ~ds[1][0];
-			SDRAM_DQMH <= ~ds[1][1];
-		end
+		if((t == STATE_DS1 || t == STATE_DS1b) && oe_latch[1]) { SDRAM_DQMH, SDRAM_DQML } <= ~ds[1];
 
 		if(t == STATE_READ1 && oe_latch[1]) begin
 			case (port[1])

@@ -416,6 +416,7 @@ signal BGEN_ACTIVATE	: std_logic;
 
 -- BACKGROUND B
 type bgbc_t is (
+	BGBC_LEFT_BORDER,
 	BGBC_INIT,
 	BGBC_GET_VSCROLL,
 	BGBC_GET_VSCROLL2,
@@ -425,9 +426,17 @@ type bgbc_t is (
 	BGBC_BASE_RD,
 	BGBC_TILE_RD,
 	BGBC_LOOP,
+	BGBC_RIGHT_BORDER,
 	BGBC_DONE
 );
-signal BGBC		: bgbc_t;
+signal BGBC : bgbc_t;
+
+type bgbc_vsram_t is (
+	BGBC_VSRAM_IDLE,
+	BGBC_VSRAM_RD1,
+	BGBC_VSRAM_RD2
+);
+signal BGBC_VSRAM : bgbc_vsram_t;
 
 -- signal BGB_COLINFO		: colinfo_t;
 signal BGB_COLINFO_ADDR_A	: std_logic_vector(8 downto 0);
@@ -462,6 +471,8 @@ signal BGB_MAPPING_EN       : std_logic;
 signal BGB_PATTERN_EN       : std_logic;
 signal BGB_PATTERN_EN_LATE  : std_logic;
 signal BGB_ENABLE           : std_logic;
+signal BGB_LEFT_BORDER      : std_logic;
+signal BGB_RIGHT_BORDER     : std_logic;
 
 -- BACKGROUND A
 type bgac_t is (
@@ -1061,6 +1072,7 @@ variable hscroll_mask	: std_logic_vector(9 downto 0);
 variable vscroll_val	: std_logic_vector(10 downto 0);
 variable vscroll_index  : std_logic_vector(4 downto 0);
 variable y_cells	: std_logic_vector(6 downto 0);
+variable bgb_tile_data : std_logic_vector(31 downto 0);
 
 -- synthesis translate_off
 file F		: text open write_mode is "bgb_dbg.out";
@@ -1072,22 +1084,44 @@ begin
 		BGB_ENABLE <= '1';
 		BGBC <= BGBC_DONE;
 	elsif rising_edge(CLK) then
-			case BGBC is
-			when BGBC_DONE =>
-				VSRAM1_ADDR_B <= (others => '0');
-				BGB_PATTERN_EN_LATE <= '0';
+		case BGBC_VSRAM is
+			when BGBC_VSRAM_IDLE =>
 				if HV_HCNT = H_INT_POS and HV_PIXDIV = 0 and VSCR = '0' then
-					BGB_VSRAM1_LATCH <= VSRAM1_Q_B;
-					BGB_VSRAM1_LAST_READ <= VSRAM1_Q_B;
+					VSRAM1_ADDR_B <= (others => '0');
+					BGBC_VSRAM <= BGBC_VSRAM_RD1;
 				end if;
+			when BGBC_VSRAM_RD1 =>
+				BGBC_VSRAM <= BGBC_VSRAM_RD2;
+			when BGBC_VSRAM_RD2 =>
+				BGB_VSRAM1_LATCH <= VSRAM1_Q_B;
+				BGB_VSRAM1_LAST_READ <= VSRAM1_Q_B;
+				BGBC_VSRAM <= BGBC_VSRAM_IDLE;
+			when others => null;
+		end case;
+
+		case BGBC is
+			when BGBC_DONE =>
 				BGB_SEL <= '0';
 				BGB_COLINFO_WE_A <= '0';
 				BGB_COLINFO_ADDR_A <= (others => '0');
+				BGB_LEFT_BORDER <= '1';
+				BGB_RIGHT_BORDER <= '0';
+				BGB_POS <= "1111100000"; -- -32
+				BGB_COL <= "1111100"; -- -4
 				if BGEN_ACTIVATE = '1' then
+					BGBC <= BGBC_LEFT_BORDER;
+				end if;
+
+			when BGBC_LEFT_BORDER =>
+				BGB_PATTERN_EN_LATE <= '0';
+				if BGB_COL = "1111110" then -- -2
 					BGBC <= BGBC_INIT;
+				elsif BGB_PATTERN_EN = '1' or BGB_PATTERN_EN_LATE = '1' then
+					BGBC <= BGBC_LOOP;
 				end if;
 
 			when BGBC_INIT =>
+				BGB_LEFT_BORDER <= '0';
 				if HSIZE = "10" then
 					-- illegal mode, 32x1
 					hscroll_mask := "0011111111";
@@ -1102,12 +1136,10 @@ begin
 				end if;
 
 				V_BGB_XSTART := "0000000000" - HSC_VRAM32_DO(25 downto 16);
-				BGB_POS <= "1111110000";
 				if V_BGB_XSTART(3 downto 0) = "0000" then
 					V_BGB_XSTART := V_BGB_XSTART - 16;
 				end if;
 				BGB_X <= ( V_BGB_XSTART(9 downto 4) & "0000" ) and hscroll_mask;
-				BGB_COL <= "1111110"; -- -2
 				BGBC <= BGBC_GET_VSCROLL;
 
 			when BGBC_GET_VSCROLL =>
@@ -1240,63 +1272,70 @@ begin
 				end if;
 
 			when BGBC_LOOP =>
-				if BGB_VRAM32_ACK = '1' or BGB_SEL = '0' or BGB_ENABLE = '0' then
+				if ((BGB_LEFT_BORDER = '0' and BGB_RIGHT_BORDER = '0') and (BGB_VRAM32_ACK = '1' or BGB_SEL = '0' or BGB_ENABLE = '0')) or
+				   ((BGB_LEFT_BORDER = '1' or BGB_RIGHT_BORDER = '1') and (SP3_VRAM32_ACK = '1' or SP3_SEL = '0')) then
 					BGB_SEL <= '0';
 
 					if BGB_PATTERN_EN = '1' then
 						BGB_PATTERN_EN_LATE <= '1';
 					end if;
 
+					if BGB_LEFT_BORDER = '1' or BGB_RIGHT_BORDER = '1' then
+						bgb_tile_data := SP3_VRAM32_DO;
+					else
+						bgb_tile_data := BGB_VRAM32_DO;
+					end if;
 					BGB_COLINFO_ADDR_A <= BGB_POS(8 downto 0) + HSC_VRAM32_DO(19 downto 16);
+
 					BGB_COLINFO_WE_A <= '1';
 					case BGB_POS(2 downto 0) is
 					when "100" =>
 						if BGB_HF = '1' then
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO( 3 downto  0);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & bgb_tile_data( 3 downto  0);
 						else
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(31 downto 28);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & bgb_tile_data(31 downto 28);
 						end if;
 					when "101" =>
 						if BGB_HF = '1' then
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO( 7 downto  4);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & bgb_tile_data( 7 downto  4);
 						else
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(27 downto 24);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & bgb_tile_data(27 downto 24);
 						end if;
 					when "110" =>
 						if BGB_HF = '1' then
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(11 downto  8);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & bgb_tile_data(11 downto  8);
 						else
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(23 downto 20);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & bgb_tile_data(23 downto 20);
 						end if;
 					when "111" =>
 						if BGB_HF = '1' then
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(15 downto 12);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & bgb_tile_data(15 downto 12);
 						else
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(19 downto 16);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & bgb_tile_data(19 downto 16);
 						end if;
 					when "000" =>
 						if BGB_HF = '1' then
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(19 downto 16);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & bgb_tile_data(19 downto 16);
 						else
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(15 downto 12);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & bgb_tile_data(15 downto 12);
 						end if;
 					when "001" =>
 						if BGB_HF = '1' then
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(23 downto 20);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & bgb_tile_data(23 downto 20);
 						else
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(11 downto  8);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & bgb_tile_data(11 downto  8);
 						end if;
 					when "010" =>
 						if BGB_HF = '1' then
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(27 downto 24);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & bgb_tile_data(27 downto 24);
 						else
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO( 7 downto  4);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & bgb_tile_data( 7 downto  4);
 						end if;
 					when "011" =>
 						if BGB_HF = '1' then
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(31 downto 28);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & bgb_tile_data(31 downto 28);
 						else
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO( 3 downto  0);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & bgb_tile_data( 3 downto  0);
 						end if;
 					when others => null;
 					end case;
@@ -1310,7 +1349,12 @@ begin
 					if BGB_POS(2 downto 0) = "111" then
 						BGB_COL <= BGB_COL + 1;
 						if (H40 = '0' and BGB_COL = 31) or (H40 = '1' and BGB_COL = 39) then
-							BGBC <= BGBC_DONE;
+							BGB_RIGHT_BORDER <= '1';
+							BGBC <= BGBC_RIGHT_BORDER;
+						elsif BGB_LEFT_BORDER = '1' then
+							BGBC <= BGBC_LEFT_BORDER;
+						elsif BGB_RIGHT_BORDER = '1' then
+							BGBC <= BGBC_RIGHT_BORDER;
 						elsif BGB_POS(3) = '0' then
 							BGBC <= BGBC_TILE_RD;
 						else
@@ -1320,10 +1364,18 @@ begin
 						BGBC <= BGBC_LOOP;
 					end if;
 				end if;
-			when others =>	-- BGBC_DONE
-				BGB_SEL <= '0';
-				BGB_COLINFO_WE_A <= '0';
-			end case;
+
+			when BGBC_RIGHT_BORDER =>
+				BGB_PATTERN_EN_LATE <= '0';
+				if (H40 = '0' and BGB_COL = 34) or (H40 = '1' and BGB_COL = 42) then
+					BGB_RIGHT_BORDER <= '0';
+					BGBC <= BGBC_DONE;
+				elsif BGB_PATTERN_EN = '1' or BGB_PATTERN_EN_LATE = '1' then
+					BGBC <= BGBC_LOOP;
+				end if;
+
+			when others => null;
+		end case;
 	end if;
 end process;
 
@@ -2463,8 +2515,9 @@ end process;
 
 -- TIMING MANAGEMENT
 -- Background generation runs during active display.
--- It starts with reading the horizontal scroll values from the VRAM
-BGEN_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = HSCROLL_READ + 8 else '0';
+-- It starts with reading the horizontal scroll values from the VRAM,
+-- but activated earlier to render border garbage
+BGEN_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = HSCROLL_READ + 1 else '0';
 
 -- Stage 1 - runs after the vcounter incremented
 -- Carefully choosing the starting position avoids the
@@ -2604,13 +2657,16 @@ begin
 				if x >= H_DISP_WIDTH or V_ACTIVE_DISP = '0' then
 					-- border area
 					col := BGCOL;
+					if DBG(8 downto 7) = "11" then
+						col := BGB_COLINFO_Q_B(5 downto 0);
+					end if;
 					PIX_MODE <= PIX_NORMAL;
 				end if;
 
 				CRAM_ADDR_B <= col;
 
 			when "0101" =>
-				if (x >= H_DISP_WIDTH or V_ACTIVE_DISP = '0') and (BORDER_EN = '0' or DBG(8 downto 7) /= "00") then
+				if (x >= H_DISP_WIDTH or V_ACTIVE_DISP = '0') and (BORDER_EN = '0' or DBG(8 downto 7) = "01" or DBG(8 downto 7) = "10") then
 					-- disabled border
 					FF_B <= (others => '0');
 					FF_G <= (others => '0');

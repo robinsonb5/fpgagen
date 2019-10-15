@@ -1106,7 +1106,10 @@ begin
 			end if;
 
 			-- Cart slot refresh (probably leftover for DRAM based dev carts?)
-			if CART_RFRSH_CNT = 133 then
+			if VDP_BGACK_N = '0' then
+				CART_RFRSH_CNT <= (others => '0');
+				CART_RFRSH_DELAY <= '0';
+			elsif CART_RFRSH_CNT = 133 then
 				if FX68_AS_N = '1' then
 					CART_RFRSH_CNT <= CART_RFRSH_CNT + 1;
 					CART_RFRSH_DELAY <= not CPU_TURBO;
@@ -1734,7 +1737,7 @@ begin
 			end if;
 
 		when FC_T80_BR =>
-			if FX68_BG_N = '0' then
+			if ZCLK_nENA = '1' and FX68_BG_N = '0' then
 				T80_FLASH_BR_N <= '1';
 				T80_FLASH_BGACK_N <= '0';
 				romrd_req <= not romrd_req;
@@ -1742,7 +1745,7 @@ begin
 			end if;
 
 		when FC_T80_RD =>
-			if CART_RFRSH_DELAY = '0' and romrd_req = romrd_ack then
+			if ZCLK_nENA = '1' and CART_RFRSH_DELAY = '0' and romrd_req = romrd_ack then
 				if T80_A(0) = '1' then
 					T80_FLASH_D <= romrd_q(7 downto 0);
 				else

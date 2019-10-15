@@ -1684,8 +1684,8 @@ begin
 		FX68_FLASH_DTACK_N_REG <= '1';
 		T80_FLASH_DTACK_N <= '1';
 		DMA_FLASH_DTACK_N_REG <= '1';
---		T80_FLASH_BR_N <= '1';
---		T80_FLASH_BGACK_N <= '1';
+		T80_FLASH_BR_N <= '1';
+		T80_FLASH_BGACK_N <= '1';
 
 		romrd_req <= '0';
 		
@@ -1703,14 +1703,13 @@ begin
 		case FC is
 		when FC_IDLE =>			
 			--if VCLKCNT = "001" then
-
 				if FX68_FLASH_SEL = '1' and FX68_FLASH_DTACK_N = '1' then
 					romrd_req <= not romrd_req;
 					romrd_a <= ROM_PAGE_A & FX68_A(18 downto 1);
 					FC <= FC_FX68_RD;
 				elsif T80_FLASH_SEL = '1' and T80_FLASH_DTACK_N = '1' then
 					romrd_a <= ROM_PAGE_A & BAR(18 downto 15) & T80_A(14 downto 1);
---					T80_FLASH_BR_N <= '0';
+					T80_FLASH_BR_N <= '0';
 					FC <= FC_T80_BR;
 				elsif DMA_FLASH_SEL = '1' and DMA_FLASH_DTACK_N_REG = '1' then
 					if SVP_ENABLE = '1' then
@@ -1735,22 +1734,21 @@ begin
 			end if;
 
 		when FC_T80_BR =>
---			if FX68_BG_N = '0' then
---				T80_FLASH_BR_N <= '1';
---				T80_FLASH_BGACK_N <= '0';
+			if FX68_BG_N = '0' then
+				T80_FLASH_BR_N <= '1';
+				T80_FLASH_BGACK_N <= '0';
 				romrd_req <= not romrd_req;
-
 				FC <= FC_T80_RD;
---			end if;
+			end if;
 
 		when FC_T80_RD =>
-			if romrd_req = romrd_ack then
+			if CART_RFRSH_DELAY = '0' and romrd_req = romrd_ack then
 				if T80_A(0) = '1' then
 					T80_FLASH_D <= romrd_q(7 downto 0);
 				else
 					T80_FLASH_D <= romrd_q(15 downto 8);
 				end if;
---				T80_FLASH_BGACK_N <= '1';
+				T80_FLASH_BGACK_N <= '1';
 				T80_FLASH_DTACK_N <= '0';
 				FC <= FC_IDLE;
 			end if;
@@ -1787,8 +1785,8 @@ begin
 		FX68_SDRAM_DTACK_N_REG <= '1';
 		T80_SDRAM_DTACK_N <= '1';
 		DMA_SDRAM_DTACK_N_REG <= '1';
---		T80_SDRAM_BR_N <= '1';
---		T80_SDRAM_BGACK_N <= '1';
+		T80_SDRAM_BR_N <= '1';
+		T80_SDRAM_BGACK_N <= '1';
 		RAM_RFRSH_DONE <= '1';
 		RAM_DELAY_CNT <= "000";
 
@@ -1823,13 +1821,13 @@ begin
 					end if;
 					SDRC <= SDRC_FX68;
 				elsif T80_SDRAM_SEL = '1' and T80_SDRAM_DTACK_N = '1' then
---					ram68k_req <= not ram68k_req;
+					ram68k_req <= not ram68k_req;
 					ram68k_a <= BAR(15) & T80_A(14 downto 1);
 					ram68k_d <= T80_DO & T80_DO;
 					ram68k_we <= not T80_WR_N;
 					ram68k_u_n <= T80_A(0);
 					ram68k_l_n <= not T80_A(0);
---					T80_SDRAM_BR_N <= '0';
+					T80_SDRAM_BR_N <= '0';
 					SDRC <= SDRC_T80_BR;
 				elsif DMA_SDRAM_SEL = '1' and DMA_SDRAM_DTACK_N_REG = '1' then
 					ram68k_req <= not ram68k_req;
@@ -1859,12 +1857,12 @@ begin
 			end if;
 
 		when SDRC_T80_BR =>
---			if FX68_BG_N = '0' then
---				T80_SDRAM_BGACK_N <= '0';
---				T80_SDRAM_BR_N <= '1';
+			if FX68_BG_N = '0' then
+				T80_SDRAM_BGACK_N <= '0';
+				T80_SDRAM_BR_N <= '1';
 				ram68k_req <= not ram68k_req;
 				SDRC <= SDRC_T80;
---			end if;
+			end if;
 
 		when SDRC_T80 =>
 			if ram68k_req = ram68k_ack then
@@ -1873,7 +1871,7 @@ begin
 				else
 					T80_SDRAM_D <= ram68k_q(7 downto 0);
 				end if;
---				T80_SDRAM_BGACK_N <= '1';
+				T80_SDRAM_BGACK_N <= '1';
 				T80_SDRAM_DTACK_N <= '0';
 				SDRC <= SDRC_IDLE;
 			end if;

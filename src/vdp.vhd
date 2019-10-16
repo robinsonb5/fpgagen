@@ -1408,6 +1408,7 @@ variable vscroll_val    : std_logic_vector(10 downto 0);
 variable vscroll_index  : std_logic_vector(4 downto 0);
 variable y_cells    : std_logic_vector(6 downto 0);
 variable bga_tile_data : std_logic_vector(31 downto 0);
+variable t_pal : std_logic_vector(1 downto 0);
 
 -- synthesis translate_off
 file F		: text open write_mode is "bga_dbg.out";
@@ -1648,8 +1649,10 @@ begin
 						else
 							bga_tile_data := SP3_VRAM32_DO;
 						end if;
+						t_pal := T_BGB_PAL; -- border garbage using the last palette no. fetched to BGB
 					else
 						bga_tile_data := BGA_VRAM32_DO;
+						t_pal := T_BGA_PAL;
 					end if;
 
 					BGA_COLINFO_WE_A <= '1';
@@ -1661,51 +1664,51 @@ begin
 					case BGA_POS(2 downto 0) is
 						when "100" =>
 							if BGA_HF = '1' then
-								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & bga_tile_data( 3 downto  0);
+								BGA_COLINFO_D_A <= T_BGA_PRI & t_pal & bga_tile_data( 3 downto  0);
 							else
-								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & bga_tile_data(31 downto 28);
+								BGA_COLINFO_D_A <= T_BGA_PRI & t_pal & bga_tile_data(31 downto 28);
 							end if;
 						when "101" =>
 							if BGA_HF = '1' then
-								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & bga_tile_data( 7 downto  4);
+								BGA_COLINFO_D_A <= T_BGA_PRI & t_pal & bga_tile_data( 7 downto  4);
 							else
-								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & bga_tile_data(27 downto 24);
+								BGA_COLINFO_D_A <= T_BGA_PRI & t_pal & bga_tile_data(27 downto 24);
 							end if;
 						when "110" =>
 							if BGA_HF = '1' then
-								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & bga_tile_data(11 downto  8);
+								BGA_COLINFO_D_A <= T_BGA_PRI & t_pal & bga_tile_data(11 downto  8);
 							else
-								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & bga_tile_data(23 downto 20);
+								BGA_COLINFO_D_A <= T_BGA_PRI & t_pal & bga_tile_data(23 downto 20);
 							end if;
 						when "111" =>
 							if BGA_HF = '1' then
-								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & bga_tile_data(15 downto 12);
+								BGA_COLINFO_D_A <= T_BGA_PRI & t_pal & bga_tile_data(15 downto 12);
 							else
-								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & bga_tile_data(19 downto 16);
+								BGA_COLINFO_D_A <= T_BGA_PRI & t_pal & bga_tile_data(19 downto 16);
 							end if;
 						when "000" =>
 							if BGA_HF = '1' then
-								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & bga_tile_data(19 downto 16);
+								BGA_COLINFO_D_A <= T_BGA_PRI & t_pal & bga_tile_data(19 downto 16);
 							else
-								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & bga_tile_data(15 downto 12);
+								BGA_COLINFO_D_A <= T_BGA_PRI & t_pal & bga_tile_data(15 downto 12);
 							end if;
 						when "001" =>
 							if BGA_HF = '1' then
-								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & bga_tile_data(23 downto 20);
+								BGA_COLINFO_D_A <= T_BGA_PRI & t_pal & bga_tile_data(23 downto 20);
 							else
-								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & bga_tile_data(11 downto  8);
+								BGA_COLINFO_D_A <= T_BGA_PRI & t_pal & bga_tile_data(11 downto  8);
 							end if;
 						when "010" =>
 							if BGA_HF = '1' then
-								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & bga_tile_data(27 downto 24);
+								BGA_COLINFO_D_A <= T_BGA_PRI & t_pal & bga_tile_data(27 downto 24);
 							else
-								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & bga_tile_data( 7 downto  4);
+								BGA_COLINFO_D_A <= T_BGA_PRI & t_pal & bga_tile_data( 7 downto  4);
 							end if;
 						when "011" =>
 							if BGA_HF = '1' then
-								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & bga_tile_data(31 downto 28);
+								BGA_COLINFO_D_A <= T_BGA_PRI & t_pal & bga_tile_data(31 downto 28);
 							else
-								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & bga_tile_data( 3 downto  0);
+								BGA_COLINFO_D_A <= T_BGA_PRI & t_pal & bga_tile_data( 3 downto  0);
 							end if;
 						when others => null;
 					end case;

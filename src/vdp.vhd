@@ -2731,10 +2731,12 @@ begin
 				if x >= H_DISP_WIDTH or V_ACTIVE_DISP = '0' then
 					-- border area
 					col := BGCOL;
-					if DBG(8 downto 7) = "10" then
-						col := BGA_COLINFO_Q_B(5 downto 0);
-					elsif DBG(8 downto 7) = "11" then
-						col := BGB_COLINFO_Q_B(5 downto 0);
+					if V_ACTIVE_DISP = '1' and DBG(8) = '1' then
+						if DBG(7) = '0' then
+							col := BGA_COLINFO_Q_B(5 downto 0);
+						else
+							col := BGB_COLINFO_Q_B(5 downto 0);
+						end if;
 					end if;
 					PIX_MODE <= PIX_NORMAL;
 				end if;

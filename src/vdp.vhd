@@ -2744,7 +2744,9 @@ begin
 				CRAM_ADDR_B <= col;
 
 			when "0101" =>
-				if (x >= H_DISP_WIDTH or V_ACTIVE_DISP = '0') and (BORDER_EN = '0' or DBG(8 downto 7) = "01") then
+				if ((x >= H_DISP_WIDTH or V_ACTIVE_DISP = '0') and (BORDER_EN = '0' or DBG(8 downto 7) = "01")) or
+				   (V_ACTIVE_DISP = '0' and DBG(8) = '1') -- blank upper border garbage even if the left and right are rendered
+				then
 					-- disabled border
 					FF_B <= (others => '0');
 					FF_G <= (others => '0');

@@ -143,6 +143,7 @@ constant CONF_STR : string := core_name &
     "OI,CPU Turbo,Off,On;"&
     "OH,PCM HiFi sound,Disable,Enable;"&
     "OJ,Border,Disable,Enable;"&
+    "OK,Blending,Disable,Enable;"&
     CONF_DBG_STR&
     "T0,Reset;"&
     "V,v"&BUILD_DATE;
@@ -233,17 +234,12 @@ ext_sw(15) <= status(19); -- Border
 
 --SDRAM_A(12)<='0';
 virtualtoplevel : entity work.Virtual_Toplevel
-	generic map(
-		rasCasTiming => 3,
-		prechargeTiming => 3
-	)
-	port map(
-		reset => reset,
-		MCLK => MCLK,
-		SDR_CLK => memclk,
+port map(
+	reset => reset,
+	MCLK => MCLK,
+	SDR_CLK => memclk,
 
-    -- SDRAM DE1 ports
---	 pMemClk => DRAM_CLK,
+	FPGA_INIT_N => pll_locked,
     DRAM_CKE => SDRAM_CKE,
     DRAM_CS_N => SDRAM_nCS,
     DRAM_RAS_N => SDRAM_nRAS,
@@ -456,6 +452,7 @@ mist_video : work.mist.mist_video
         scandoubler_disable => scandoubler_disable,
         ypbpr       => ypbpr,
         rotate      => "00",
+        blend       => status(20),
 
         SPI_SCK     => SPI_SCK,
         SPI_SS3     => SPI_SS3,

@@ -223,9 +223,7 @@ signal VSCR 		: std_logic;
 signal WVP			: std_logic_vector(4 downto 0);
 signal WDOWN		: std_logic;
 signal WHP			: std_logic_vector(4 downto 0);
-signal WHP_LATCH    : std_logic_vector(4 downto 0);
 signal WRIGT		: std_logic;
-signal WRIGT_LATCH  : std_logic;
 
 signal BGCOL		: std_logic_vector(5 downto 0);
 
@@ -370,6 +368,7 @@ signal HSYNC_END       : std_logic_vector(8 downto 0);
 signal HBLANK_START    : std_logic_vector(8 downto 0);
 signal HBLANK_END      : std_logic_vector(8 downto 0);
 signal HSCROLL_READ    : std_logic_vector(8 downto 0);
+signal HSCROLL_READ_EN : std_logic;
 signal V_DISP_START    : std_logic_vector(8 downto 0);
 signal V_DISP_HEIGHT   : std_logic_vector(8 downto 0);
 signal VSYNC_HSTART    : std_logic_vector(8 downto 0);
@@ -418,6 +417,7 @@ signal BGEN_ACTIVATE	: std_logic;
 
 -- BACKGROUND B
 type bgbc_t is (
+	BGBC_LEFT_BORDER,
 	BGBC_INIT,
 	BGBC_GET_VSCROLL,
 	BGBC_GET_VSCROLL2,
@@ -427,9 +427,17 @@ type bgbc_t is (
 	BGBC_BASE_RD,
 	BGBC_TILE_RD,
 	BGBC_LOOP,
+	BGBC_RIGHT_BORDER,
 	BGBC_DONE
 );
-signal BGBC		: bgbc_t;
+signal BGBC : bgbc_t;
+
+type bgbc_vsram_t is (
+	BGBC_VSRAM_IDLE,
+	BGBC_VSRAM_RD1,
+	BGBC_VSRAM_RD2
+);
+signal BGBC_VSRAM : bgbc_vsram_t;
 
 -- signal BGB_COLINFO		: colinfo_t;
 signal BGB_COLINFO_ADDR_A	: std_logic_vector(8 downto 0);
@@ -462,10 +470,14 @@ signal BGB_VSRAM1_LAST_READ : std_logic_vector(10 downto 0);
 
 signal BGB_MAPPING_EN       : std_logic;
 signal BGB_PATTERN_EN       : std_logic;
+signal BGB_PATTERN_EN_LATE  : std_logic;
 signal BGB_ENABLE           : std_logic;
+signal BGB_LEFT_BORDER      : std_logic;
+signal BGB_RIGHT_BORDER     : std_logic;
 
 -- BACKGROUND A
 type bgac_t is (
+	BGAC_LEFT_BORDER,
 	BGAC_INIT,
 	BGAC_GET_VSCROLL,
 	BGAC_GET_VSCROLL2,
@@ -475,9 +487,17 @@ type bgac_t is (
 	BGAC_BASE_RD,
 	BGAC_TILE_RD,
 	BGAC_LOOP,
+	BGAC_RIGHT_BORDER,
 	BGAC_DONE
 );
 signal BGAC		: bgac_t;
+
+type bgac_vsram_t is (
+	BGAC_VSRAM_IDLE,
+	BGAC_VSRAM_RD1,
+	BGAC_VSRAM_RD2
+);
+signal BGAC_VSRAM : bgac_vsram_t;
 
 -- signal BGA_COLINFO		: colinfo_t;
 signal BGA_COLINFO_ADDR_A	: std_logic_vector(8 downto 0);
@@ -513,7 +533,11 @@ signal WIN_H		: std_logic;
 
 signal BGA_MAPPING_EN       : std_logic;
 signal BGA_PATTERN_EN       : std_logic;
+signal BGA_PATTERN_EN_LATE  : std_logic;
 signal BGA_ENABLE           : std_logic;
+signal BGA_LEFT_BORDER      : std_logic;
+signal BGA_RIGHT_BORDER     : std_logic;
+
 ----------------------------------------------------------------
 -- SPRITE ENGINE
 ----------------------------------------------------------------
@@ -620,9 +644,8 @@ signal SP3E_ACTIVATE	: std_logic;
 type sp3c_t is (
 	SP3C_INIT,
 	SP3C_NEXT,
-	SP3C_TILE_RD,
-	SP3C_LOOP,
 	SP3C_PLOT,
+	SP3C_LAST_PIX,
 	SP3C_DONE
 );
 signal SP3C		: SP3C_t;
@@ -633,14 +656,16 @@ signal SP3_VRAM32_DO_REG: std_logic_vector(31 downto 0);
 signal SP3_VRAM32_ACK   : std_logic;
 signal SP3_VRAM32_ACK_REG: std_logic;
 signal SP3_SEL          : std_logic;
+signal SP3_WAIT_EN		: std_logic;
+signal SP3_EN           : std_logic;
+signal SP3_EN_LATE      : std_logic;
 
-signal OBJ_PIX          : std_logic_vector(8 downto 0);
+signal OBJ_TILE_NO      : std_logic_vector(5 downto 0);
 signal OBJ_NO			: std_logic_vector(4 downto 0);
 
 signal OBJ_LINK			: std_logic_vector(6 downto 0);
 
 signal OBJ_HS			: std_logic_vector(1 downto 0);
-signal OBJ_VS			: std_logic_vector(1 downto 0);
 signal OBJ_MASKED		: std_logic;
 signal OBJ_VALID_X	: std_logic;
 signal OBJ_DOT_OVERFLOW	: std_logic;
@@ -649,7 +674,7 @@ signal OBJ_PRI			: std_logic;
 signal OBJ_PAL			: std_logic_vector(1 downto 0);
 signal OBJ_HF			: std_logic;
 signal OBJ_POS			: std_logic_vector(8 downto 0);
-signal OBJ_TILEBASE		: std_logic_vector(14 downto 0);
+signal OBJ_ADDR_INC		: std_logic_vector(7 downto 0);
 
 ----------------------------------------------------------------
 -- VIDEO OUTPUT
@@ -1028,8 +1053,7 @@ process (RST_N, CLK) begin
 	if RST_N = '0' then
 		HSC_SEL <= '0';
 	elsif rising_edge(CLK) then
-		if V_ACTIVE = '1' and HV_HCNT = HSCROLL_READ and HV_PIXDIV = 0 then
-
+		if V_ACTIVE = '1' and HSCROLL_READ_EN = '1' then
 			case HSCR is -- Horizontal scroll mode
 				when "00" =>
 					HSC_VRAM_ADDR <= HSCB & "000000000";
@@ -1060,6 +1084,7 @@ variable hscroll_mask	: std_logic_vector(9 downto 0);
 variable vscroll_val	: std_logic_vector(10 downto 0);
 variable vscroll_index  : std_logic_vector(4 downto 0);
 variable y_cells	: std_logic_vector(6 downto 0);
+variable bgb_tile_data : std_logic_vector(31 downto 0);
 
 -- synthesis translate_off
 file F		: text open write_mode is "bgb_dbg.out";
@@ -1070,22 +1095,46 @@ begin
 		BGB_SEL <= '0';
 		BGB_ENABLE <= '1';
 		BGBC <= BGBC_DONE;
+		BGBC_VSRAM <= BGBC_VSRAM_IDLE;
 	elsif rising_edge(CLK) then
-			case BGBC is
-			when BGBC_DONE =>
-				VSRAM1_ADDR_B <= (others => '0');
+		case BGBC_VSRAM is
+			when BGBC_VSRAM_IDLE =>
 				if HV_HCNT = H_INT_POS and HV_PIXDIV = 0 and VSCR = '0' then
-					BGB_VSRAM1_LATCH <= VSRAM1_Q_B;
-					BGB_VSRAM1_LAST_READ <= VSRAM1_Q_B;
+					VSRAM1_ADDR_B <= (others => '0');
+					BGBC_VSRAM <= BGBC_VSRAM_RD1;
 				end if;
+			when BGBC_VSRAM_RD1 =>
+				BGBC_VSRAM <= BGBC_VSRAM_RD2;
+			when BGBC_VSRAM_RD2 =>
+				BGB_VSRAM1_LATCH <= VSRAM1_Q_B;
+				BGB_VSRAM1_LAST_READ <= VSRAM1_Q_B;
+				BGBC_VSRAM <= BGBC_VSRAM_IDLE;
+			when others => null;
+		end case;
+
+		case BGBC is
+			when BGBC_DONE =>
 				BGB_SEL <= '0';
 				BGB_COLINFO_WE_A <= '0';
 				BGB_COLINFO_ADDR_A <= (others => '0');
+				BGB_LEFT_BORDER <= '1';
+				BGB_RIGHT_BORDER <= '0';
+				BGB_POS <= "1111100000"; -- -32
+				BGB_COL <= "1111100"; -- -4
 				if BGEN_ACTIVATE = '1' then
+					BGBC <= BGBC_LEFT_BORDER;
+				end if;
+
+			when BGBC_LEFT_BORDER =>
+				BGB_PATTERN_EN_LATE <= '0';
+				if BGB_COL = "1111110" then -- -2
 					BGBC <= BGBC_INIT;
+				elsif BGB_PATTERN_EN = '1' or BGB_PATTERN_EN_LATE = '1' then
+					BGBC <= BGBC_LOOP;
 				end if;
 
 			when BGBC_INIT =>
+				BGB_LEFT_BORDER <= '0';
 				if HSIZE = "10" then
 					-- illegal mode, 32x1
 					hscroll_mask := "0011111111";
@@ -1102,12 +1151,8 @@ begin
 				V_BGB_XSTART := "0000000000" - HSC_VRAM32_DO(25 downto 16);
 				if V_BGB_XSTART(3 downto 0) = "0000" then
 					V_BGB_XSTART := V_BGB_XSTART - 16;
-					BGB_POS <= "1111110000";
-				else
-					BGB_POS <= "0000000000" - ( "000000" & V_BGB_XSTART(3 downto 0) );
 				end if;
 				BGB_X <= ( V_BGB_XSTART(9 downto 4) & "0000" ) and hscroll_mask;
-				BGB_COL <= "1111110"; -- -2
 				BGBC <= BGBC_GET_VSCROLL;
 
 			when BGBC_GET_VSCROLL =>
@@ -1209,7 +1254,7 @@ begin
 				-- BGB pattern slot
 				BGB_COLINFO_WE_A <= '0';
 
-				if BGB_X(3) = '0' then
+				if BGB_POS(3) = '0' then
 					bgb_nametable_item := BGB_NAMETABLE_ITEMS(15 downto 0);
 				else
 					bgb_nametable_item := BGB_NAMETABLE_ITEMS(31 downto 16);
@@ -1231,65 +1276,79 @@ begin
 					end if;
 				end if;
 
-				if BGB_ENABLE = '1' then
-					BGB_SEL <= '1';
+				if BGB_PATTERN_EN = '1' or BGB_PATTERN_EN_LATE = '1' then
+					BGB_PATTERN_EN_LATE <= '0';
+					if BGB_ENABLE = '1' then
+						BGB_SEL <= '1';
+					end if;
+					BGBC <= BGBC_LOOP;
 				end if;
-				BGBC <= BGBC_LOOP;
 
 			when BGBC_LOOP =>
-				if BGB_VRAM32_ACK = '1' or BGB_SEL = '0' or BGB_ENABLE = '0' then
+				if ((BGB_LEFT_BORDER = '0' and BGB_RIGHT_BORDER = '0') and (BGB_VRAM32_ACK = '1' or BGB_SEL = '0' or BGB_ENABLE = '0')) or
+				   ((BGB_LEFT_BORDER = '1' or BGB_RIGHT_BORDER = '1') and (SP3_VRAM32_ACK = '1' or SP3_SEL = '0')) then
 					BGB_SEL <= '0';
 
-					BGB_COLINFO_ADDR_A <= BGB_POS(8 downto 0);
+					if BGB_PATTERN_EN = '1' then
+						BGB_PATTERN_EN_LATE <= '1';
+					end if;
+
+					if BGB_LEFT_BORDER = '1' or BGB_RIGHT_BORDER = '1' then
+						bgb_tile_data := SP3_VRAM32_DO;
+					else
+						bgb_tile_data := BGB_VRAM32_DO;
+					end if;
+					BGB_COLINFO_ADDR_A <= BGB_POS(8 downto 0) + HSC_VRAM32_DO(19 downto 16);
+
 					BGB_COLINFO_WE_A <= '1';
-					case BGB_X(2 downto 0) is
+					case BGB_POS(2 downto 0) is
 					when "100" =>
 						if BGB_HF = '1' then
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO( 3 downto  0);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & bgb_tile_data( 3 downto  0);
 						else
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(31 downto 28);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & bgb_tile_data(31 downto 28);
 						end if;
 					when "101" =>
 						if BGB_HF = '1' then
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO( 7 downto  4);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & bgb_tile_data( 7 downto  4);
 						else
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(27 downto 24);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & bgb_tile_data(27 downto 24);
 						end if;
 					when "110" =>
 						if BGB_HF = '1' then
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(11 downto  8);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & bgb_tile_data(11 downto  8);
 						else
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(23 downto 20);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & bgb_tile_data(23 downto 20);
 						end if;
 					when "111" =>
 						if BGB_HF = '1' then
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(15 downto 12);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & bgb_tile_data(15 downto 12);
 						else
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(19 downto 16);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & bgb_tile_data(19 downto 16);
 						end if;
 					when "000" =>
 						if BGB_HF = '1' then
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(19 downto 16);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & bgb_tile_data(19 downto 16);
 						else
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(15 downto 12);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & bgb_tile_data(15 downto 12);
 						end if;
 					when "001" =>
 						if BGB_HF = '1' then
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(23 downto 20);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & bgb_tile_data(23 downto 20);
 						else
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(11 downto  8);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & bgb_tile_data(11 downto  8);
 						end if;
 					when "010" =>
 						if BGB_HF = '1' then
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(27 downto 24);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & bgb_tile_data(27 downto 24);
 						else
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO( 7 downto  4);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & bgb_tile_data( 7 downto  4);
 						end if;
 					when "011" =>
 						if BGB_HF = '1' then
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO(31 downto 28);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & bgb_tile_data(31 downto 28);
 						else
-							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & BGB_VRAM32_DO( 3 downto  0);
+							BGB_COLINFO_D_A <= T_BGB_PRI & T_BGB_PAL & bgb_tile_data( 3 downto  0);
 						end if;
 					when others => null;
 					end case;
@@ -1300,11 +1359,16 @@ begin
 
 					BGB_X <= (BGB_X + 1) and hscroll_mask;
 					BGB_POS <= BGB_POS + 1;
-					if BGB_X(2 downto 0) = "111" then
+					if BGB_POS(2 downto 0) = "111" then
 						BGB_COL <= BGB_COL + 1;
 						if (H40 = '0' and BGB_COL = 31) or (H40 = '1' and BGB_COL = 39) then
-							BGBC <= BGBC_DONE;
-						elsif BGB_X(3) = '0' then
+							BGB_RIGHT_BORDER <= '1';
+							BGBC <= BGBC_RIGHT_BORDER;
+						elsif BGB_LEFT_BORDER = '1' then
+							BGBC <= BGBC_LEFT_BORDER;
+						elsif BGB_RIGHT_BORDER = '1' then
+							BGBC <= BGBC_RIGHT_BORDER;
+						elsif BGB_POS(3) = '0' then
 							BGBC <= BGBC_TILE_RD;
 						else
 							BGBC <= BGBC_GET_VSCROLL;
@@ -1313,10 +1377,18 @@ begin
 						BGBC <= BGBC_LOOP;
 					end if;
 				end if;
-			when others =>	-- BGBC_DONE
-				BGB_SEL <= '0';
-				BGB_COLINFO_WE_A <= '0';
-			end case;
+
+			when BGBC_RIGHT_BORDER =>
+				BGB_PATTERN_EN_LATE <= '0';
+				if (H40 = '0' and BGB_COL = 34) or (H40 = '1' and BGB_COL = 42) then
+					BGB_RIGHT_BORDER <= '0';
+					BGBC <= BGBC_DONE;
+				elsif BGB_PATTERN_EN = '1' or BGB_PATTERN_EN_LATE = '1' then
+					BGBC <= BGBC_LOOP;
+				end if;
+
+			when others => null;
+		end case;
 	end if;
 end process;
 
@@ -1330,12 +1402,14 @@ variable V_BGA_XBASE		: std_logic_vector(15 downto 0);
 variable V_BGA_BASE		: std_logic_vector(15 downto 0);
 variable bga_pos_next   : std_logic_vector(9 downto 0);
 variable bga_nametable_item : std_logic_vector(15 downto 0);
-variable tile_pos       : std_logic_vector(3 downto 0);
 variable vscroll_mask	: std_logic_vector(10 downto 0);
 variable hscroll_mask	: std_logic_vector(9 downto 0);
 variable vscroll_val    : std_logic_vector(10 downto 0);
 variable vscroll_index  : std_logic_vector(4 downto 0);
 variable y_cells    : std_logic_vector(6 downto 0);
+variable bga_tile_data : std_logic_vector(31 downto 0);
+variable t_pal : std_logic_vector(1 downto 0);
+
 -- synthesis translate_off
 file F		: text open write_mode is "bga_dbg.out";
 variable L	: line;
@@ -1345,25 +1419,47 @@ begin
 		BGA_SEL <= '0';
 		BGAC <= BGAC_DONE;
 		BGA_ENABLE <= '1';
+		BGAC_VSRAM <= BGAC_VSRAM_IDLE;
 	elsif rising_edge(CLK) then
-			case BGAC is
-			when BGAC_DONE =>
-				VSRAM0_ADDR_B <= (others => '0');
-				if HV_HCNT = H_INT_POS and HV_PIXDIV = 0 then
-					if VSCR = '0' then
-						BGA_VSRAM0_LATCH <= VSRAM0_Q_B;
-						BGA_VSRAM0_LAST_READ <= VSRAM0_Q_B;
-					end if;
-					WRIGT_LATCH <= WRIGT;
-					WHP_LATCH <= WHP;
+		case BGAC_VSRAM is
+			when BGAC_VSRAM_IDLE =>
+				if HV_HCNT = H_INT_POS and HV_PIXDIV = 0 and VSCR = '0' then
+					VSRAM0_ADDR_B <= (others => '0');
+					BGAC_VSRAM <= BGAC_VSRAM_RD1;
 				end if;
+			when BGAC_VSRAM_RD1 =>
+				BGAC_VSRAM <= BGAC_VSRAM_RD2;
+			when BGAC_VSRAM_RD2 =>
+				BGA_VSRAM0_LATCH <= VSRAM0_Q_B;
+				BGA_VSRAM0_LAST_READ <= VSRAM0_Q_B;
+				BGAC_VSRAM <= BGAC_VSRAM_IDLE;
+			when others => null;
+		end case;
+
+		case BGAC is
+			when BGAC_DONE =>
+				BGA_PATTERN_EN_LATE <= '0';
 				BGA_SEL <= '0';
 				BGA_COLINFO_ADDR_A <= (others => '0');
 				BGA_COLINFO_WE_A <= '0';
+				BGA_LEFT_BORDER <= '1';
+				BGA_RIGHT_BORDER <= '0';
+				BGA_POS <= "1111100000"; -- -32
+				BGA_COL <= "1111100"; -- -4
 				if BGEN_ACTIVATE = '1' then
-					BGAC <= BGAC_INIT;
+					BGAC <= BGAC_LEFT_BORDER;
 				end if;
+
+			when BGAC_LEFT_BORDER =>
+				BGA_PATTERN_EN_LATE <= '0';
+				if BGA_COL = "1111110" then -- -2
+					BGAC <= BGAC_INIT;
+				elsif BGA_PATTERN_EN = '1' or BGA_PATTERN_EN_LATE = '1' then
+					BGAC <= BGAC_LOOP;
+				end if;
+
 			when BGAC_INIT =>
+				BGA_LEFT_BORDER <= '0';
 				if HSIZE = "10" then
 					-- illegal mode, 32x1
 					hscroll_mask := "0011111111";
@@ -1383,22 +1479,18 @@ begin
 					WIN_V <= WDOWN;
 				end if;
 
-				if WHP_LATCH = "00000" then
-					WIN_H <= WRIGT_LATCH;
+				if WHP = "00000" then
+					WIN_H <= WRIGT;
 				else
-					WIN_H <= not WRIGT_LATCH;
+					WIN_H <= not WRIGT;
 				end if;
 
 				V_BGA_XSTART := "0000000000" - HSC_VRAM32_DO(9 downto 0);
 				if V_BGA_XSTART(3 downto 0) = "0000" then
 					V_BGA_XSTART := V_BGA_XSTART - 16;
-					BGA_POS <= "1111110000";
-				else
-					BGA_POS <= "0000000000" - ( "000000" & V_BGA_XSTART(3 downto 0) );
 				end if;
 
 				BGA_X <= ( V_BGA_XSTART(9 downto 4) & "0000" ) and hscroll_mask;
-				BGA_COL <= "1111110"; -- -2
 				BGAC <= BGAC_GET_VSCROLL;
 
 			when BGAC_GET_VSCROLL =>
@@ -1508,8 +1600,7 @@ begin
 				-- BGA pattern slot
 				BGA_COLINFO_WE_A <= '0';
 
-				if ((WIN_H = '1' or WIN_V = '1') and BGA_POS(3) = '0') or
-				   (WIN_H = '0' and WIN_V = '0' and BGA_X(3) = '0') then
+				if BGA_POS(3) = '0' then
 					bga_nametable_item := BGA_NAMETABLE_ITEMS(15 downto 0);
 				else
 					bga_nametable_item := BGA_NAMETABLE_ITEMS(31 downto 16);
@@ -1532,70 +1623,92 @@ begin
 					end if;
 				end if;
 
-				if BGA_ENABLE = '1' then
-					BGA_SEL <= '1';
+				if BGA_PATTERN_EN = '1' or BGA_PATTERN_EN_LATE = '1' then
+					BGA_PATTERN_EN_LATE <= '0';
+					if BGA_ENABLE = '1' then
+						BGA_SEL <= '1';
+					end if;
+					BGAC <= BGAC_LOOP;
 				end if;
-				BGAC <= BGAC_LOOP;
 
 			when BGAC_LOOP =>
-				if BGA_VRAM32_ACK = '1' or BGA_SEL = '0' or BGA_ENABLE = '0' then
+				if ((BGA_LEFT_BORDER = '0' and BGA_RIGHT_BORDER = '0') and (BGA_VRAM32_ACK = '1' or BGA_SEL = '0' or BGA_ENABLE = '0')) or
+				   ((BGA_LEFT_BORDER = '1' or BGA_RIGHT_BORDER = '1') and
+				   ((BGA_COL = "1111101" and (HSC_VRAM32_ACK = '1' or HSC_SEL = '0')) or
+				    (BGA_COL /= "1111101" and (SP3_VRAM32_ACK = '1' or SP3_SEL = '0'))))
+				then
 					BGA_SEL <= '0';
 
-					BGA_COLINFO_WE_A <= '1';
-					BGA_COLINFO_ADDR_A <= BGA_POS(8 downto 0);
-					if WIN_H = '1' or WIN_V = '1' then
-						tile_pos := BGA_POS(3 downto 0);
-					else
-						tile_pos := BGA_X(3 downto 0);
+					if BGA_PATTERN_EN = '1' then
+						BGA_PATTERN_EN_LATE <= '1';
 					end if;
-					case tile_pos(2 downto 0) is
+
+					if BGA_LEFT_BORDER = '1' or BGA_RIGHT_BORDER = '1' then
+						if BGA_COL = "111101" then
+							bga_tile_data := HSC_VRAM32_DO;
+						else
+							bga_tile_data := SP3_VRAM32_DO;
+						end if;
+						t_pal := T_BGB_PAL; -- border garbage using the last palette no. fetched to BGB
+					else
+						bga_tile_data := BGA_VRAM32_DO;
+						t_pal := T_BGA_PAL;
+					end if;
+
+					BGA_COLINFO_WE_A <= '1';
+					if WIN_H = '1' or WIN_V = '1' then
+						BGA_COLINFO_ADDR_A <= BGA_POS(8 downto 0);
+					else
+						BGA_COLINFO_ADDR_A <= BGA_POS(8 downto 0) + HSC_VRAM32_DO(3 downto 0);
+					end if;
+					case BGA_POS(2 downto 0) is
 						when "100" =>
 							if BGA_HF = '1' then
-								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM32_DO( 3 downto  0);
+								BGA_COLINFO_D_A <= T_BGA_PRI & t_pal & bga_tile_data( 3 downto  0);
 							else
-								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM32_DO(31 downto 28);
+								BGA_COLINFO_D_A <= T_BGA_PRI & t_pal & bga_tile_data(31 downto 28);
 							end if;
 						when "101" =>
 							if BGA_HF = '1' then
-								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM32_DO( 7 downto  4);
+								BGA_COLINFO_D_A <= T_BGA_PRI & t_pal & bga_tile_data( 7 downto  4);
 							else
-								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM32_DO(27 downto 24);
+								BGA_COLINFO_D_A <= T_BGA_PRI & t_pal & bga_tile_data(27 downto 24);
 							end if;
 						when "110" =>
 							if BGA_HF = '1' then
-								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM32_DO(11 downto  8);
+								BGA_COLINFO_D_A <= T_BGA_PRI & t_pal & bga_tile_data(11 downto  8);
 							else
-								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM32_DO(23 downto 20);
+								BGA_COLINFO_D_A <= T_BGA_PRI & t_pal & bga_tile_data(23 downto 20);
 							end if;
 						when "111" =>
 							if BGA_HF = '1' then
-								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM32_DO(15 downto 12);
+								BGA_COLINFO_D_A <= T_BGA_PRI & t_pal & bga_tile_data(15 downto 12);
 							else
-								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM32_DO(19 downto 16);
+								BGA_COLINFO_D_A <= T_BGA_PRI & t_pal & bga_tile_data(19 downto 16);
 							end if;
 						when "000" =>
 							if BGA_HF = '1' then
-								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM32_DO(19 downto 16);
+								BGA_COLINFO_D_A <= T_BGA_PRI & t_pal & bga_tile_data(19 downto 16);
 							else
-								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM32_DO(15 downto 12);
+								BGA_COLINFO_D_A <= T_BGA_PRI & t_pal & bga_tile_data(15 downto 12);
 							end if;
 						when "001" =>
 							if BGA_HF = '1' then
-								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM32_DO(23 downto 20);
+								BGA_COLINFO_D_A <= T_BGA_PRI & t_pal & bga_tile_data(23 downto 20);
 							else
-								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM32_DO(11 downto  8);
+								BGA_COLINFO_D_A <= T_BGA_PRI & t_pal & bga_tile_data(11 downto  8);
 							end if;
 						when "010" =>
 							if BGA_HF = '1' then
-								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM32_DO(27 downto 24);
+								BGA_COLINFO_D_A <= T_BGA_PRI & t_pal & bga_tile_data(27 downto 24);
 							else
-								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM32_DO( 7 downto  4);
+								BGA_COLINFO_D_A <= T_BGA_PRI & t_pal & bga_tile_data( 7 downto  4);
 							end if;
 						when "011" =>
 							if BGA_HF = '1' then
-								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM32_DO(31 downto 28);
+								BGA_COLINFO_D_A <= T_BGA_PRI & t_pal & bga_tile_data(31 downto 28);
 							else
-								BGA_COLINFO_D_A <= T_BGA_PRI & T_BGA_PAL & BGA_VRAM32_DO( 3 downto  0);
+								BGA_COLINFO_D_A <= T_BGA_PRI & t_pal & bga_tile_data( 3 downto  0);
 							end if;
 						when others => null;
 					end case;
@@ -1607,8 +1720,8 @@ begin
 					BGA_X <= (BGA_X + 1) and hscroll_mask;
 					bga_pos_next := BGA_POS + 1;
 					BGA_POS <= bga_pos_next;
-					if tile_pos(2 downto 0) = "111" then
-						if tile_pos(3) = '0' then
+					if BGA_POS(2 downto 0) = "111" then
+						if BGA_POS(3) = '0' then
 							BGAC <= BGAC_TILE_RD;
 						else
 							BGAC <= BGAC_GET_VSCROLL;
@@ -1617,32 +1730,41 @@ begin
 						BGAC <= BGAC_LOOP;
 					end if;
 
-					if WIN_H = '1' and WRIGT_LATCH = '0' and BGA_POS(3 downto 0) = "1111" and bga_pos_next(8 downto 4) = WHP_LATCH
+					if WIN_H = '1' and WRIGT = '0' and BGA_POS(3 downto 0) = "1111" and bga_pos_next(8 downto 4) = WHP
 					then
 						-- window on the left side ends, but not neccessarily on a scroll boundary,
 						-- when it continues to draw a wrong tile ("left window bug")
 						WIN_H <= '0';
-						if WIN_V = '0' and BGA_X(3 downto 0) /= "1111" then
-							BGAC <= BGAC_LOOP;
-						end if;
-					elsif WIN_H = '0' and WRIGT_LATCH = '1' and BGA_POS(3 downto 0) = "1111" and bga_pos_next(8 downto 4) = WHP_LATCH
+					elsif WIN_H = '0' and WRIGT = '1' and BGA_POS(3 downto 0) = "1111" and bga_pos_next(8 downto 4) = WHP
 					then
-						-- window on the right side starts, cancel rendering the current tile
+						-- window on the right side starts
 						WIN_H <= '1';
-						BGAC <= BGAC_GET_VSCROLL;
 					end if;
 
-					if BGA_X(2 downto 0) = "111" then
+					if BGA_POS(2 downto 0) = "111" then
 						BGA_COL <= BGA_COL + 1;
 						if (H40 = '0' and BGA_COL = 31) or (H40 = '1' and BGA_COL = 39) then
-							BGAC <= BGAC_DONE;
+							BGA_RIGHT_BORDER <= '1';
+							BGAC <= BGAC_RIGHT_BORDER;
+						elsif BGA_LEFT_BORDER = '1' then
+							BGAC <= BGAC_LEFT_BORDER;
+						elsif BGA_RIGHT_BORDER = '1' then
+							BGAC <= BGAC_RIGHT_BORDER;
 						end if;
 					end if;
+
 				end if;
-			when others =>	-- BGAC_DONE
-				BGA_SEL <= '0';
-				BGA_COLINFO_WE_A <= '0';
-			end case;
+
+			when BGAC_RIGHT_BORDER =>
+				BGA_PATTERN_EN_LATE <= '0';
+				if (H40 = '0' and BGA_COL = 34) or (H40 = '1' and BGA_COL = 42) then
+					BGA_RIGHT_BORDER <= '0';
+					BGAC <= BGAC_DONE;
+				elsif BGA_PATTERN_EN = '1' or BGA_PATTERN_EN_LATE = '1' then
+					BGAC <= BGAC_LOOP;
+				end if;
+			when others => null;
+		end case;
 	end if;
 end process;
 
@@ -1929,6 +2051,7 @@ variable obj_hf_var	: std_logic;
 variable obj_vf_var	: std_logic;
 variable obj_x_var	: std_logic_vector(8 downto 0);
 variable obj_y_ofs_var: std_logic_vector(5 downto 0);
+variable obj_x_pos      : std_logic_vector(4 downto 0);
 variable obj_pat_var	: std_logic_vector(10 downto 0);
 variable obj_color	: std_logic_vector(3 downto 0);
 
@@ -1955,23 +2078,19 @@ begin
 			when SP3C_INIT =>
 				OBJ_NO <= (others => '0');
 				OBJ_SPINFO_ADDR_RD <= (others => '0');
-				OBJ_PIX <= (others => '0');
+				OBJ_TILE_NO <= (others => '0');
 				OBJ_MASKED <= '0';
 				OBJ_VALID_X <= OBJ_DOT_OVERFLOW;
 				OBJ_DOT_OVERFLOW <= '0';
+				SP3_EN_LATE <= '0';
+				SP3_WAIT_EN <= '0';
 				SP3C <= SP3C_NEXT;
 
 			when SP3C_NEXT =>
 
 				OBJ_COLINFO_WE_SP3 <= '0';
 
-				SP3C <= SP3C_LOOP;
-				if OBJ_NO = OBJ_IDX	then
-					SP3C <= SP3C_DONE;
-				end if;
-
 				obj_vs_var := OBJ_SPINFO_Q(7 downto 6);
-				OBJ_VS <= obj_vs_var;
 				obj_hs_var := OBJ_SPINFO_Q(9 downto 8);
 				OBJ_HS <= obj_hs_var;
 				obj_x_var := OBJ_SPINFO_Q(18 downto 10);
@@ -1988,9 +2107,6 @@ begin
 				OBJ_PAL <= OBJ_SPINFO_Q(33 downto 32);
 				OBJ_PRI <= OBJ_SPINFO_Q(34);
 
-				OBJ_SPINFO_ADDR_RD <= OBJ_NO + 1;
-				OBJ_NO <= OBJ_NO + 1;
-
 				-- sprite masking algorithm as implemented by gens-ii
 				if obj_x_var = "000000000" and OBJ_VALID_X = '1' then
 					OBJ_MASKED <= '1';
@@ -2001,16 +2117,17 @@ begin
 				end if;
 
 				OBJ_X_OFS <= "00000";
+				obj_x_pos := "00000";
 				if obj_hf_var = '1' then
 					case obj_hs_var is
 					when "00" =>	-- 8 pixels
-						OBJ_X_OFS <= "00111";
+						obj_x_pos := "00111";
 					when "01" =>	-- 16 pixels
-						OBJ_X_OFS <= "01111";
+						obj_x_pos := "01111";
 					when "11" =>	-- 32 pixels
-						OBJ_X_OFS <= "11111";
+						obj_x_pos := "11111";
 					when others =>	-- 24 pixels
-						OBJ_X_OFS <= "10111";
+						obj_x_pos := "10111";
 					end case;
 				end if;
 
@@ -2040,139 +2157,133 @@ begin
 					end case;
 				end if;
 
-				OBJ_POS <= obj_x_var - "010000000";
-				OBJ_TILEBASE <= (obj_pat_var & "0000") + ("000" & obj_y_ofs_var & "0");
-
-			-- loop over all tiles of the sprite
-			when SP3C_LOOP =>
-				OBJ_COLINFO_WE_SP3 <= '0';
-				OBJ_COLINFO_ADDR_RD_SP3 <= OBJ_POS;
-
+				-- VRAM address increment to the next tile on the current line
 				if LSM = "11" then
-					case OBJ_VS is
+					case obj_vs_var is
 					when "00" =>	-- 2*8 pixels
-						SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "00000");
+						OBJ_ADDR_INC <= "00100000";
 					when "01" =>	-- 2*16 pixels
-						SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "000000");
+						OBJ_ADDR_INC <= "01000000";
 					when "11" =>	-- 2*32 pixels
-						SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "0000000");
+						OBJ_ADDR_INC <= "10000000";
 					when others =>	-- 2*24 pixels
-						case OBJ_X_OFS(4 downto 3) is
-						when "00" =>
-							SP3_VRAM_ADDR <= OBJ_TILEBASE;
-						when "01" =>
-							SP3_VRAM_ADDR <= OBJ_TILEBASE + "001100000";
-						when "11" =>
-							SP3_VRAM_ADDR <= OBJ_TILEBASE + "100100000";
-						when others =>
-							SP3_VRAM_ADDR <= OBJ_TILEBASE + "011000000";
-						end case;
+						OBJ_ADDR_INC <= "01100000";
 					end case;
 				else
-					case OBJ_VS is
+					case obj_vs_var is
 					when "00" =>	-- 8 pixels
-						SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "0000");
+						OBJ_ADDR_INC <= "00010000";
 					when "01" =>	-- 16 pixels
-						SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "00000");
+						OBJ_ADDR_INC <= "00100000";
 					when "11" =>	-- 32 pixels
-						SP3_VRAM_ADDR <= OBJ_TILEBASE + (OBJ_X_OFS(4 downto 3) & "000000");
+						OBJ_ADDR_INC <= "01000000";
 					when others =>	-- 24 pixels
-						case OBJ_X_OFS(4 downto 3) is
-						when "00" =>
-							SP3_VRAM_ADDR <= OBJ_TILEBASE;
-						when "01" =>
-							SP3_VRAM_ADDR <= OBJ_TILEBASE + "00110000";
-						when "11" =>
-							SP3_VRAM_ADDR <= OBJ_TILEBASE + "10010000";
-						when others =>
-							SP3_VRAM_ADDR <= OBJ_TILEBASE + "01100000";
-						end case;
+						OBJ_ADDR_INC <= "00110000";
 					end case;
 				end if;
 
-				SP3_SEL <= '1';
-				SP3C <= SP3C_TILE_RD;
+				obj_x_var := obj_x_var - "010000000" + obj_x_pos;
+				OBJ_POS <= obj_x_var;
+				OBJ_COLINFO_ADDR_RD_SP3 <= obj_x_var;
+				SP3_VRAM_ADDR <= (obj_pat_var & "0000") + ("000" & obj_y_ofs_var & "0");
 
-			when SP3C_TILE_RD =>
-				if SP3_VRAM32_ACK = '1' then
-					SP3_SEL <= '0';
+				if SP3_EN = '1' or SP3_EN_LATE = '1' then
+					OBJ_SPINFO_ADDR_RD <= OBJ_NO + 1;
+					OBJ_NO <= OBJ_NO + 1;
+					OBJ_TILE_NO <= OBJ_TILE_NO + 1;
+					SP3_EN_LATE <= '0'; -- hack if the memory cycle is a bit long
+					SP3_SEL <= '1';
 					SP3C <= SP3C_PLOT;
 				end if;
 
 			-- loop over all sprite pixels on the current line
 			when SP3C_PLOT =>
-				case OBJ_X_OFS(2 downto 0) is
-				when "100" =>
-					obj_color := SP3_VRAM32_DO(31 downto 28);
-				when "101" =>
-					obj_color := SP3_VRAM32_DO(27 downto 24);
-				when "110" =>
-					obj_color := SP3_VRAM32_DO(23 downto 20);
-				when "111" =>
-					obj_color := SP3_VRAM32_DO(19 downto 16);
-				when "000" =>
-					obj_color := SP3_VRAM32_DO(15 downto 12);
-				when "001" =>
-					obj_color := SP3_VRAM32_DO(11 downto  8);
-				when "010" =>
-					obj_color := SP3_VRAM32_DO( 7 downto  4);
-				when "011" =>
-					obj_color := SP3_VRAM32_DO( 3 downto  0);
-				when others => null;
-				end case;
-
 				OBJ_COLINFO_WE_SP3 <= '0';
-				if OBJ_POS < 320 then
-					if OBJ_COLINFO_Q_A(3 downto 0) = "0000" then
-						if OBJ_MASKED = '0' then
-							OBJ_COLINFO_WE_SP3 <= '1';
-							OBJ_COLINFO_ADDR_WR_SP3 <= OBJ_POS;
-							OBJ_COLINFO_D_SP3 <= OBJ_PRI & OBJ_PAL & obj_color;
-						end if;
-					else
-						if obj_color /= "0000" then
-							SCOL_SET <= '1';
-						end if;
+				if (SP3_VRAM32_ACK = '1' or SP3_SEL = '0') and SP3_WAIT_EN = '0' then
+					SP3_SEL <= '0';
+					if SP3_EN = '1' then
+						SP3_EN_LATE <= '1';
 					end if;
-				end if;
 
-				OBJ_POS <= OBJ_POS + 1;
-				OBJ_PIX <= OBJ_PIX + 1;
-				OBJ_COLINFO_ADDR_RD_SP3 <= OBJ_POS + 1;
-				if OBJ_HF = '1' then
-					if OBJ_X_OFS = "00000" then
-						SP3C <= SP3C_NEXT;
-					else
-						OBJ_X_OFS <= OBJ_X_OFS - 1;
-						if OBJ_X_OFS(2 downto 0) = "000" then
-							SP3C <= SP3C_LOOP; -- fetch the next tile
+					case OBJ_X_OFS(2 downto 0) is
+					when "100" =>
+						obj_color := SP3_VRAM32_DO(31 downto 28);
+					when "101" =>
+						obj_color := SP3_VRAM32_DO(27 downto 24);
+					when "110" =>
+						obj_color := SP3_VRAM32_DO(23 downto 20);
+					when "111" =>
+						obj_color := SP3_VRAM32_DO(19 downto 16);
+					when "000" =>
+						obj_color := SP3_VRAM32_DO(15 downto 12);
+					when "001" =>
+						obj_color := SP3_VRAM32_DO(11 downto  8);
+					when "010" =>
+						obj_color := SP3_VRAM32_DO( 7 downto  4);
+					when "011" =>
+						obj_color := SP3_VRAM32_DO( 3 downto  0);
+					when others => null;
+					end case;
+
+					OBJ_COLINFO_WE_SP3 <= '0';
+					if OBJ_NO <= OBJ_IDX and OBJ_POS < 320 then
+						if OBJ_COLINFO_Q_A(3 downto 0) = "0000" then
+							if OBJ_MASKED = '0' then
+								OBJ_COLINFO_WE_SP3 <= '1';
+								OBJ_COLINFO_ADDR_WR_SP3 <= OBJ_POS;
+								OBJ_COLINFO_D_SP3 <= OBJ_PRI & OBJ_PAL & obj_color;
+							end if;
 						else
-							SP3C <= SP3C_PLOT;
+							if obj_color /= "0000" then
+								SCOL_SET <= '1';
+							end if;
 						end if;
 					end if;
-				else
-					if (OBJ_X_OFS = "00111" and OBJ_HS = "00")
-					or (OBJ_X_OFS = "01111" and OBJ_HS = "01")
-					or (OBJ_X_OFS = "11111" and OBJ_HS = "11")
-					or (OBJ_X_OFS = "10111" and OBJ_HS = "10")
-					then
-						SP3C <= SP3C_NEXT;
+
+					if OBJ_HF = '1' then
+						OBJ_POS <= OBJ_POS - 1;
+						OBJ_COLINFO_ADDR_RD_SP3 <= OBJ_POS - 1;
 					else
+						OBJ_POS <= OBJ_POS + 1;
+						OBJ_COLINFO_ADDR_RD_SP3 <= OBJ_POS + 1;
+					end if;
+
+					if OBJ_X_OFS(2 downto 0) /= "111" then
 						OBJ_X_OFS <= OBJ_X_OFS + 1;
-						if OBJ_X_OFS(2 downto 0) = "111" then
-							SP3C <= SP3C_LOOP; -- fetch the next tile
-						else
-							SP3C <= SP3C_PLOT;
+					end if;
+
+				end if;
+
+				if OBJ_X_OFS(2 downto 0) = "111" then
+					-- limit total tiles per line
+					if OBJ_TILE_NO(5 downto 1) = OBJ_MAX_LINE then
+						SP3C <= SP3C_LAST_PIX;
+						if OBJ_NO <= OBJ_IDX then
+							-- no more slots, but still tiles to draw
+							OBJ_DOT_OVERFLOW <= '1';
+							SOVR_SET <= '1';
 						end if;
+					elsif (OBJ_X_OFS(4 downto 3) = OBJ_HS)	then
+						-- fetch next sprite
+						SP3C <= SP3C_NEXT;
+					else
+						-- fetch next tile
+						SP3_WAIT_EN <= '1';
+						if SP3_EN = '1' or SP3_EN_LATE = '1' then
+							OBJ_X_OFS <= OBJ_X_OFS + 1;
+							SP3_WAIT_EN <= '0';
+							OBJ_TILE_NO <= OBJ_TILE_NO + 1;
+							SP3_EN_LATE <= '0'; -- hack if the memory cycle is a bit long
+							SP3_VRAM_ADDR <= SP3_VRAM_ADDR + OBJ_ADDR_INC;
+							SP3_SEL <= '1';
+						end if;
+
 					end if;
 				end if;
 
-				-- limit total sprite pixels per line
-				if OBJ_PIX = H_DISP_WIDTH then
-					OBJ_DOT_OVERFLOW <= '1';
-					SP3C <= SP3C_DONE;
-					SOVR_SET <= '1';
-				end if;
+			when SP3C_LAST_PIX =>
+				OBJ_COLINFO_WE_SP3 <= '0';
+				SP3C <= SP3C_DONE;
 
 			when others => -- SP3C_DONE
 				SP3_SEL <= '0';
@@ -2285,6 +2396,12 @@ begin
 
 		SP1_EN <= '0';
 		SP2_EN <= '0';
+		SP3_EN <= '0';
+		BGA_MAPPING_EN <= '0';
+		BGA_PATTERN_EN <= '0';
+		BGB_MAPPING_EN <= '0';
+		BGB_PATTERN_EN <= '0';
+		HSCROLL_READ_EN <= '0';
 
 	elsif rising_edge(CLK) then
 
@@ -2302,10 +2419,13 @@ begin
 
 		SP1_EN <= '0';
 		SP2_EN <= '0';
+		SP3_EN <= '0';
 		BGA_MAPPING_EN <= '0';
 		BGA_PATTERN_EN <= '0';
 		BGB_MAPPING_EN <= '0';
 		BGB_PATTERN_EN <= '0';
+		HSCROLL_READ_EN <= '0';
+
 		-- H40 slow slots: 8aaaaaaa99aaaaaaa8aaaaaaa99aaaaaaa
 		-- 8, 10, 10, 10, 10, 10, 10, 10, 9, 9, 10, 10, 10, 10, 10, 10, 10, 8, 10, 10, 10, 10, 10, 10, 10, 9, 9, 10, 10, 10, 10, 10, 10, 10
 		-- 460                           468                               477                            485                            493
@@ -2361,9 +2481,8 @@ begin
 					PRE_V_ACTIVE <= '1';
 				elsif HV_VCNT = "1"&x"FF" then
 					V_ACTIVE <= '1';
-				elsif HV_VCNT = V_DISP_HEIGHT - 2 then
-					PRE_V_ACTIVE <= '0';
 				elsif HV_VCNT = V_DISP_HEIGHT - 1 then
+					PRE_V_ACTIVE <= '0';
 					V_ACTIVE <= '0';
 				end if;
 			end if;
@@ -2447,19 +2566,32 @@ begin
 				when others => null;
 			end case;
 
+			if HV_HCNT(0) = '0' and
+				((H40 = '1' and HV_HCNT /= 322 and HV_HCNT /= 324 and HV_HCNT /= 464) or
+				(H40 = '0' and HV_HCNT /= 290 and HV_HCNT /= 486 and HV_HCNT /= 258 and HV_HCNT /= 260)) and -- external slots
+				HV_HCNT /= 488 and -- hscroll read slot
+				HV_HCNT /= 498 and HV_HCNT /= 502 and HV_HCNT /= 504 and HV_HCNT /= 506 and HV_HCNT /= 510 -- rendering slots
+			then
+				SP3_EN <= '1';
+			end if;
+
 			SLOT_EN <= not HV_HCNT(0);
 			if (IN_VBL = '1' or DE = '0') and REFRESH_SLOT = '1' then
 				REFRESH_EN <= '1';
 			end if;
 
+			if HV_HCNT = HSCROLL_READ then
+				HSCROLL_READ_EN <= '1';
+			end if;
 		end if;
 	end if;
 end process;
 
 -- TIMING MANAGEMENT
 -- Background generation runs during active display.
--- It starts with reading the horizontal scroll values from the VRAM
-BGEN_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = HSCROLL_READ + 8 else '0';
+-- It starts with reading the horizontal scroll values from the VRAM,
+-- but activated earlier to render border garbage
+BGEN_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = HSCROLL_READ - 4 else '0';
 
 -- Stage 1 - runs after the vcounter incremented
 -- Carefully choosing the starting position avoids the
@@ -2468,7 +2600,7 @@ SP1E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = H_INT_POS + 1 else '0
 -- Stage 2 - runs in the active area
 SP2E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = 0 else '0';
 -- Stage 3 runs 3 slots after the background rendering ends
-SP3E_ACTIVATE <= '1' when V_ACTIVE = '1' and HV_HCNT = H_DISP_WIDTH + 5 else '0';
+SP3E_ACTIVATE <= '1' when PRE_V_ACTIVE = '1' and HV_HCNT = H_DISP_WIDTH + 5 else '0';
 
 process( CLK )
 	variable x : std_logic_vector(8 downto 0);
@@ -2599,13 +2731,22 @@ begin
 				if x >= H_DISP_WIDTH or V_ACTIVE_DISP = '0' then
 					-- border area
 					col := BGCOL;
+					if V_ACTIVE_DISP = '1' and DBG(8) = '1' then
+						if DBG(7) = '0' then
+							col := BGA_COLINFO_Q_B(5 downto 0);
+						else
+							col := BGB_COLINFO_Q_B(5 downto 0);
+						end if;
+					end if;
 					PIX_MODE <= PIX_NORMAL;
 				end if;
 
 				CRAM_ADDR_B <= col;
 
 			when "0101" =>
-				if (x >= H_DISP_WIDTH or V_ACTIVE_DISP = '0') and (BORDER_EN = '0' or DBG(8 downto 7) /= "00") then
+				if ((x >= H_DISP_WIDTH or V_ACTIVE_DISP = '0') and (BORDER_EN = '0' or DBG(8 downto 7) = "01")) or
+				   (V_ACTIVE_DISP = '0' and DBG(8) = '1') -- blank upper border garbage even if the left and right are rendered
+				then
 					-- disabled border
 					FF_B <= (others => '0');
 					FF_G <= (others => '0');

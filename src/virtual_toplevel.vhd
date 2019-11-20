@@ -41,20 +41,17 @@ use IEEE.STD_LOGIC_UNSIGNED.ALL;
 use IEEE.STD_LOGIC_TEXTIO.all;
 use work.jt12.all;
 use work.jt89.all;
+use work.sdram.all;
 
 entity Virtual_Toplevel is
-	generic (
-		colAddrBits : integer := 9;
-		rowAddrBits : integer := 13;
-		rasCasTiming : integer := 2;
-		prechargeTiming: integer := 2
-	);
 	port(
 		reset : in std_logic;
 		MCLK : in std_logic;		-- 54MHz
 		SDR_CLK : in std_logic;		-- 108MHz
 
-		DRAM_ADDR	: out std_logic_vector(rowAddrBits-1 downto 0);
+		FPGA_INIT_N : in std_logic;
+
+		DRAM_ADDR	: out std_logic_vector(12 downto 0);
 		DRAM_BA_0	: out std_logic;
 		DRAM_BA_1	: out std_logic;
 		DRAM_CAS_N	: out std_logic;
@@ -118,15 +115,12 @@ end entity;
 
 architecture rtl of Virtual_Toplevel is
 
-constant addrwidth : integer := rowAddrBits+colAddrBits+2;
-
+signal SDRAM_BA : std_logic_vector(1 downto 0);
 -- "FLASH"
 signal romwr_req : std_logic := '0';
 signal romwr_ack : std_logic;
-signal romwr_we  : std_logic := '1';
 signal romwr_a : unsigned(23 downto 1);
 signal romwr_d : std_logic_vector(15 downto 0);
-signal romwr_q : std_logic_vector(15 downto 0);
 
 signal romrd_req : std_logic := '0';
 signal romrd_ack : std_logic;
@@ -140,7 +134,6 @@ type fc_t is ( FC_IDLE,
 	FC_T80_RD
 );
 signal FC : fc_t;
-signal FC_DELAY : std_logic_vector(1 downto 0);
 
 -- 68000 RAM
 signal ram68k_req : std_logic;
@@ -158,7 +151,6 @@ type sdrc_t is ( SDRC_IDLE,
 	SDRC_T80_BR,
 	SDRC_T80);
 signal SDRC : sdrc_t;
-signal SDRC_DELAY : std_logic_vector(1 downto 0);
 
 -- SRAM
 signal sram_req : std_logic := '0';
@@ -301,13 +293,19 @@ signal VCLKCNT     : std_logic_vector(2 downto 0);
 signal ZCLK_ENA    : std_logic;
 signal ZCLK_nENA   : std_logic;
 signal ZCLKCNT     : std_logic_vector(3 downto 0);
-signal RFRSH_CNT   : std_logic_vector(7 downto 0);
-signal RFRSH_DELAY : std_logic;
+signal CART_RFRSH_CNT   : std_logic_vector(7 downto 0);
+signal CART_RFRSH_DELAY : std_logic;
+signal RAM_RFRSH_CNT    : std_logic_vector(7 downto 0);
+signal RAM_RFRSH_DELAY  : std_logic;
+signal RAM_RFRSH_DONE   : std_logic;
+signal RAM_DELAY_CNT    : std_logic_vector(2 downto 0);
 
 -- FLASH CONTROL
-signal FX68_FLASH_SEL		: std_logic;
-signal FX68_FLASH_D			: std_logic_vector(15 downto 0);
-signal FX68_FLASH_DTACK_N	: std_logic;
+signal FX68_FLASH_SEL         : std_logic;
+signal FX68_FLASH_D           : std_logic_vector(15 downto 0);
+signal FX68_FLASH_D_REG       : std_logic_vector(15 downto 0);
+signal FX68_FLASH_DTACK_N     : std_logic;
+signal FX68_FLASH_DTACK_N_REG : std_logic;
 
 signal T80_FLASH_SEL		: std_logic;
 signal T80_FLASH_D			: std_logic_vector(7 downto 0);
@@ -324,7 +322,9 @@ signal DMA_FLASH_DTACK_N_REG: std_logic;
 -- SDRAM CONTROL
 signal FX68_SDRAM_SEL		: std_logic;
 signal FX68_SDRAM_D			: std_logic_vector(15 downto 0);
+signal FX68_SDRAM_D_REG		: std_logic_vector(15 downto 0);
 signal FX68_SDRAM_DTACK_N	: std_logic;
+signal FX68_SDRAM_DTACK_N_REG: std_logic;
 
 signal T80_SDRAM_SEL		: std_logic;
 signal T80_SDRAM_D			: std_logic_vector(7 downto 0);
@@ -569,7 +569,7 @@ begin
 process(MRST_N,MCLK)
 begin
 	if rising_edge(MCLK) then
-		MRST_N <= SDR_INIT_DONE and reset and ext_bootdone and ext_reset_n;
+		MRST_N <= reset and ext_bootdone and ext_reset_n;
 		if bootState = BOOT_DONE then
 			VDP_RST_N <= '1';
 		else
@@ -624,41 +624,37 @@ LED <= '0';
 -- -----------------------------------------------------------------------
 -- SDRAM Controller
 -- -----------------------------------------------------------------------		
-sdc : entity work.chameleon_sdram generic map (
-	colAddrBits => colAddrBits,
-	rowAddrBits => rowAddrBits,
-	prechargeTiming => prechargeTiming,
-	rasCasTiming => rasCasTiming
-) port map(
-	clk         => SDR_CLK,
-	reset_n     => ext_reset_n,
+DRAM_BA_0 <= SDRAM_BA(0);
+DRAM_BA_1 <= SDRAM_BA(1);
 
-	std_logic_vector(sd_data)	=> DRAM_DQ,
-	std_logic_vector(sd_addr)	=> DRAM_ADDR,
-	sd_we_n						=> DRAM_WE_N,
-	sd_ras_n					=> DRAM_RAS_N,
-	sd_cas_n					=> DRAM_CAS_N,
-	sd_ba_0						=> DRAM_BA_0,
-	sd_ba_1						=> DRAM_BA_1,
-	sd_ldqm						=> DRAM_LDQM,
-	sd_udqm						=> DRAM_UDQM,
+sdc : sdram
+port map(
+	clk         => SDR_CLK,
+	init_n      => FPGA_INIT_N,
+
+	std_logic_vector(SDRAM_DQ)	=> DRAM_DQ,
+	std_logic_vector(SDRAM_A)	=> DRAM_ADDR,
+	SDRAM_nWE					=> DRAM_WE_N,
+	SDRAM_nRAS					=> DRAM_RAS_N,
+	SDRAM_nCAS					=> DRAM_CAS_N,
+	SDRAM_BA					=> SDRAM_BA,
+	SDRAM_DQML					=> DRAM_LDQM,
+	SDRAM_DQMH					=> DRAM_UDQM,
 
 	romwr_req	=> romwr_req,
 	romwr_ack	=> romwr_ack,
-	romwr_we 	=> romwr_we,
-	romwr_a		=> conv_std_logic_vector(0, addrwidth - 23) & std_logic_vector(romwr_a),
+	romwr_a		=> std_logic_vector(romwr_a),
 	romwr_d		=> romwr_d,
-	romwr_q		=> romwr_q,
 
 	romrd_req	=> romrd_req,
 	romrd_ack	=> romrd_ack,
-	romrd_a		=> conv_std_logic_vector(0, addrwidth - 23) & romrd_a,
+	romrd_a		=> romrd_a,
 	romrd_q		=> romrd_q,
 
 	ram68k_req	=> ram68k_req,
 	ram68k_ack	=> ram68k_ack,
 	ram68k_we	=> ram68k_we,
-	ram68k_a	=> conv_std_logic_vector(2#111111000#, addrwidth - 15) & ram68k_a,
+	ram68k_a	=> ram68k_a,
 	ram68k_d	=> ram68k_d,
 	ram68k_q	=> ram68k_q,
 	ram68k_u_n	=> ram68k_u_n,
@@ -667,7 +663,7 @@ sdc : entity work.chameleon_sdram generic map (
 	sram_req	=> sram_req,
 	sram_ack	=> sram_ack,
 	sram_we	=> sram_we,
-	sram_a		=> conv_std_logic_vector(2#111111010#, addrwidth - 15) & sram_a,
+	sram_a		=> sram_a,
 	sram_d		=> sram_d,
 	sram_q		=> sram_q,
 	sram_u_n	=> sram_u_n,
@@ -676,7 +672,7 @@ sdc : entity work.chameleon_sdram generic map (
 	vram_req	=> vram_req,
 	vram_ack => vram_ack,
 	vram_we	=> vram_we,
-	vram_a	=> conv_std_logic_vector(2#111111100#, addrwidth - 15) & vram_a,
+	vram_a	=> vram_a,
 	vram_d	=> vram_d,
 	vram_q	=> vram_q,
 	vram_u_n => vram_u_n,
@@ -684,20 +680,20 @@ sdc : entity work.chameleon_sdram generic map (
 
 	vram32_req => vram32_req,
 	vram32_ack => vram32_ack,
-	vram32_a   => conv_std_logic_vector(2#111111100#, addrwidth - 15) & vram32_a,
+	vram32_a   => vram32_a,
 	vram32_q   => vram32_q,
 
 	svp_ram1_req => svp_ram1_req,
 	svp_ram1_ack => svp_ram1_ack,
 	svp_ram1_we  => svp_ram1_we,
-	svp_ram1_a   => conv_std_logic_vector(2#11111111#, addrwidth - 16) & svp_ram1_a,
+	svp_ram1_a   => svp_ram1_a,
 	svp_ram1_d   => svp_ram1_d,
 	svp_ram1_q   => svp_ram1_q,
 
 	svp_ram2_req => svp_ram2_req,
 	svp_ram2_ack => svp_ram2_ack,
 	svp_ram2_we  => svp_ram2_we,
-	svp_ram2_a   => conv_std_logic_vector(2#11111111#, addrwidth - 16) & svp_ram2_a,
+	svp_ram2_a   => svp_ram2_a,
 	svp_ram2_d   => svp_ram2_d,
 	svp_ram2_q   => svp_ram2_q,
 	svp_ram2_u_n => svp_ram2_u_n,
@@ -705,10 +701,8 @@ sdc : entity work.chameleon_sdram generic map (
 
 	svp_rom_req	=> svp_rom_req,
 	svp_rom_ack	=> svp_rom_ack,
-	svp_rom_a	=> conv_std_logic_vector(0, addrwidth - 20) & svp_rom_a,
-	svp_rom_q	=> svp_rom_q,
-
-	initDone 	=> SDR_INIT_DONE
+	svp_rom_a	=> "000" & svp_rom_a,
+	svp_rom_q	=> svp_rom_q
 );
 
 -- -----------------------------------------------------------------------
@@ -1063,8 +1057,10 @@ begin
 	if MRST_N = '0' then
 		VCLKCNT <= "001"; -- important for SDRAM controller (EDIT: not needed anymore)
 		ZCLKCNT <= (others => '0');
-		RFRSH_CNT <= (others => '0');
-		RFRSH_DELAY <= '0';
+		CART_RFRSH_CNT <= (others => '0');
+		CART_RFRSH_DELAY <= '0';
+		RAM_RFRSH_CNT <= (others => '0');
+		RAM_RFRSH_DELAY <= '0';
 		SVP_CLKEN <= '0';
 
 	elsif rising_edge(MCLK) then
@@ -1095,29 +1091,36 @@ begin
 			FCLK_EN <= '0';
 		end if;
 
-		-- "The 68k is a bit slower than expected because something on the bus steals 2 out of every 128 cycles.
-		-- This is visible when measuring the bus because every time 128 cycles have passed the next bus access is
-		-- slowed down by 2 cycles.
-		-- Interestingly if this hits when the 68k is writing to the VDP (no matter which port) then the slowdown doesn't happen."
-		-- (From Titan 2 tech doc)
-		if VCLKCNT = "110" then
-			if (RFRSH_CNT(7) = '1' and FX68_DTACK_N = '0') or VDP_BGACK_N = '0' then
-				RFRSH_CNT <= (others => '0');
-			elsif RFRSH_DELAY = '0' then
-				RFRSH_CNT <= RFRSH_CNT + 1;
-			end if;
-		end if;
-
 		if VCLKCNT = "000" then
-			if RFRSH_CNT(7) = '1' and FX68_AS_N = '1' then
-				RFRSH_DELAY <= '1';
-			else
-				RFRSH_DELAY <= '0';
+			-- Work ram refresh
+			RAM_RFRSH_CNT <= RAM_RFRSH_CNT + 1;
+			if VDP_BGACK_N = '0' then
+				RAM_RFRSH_CNT <= (others => '0');
+				RAM_RFRSH_DELAY <= '0';
+			elsif RAM_RFRSH_CNT >= 116 then
+				RAM_RFRSH_DELAY <= not CPU_TURBO;
+				if RAM_RFRSH_CNT = 137 or RAM_RFRSH_DONE = '1' then
+					RAM_RFRSH_CNT <= (others => '0');
+					RAM_RFRSH_DELAY <= '0';
+				end if;
 			end if;
-		end if;
 
-		if FX68_DTACK_N = '0' then
-			RFRSH_DELAY <= '0';
+			-- Cart slot refresh (probably leftover for DRAM based dev carts?)
+			if VDP_BGACK_N = '0' then
+				CART_RFRSH_CNT <= (others => '0');
+				CART_RFRSH_DELAY <= '0';
+			elsif CART_RFRSH_CNT = 133 then
+				if FX68_AS_N = '1' then
+					CART_RFRSH_CNT <= CART_RFRSH_CNT + 1;
+					CART_RFRSH_DELAY <= not CPU_TURBO;
+				end if;
+			elsif CART_RFRSH_CNT = 136 then
+				CART_RFRSH_CNT <= (others => '0');
+				CART_RFRSH_DELAY <= '0';
+			else
+				CART_RFRSH_CNT <= CART_RFRSH_CNT + 1;
+			end if;
+
 		end if;
 
 		if VCLKCNT = "011" or (CPU_TURBO = '1' and VCLKCNT = "110") then
@@ -1429,7 +1432,7 @@ end process;
 -- 7F = 01111111 000
 -- FF = 11111111 000
 -- VDP AREA
-FX68_VDP_SEL <= '1' when ((FX68_AS_N = '0' and FX68_RNW = '0') or FX68_SEL = '1') and
+FX68_VDP_SEL <= '1' when FX68_AS_N = '0' and
 	((FX68_A(23 downto 21) = "110" and FX68_A(18 downto 16) = "000") or
 	 (FX68_A(23 downto 16) = x"A0" and FX68_A(14 downto 5) = "1111111" & "000")) -- Z80 Address space
 	else '0';
@@ -1663,15 +1666,17 @@ ROM_PAGE_A <= FX68_A(23 downto 19) when FX68_FLASH_SEL = '1' and FX68_DTACK_N = 
 -- Z80  : 000000 - 9fffff
 -- DMA  : 000000 - 9fffff
 
-FX68_FLASH_SEL <= '1' when (FX68_A(23) = '0' or FX68_A(23 downto 21) = "100") and FX68_SEL = '1' and
-	FX68_SRAM_SEL = '0' and FX68_SRAM_SEL = '0' and FX68_EEPROM_SEL = '0' and FX68_SVP_RAM_SEL = '0' and CART_EN = '1' else '0';
+FX68_FLASH_SEL <= '1' when (FX68_A(23) = '0' or FX68_A(23 downto 21) = "100") and FX68_AS_N = '0' and
+	FX68_SRAM_SEL = '0' and FX68_EEPROM_SEL = '0' and FX68_SVP_RAM_SEL = '0' and CART_EN = '1' else '0';
 T80_FLASH_SEL <= '1' when T80_A(15) = '1' and T80_MREQ_N = '0' and T80_RD_N = '0' and (BAR(23) = '0' or BAR(23 downto 21) = "100")
 	else '0';
 DMA_FLASH_SEL <= '1' when (VBUS_ADDR(23) = '0' or VBUS_ADDR(23 downto 21) = "100") and VBUS_SEL = '1' and DMA_SVP_RAM_SEL = '0' else '0';
 
 DMA_FLASH_DTACK_N  <= '0' when FC = FC_DMA_RD and romrd_req = romrd_ack else DMA_FLASH_DTACK_N_REG;
---DMA_FLASH_DTACK_N  <= DMA_FLASH_DTACK_N_REG;
 DMA_FLASH_D <= romrd_q when FC = FC_DMA_RD and romrd_req = romrd_ack else DMA_FLASH_D_REG;
+
+FX68_FLASH_DTACK_N <= '0' when FC = FC_FX68_RD and romrd_req = romrd_ack and CART_RFRSH_DELAY = '0' else FX68_FLASH_DTACK_N_REG;
+FX68_FLASH_D <= romrd_q when FC = FC_FX68_RD and romrd_req = romrd_ack and CART_RFRSH_DELAY = '0' else FX68_FLASH_D_REG;
 
 process( MRST_N, MCLK )
 variable dma_a : std_logic_vector(23 downto 1);
@@ -1679,17 +1684,17 @@ begin
 	if MRST_N = '0' then
 		FC <= FC_IDLE;
 		
-		FX68_FLASH_DTACK_N <= '1';
+		FX68_FLASH_DTACK_N_REG <= '1';
 		T80_FLASH_DTACK_N <= '1';
 		DMA_FLASH_DTACK_N_REG <= '1';
---		T80_FLASH_BR_N <= '1';
---		T80_FLASH_BGACK_N <= '1';
+		T80_FLASH_BR_N <= '1';
+		T80_FLASH_BGACK_N <= '1';
 
 		romrd_req <= '0';
 		
 	elsif rising_edge( MCLK ) then
 		if FX68_FLASH_SEL = '0' then 
-			FX68_FLASH_DTACK_N <= '1';
+			FX68_FLASH_DTACK_N_REG <= '1';
 		end if;
 		if T80_FLASH_SEL = '0' then 
 			T80_FLASH_DTACK_N <= '1';
@@ -1701,16 +1706,13 @@ begin
 		case FC is
 		when FC_IDLE =>			
 			--if VCLKCNT = "001" then
-
 				if FX68_FLASH_SEL = '1' and FX68_FLASH_DTACK_N = '1' then
 					romrd_req <= not romrd_req;
 					romrd_a <= ROM_PAGE_A & FX68_A(18 downto 1);
-					FC_DELAY <= "00";
-					if RFRSH_DELAY = '1' then FC_DELAY <= "10"; end if;
 					FC <= FC_FX68_RD;
 				elsif T80_FLASH_SEL = '1' and T80_FLASH_DTACK_N = '1' then
 					romrd_a <= ROM_PAGE_A & BAR(18 downto 15) & T80_A(14 downto 1);
---					T80_FLASH_BR_N <= '0';
+					T80_FLASH_BR_N <= '0';
 					FC <= FC_T80_BR;
 				elsif DMA_FLASH_SEL = '1' and DMA_FLASH_DTACK_N_REG = '1' then
 					if SVP_ENABLE = '1' then
@@ -1725,31 +1727,31 @@ begin
 			--end if;
 
 		when FC_FX68_RD =>
-			if FX68_PHI2 = '1' and FC_DELAY /= "00" then
-				FC_DELAY <= FC_DELAY - 1;
+			if CART_RFRSH_DELAY = '0' and CPU_TURBO = '0' then
+				FX68_FLASH_DTACK_N_REG <= '0';
 			end if;
-			if romrd_req = romrd_ack and FC_DELAY = "00" then
-				FX68_FLASH_D <= romrd_q;
-				FX68_FLASH_DTACK_N <= '0';
+			if romrd_req = romrd_ack and CART_RFRSH_DELAY = '0' then
+				FX68_FLASH_D_REG <= romrd_q;
+				FX68_FLASH_DTACK_N_REG <= '0';
 				FC <= FC_IDLE;
 			end if;
 
 		when FC_T80_BR =>
---			if FX68_BG_N = '0' then
---				T80_FLASH_BR_N <= '1';
---				T80_FLASH_BGACK_N <= '0';
+			if ZCLK_nENA = '1' and FX68_BG_N = '0' then
+				T80_FLASH_BR_N <= '1';
+				T80_FLASH_BGACK_N <= '0';
 				romrd_req <= not romrd_req;
 				FC <= FC_T80_RD;
---			end if;
+			end if;
 
 		when FC_T80_RD =>
-			if romrd_req = romrd_ack then
+			if ZCLK_nENA = '1' and CART_RFRSH_DELAY = '0' and romrd_req = romrd_ack then
 				if T80_A(0) = '1' then
 					T80_FLASH_D <= romrd_q(7 downto 0);
 				else
 					T80_FLASH_D <= romrd_q(15 downto 8);
 				end if;
---				T80_FLASH_BGACK_N <= '1';
+				T80_FLASH_BGACK_N <= '1';
 				T80_FLASH_DTACK_N <= '0';
 				FC <= FC_IDLE;
 			end if;
@@ -1777,15 +1779,19 @@ DMA_SDRAM_SEL <= '1' when VBUS_ADDR(23 downto 21) = "111" and VBUS_SEL = '1' els
 DMA_SDRAM_DTACK_N  <= '0' when SDRC = SDRC_DMA and ram68k_req = ram68k_ack else DMA_SDRAM_DTACK_N_REG;
 DMA_SDRAM_D <= ram68k_q when SDRC = SDRC_DMA and ram68k_req = ram68k_ack else DMA_SDRAM_D_REG;
 
+FX68_SDRAM_DTACK_N  <= '0' when SDRC = SDRC_FX68 and ram68k_req = ram68k_ack and RAM_DELAY_CNT = "000" else FX68_SDRAM_DTACK_N_REG;
+FX68_SDRAM_D <= ram68k_q when SDRC = SDRC_FX68 and ram68k_req = ram68k_ack and RAM_DELAY_CNT = "000" else FX68_SDRAM_D_REG;
+
 process( MRST_N, MCLK )
 begin
 	if MRST_N = '0' then
-		FX68_SDRAM_DTACK_N <= '1';
+		FX68_SDRAM_DTACK_N_REG <= '1';
 		T80_SDRAM_DTACK_N <= '1';
 		DMA_SDRAM_DTACK_N_REG <= '1';
---		T80_SDRAM_BR_N <= '1';
---		T80_SDRAM_BGACK_N <= '1';
-		SDRC_DELAY <= "00";
+		T80_SDRAM_BR_N <= '1';
+		T80_SDRAM_BGACK_N <= '1';
+		RAM_RFRSH_DONE <= '1';
+		RAM_DELAY_CNT <= "000";
 
 		ram68k_req <= '0';
 		
@@ -1793,7 +1799,8 @@ begin
 		
 	elsif rising_edge(MCLK) then
 		if FX68_SDRAM_SEL = '0' then 
-			FX68_SDRAM_DTACK_N <= '1';
+			FX68_SDRAM_DTACK_N_REG <= '1';
+			RAM_RFRSH_DONE <= '0';
 		end if;	
 		if T80_SDRAM_SEL = '0' then 
 			T80_SDRAM_DTACK_N <= '1';
@@ -1812,17 +1819,18 @@ begin
 					ram68k_we <= not FX68_RNW and FX68_IO_READY;
 					ram68k_u_n <= FX68_UDS_N;
 					ram68k_l_n <= FX68_LDS_N;
-					SDRC_DELAY <= "00";
-					if RFRSH_DELAY = '1' then SDRC_DELAY <= "10"; end if;
+					if RAM_RFRSH_DELAY = '1' then
+						RAM_DELAY_CNT <= "100";
+					end if;
 					SDRC <= SDRC_FX68;
 				elsif T80_SDRAM_SEL = '1' and T80_SDRAM_DTACK_N = '1' then
---					ram68k_req <= not ram68k_req;
+					ram68k_req <= not ram68k_req;
 					ram68k_a <= BAR(15) & T80_A(14 downto 1);
 					ram68k_d <= T80_DO & T80_DO;
 					ram68k_we <= not T80_WR_N;
 					ram68k_u_n <= T80_A(0);
 					ram68k_l_n <= not T80_A(0);
---					T80_SDRAM_BR_N <= '0';
+					T80_SDRAM_BR_N <= '0';
 					SDRC <= SDRC_T80_BR;
 				elsif DMA_SDRAM_SEL = '1' and DMA_SDRAM_DTACK_N_REG = '1' then
 					ram68k_req <= not ram68k_req;
@@ -1835,22 +1843,29 @@ begin
 			--end if;
 
 		when SDRC_FX68 =>
-			if FX68_PHI2 = '1' and SDRC_DELAY /= "00" then
-				SDRC_DELAY <= SDRC_DELAY - 1;
+			if FX68_PHI1 = '1' and RAM_DELAY_CNT /= "000" then
+				RAM_DELAY_CNT <= RAM_DELAY_CNT - 1;
+				if RAM_DELAY_CNT = "001" or RAM_RFRSH_DELAY = '0' then
+					RAM_RFRSH_DONE <= '1';
+					RAM_DELAY_CNT <= "000";
+				end if;
 			end if;
-			if ram68k_req = ram68k_ack and SDRC_DELAY = "00" then
-				FX68_SDRAM_D <= ram68k_q;
-				FX68_SDRAM_DTACK_N <= '0';
+			if RAM_DELAY_CNT = "000" and CPU_TURBO = '0' then
+				FX68_SDRAM_DTACK_N_REG <= '0';
+			end if;
+			if ram68k_req = ram68k_ack and RAM_DELAY_CNT = "000" then
+				FX68_SDRAM_D_REG <= ram68k_q;
+				FX68_SDRAM_DTACK_N_REG <= '0';
 				SDRC <= SDRC_IDLE;
 			end if;
 
 		when SDRC_T80_BR =>
---			if FX68_BG_N = '0' then
---				T80_SDRAM_BGACK_N <= '0';
---				T80_SDRAM_BR_N <= '1';
+			if FX68_BG_N = '0' then
+				T80_SDRAM_BGACK_N <= '0';
+				T80_SDRAM_BR_N <= '1';
 				ram68k_req <= not ram68k_req;
 				SDRC <= SDRC_T80;
---			end if;
+			end if;
 
 		when SDRC_T80 =>
 			if ram68k_req = ram68k_ack then
@@ -1859,7 +1874,7 @@ begin
 				else
 					T80_SDRAM_D <= ram68k_q(7 downto 0);
 				end if;
---				T80_SDRAM_BGACK_N <= '1';
+				T80_SDRAM_BGACK_N <= '1';
 				T80_SDRAM_DTACK_N <= '0';
 				SDRC <= SDRC_IDLE;
 			end if;
@@ -1882,8 +1897,8 @@ end process;
 -- EEPROM at 0x200000
 SRAM_EN <= (SRAM_EN_AUTO or SRAM_EN_PAGEIN) and not SVP_ENABLE;
 
-FX68_SRAM_SEL <= '1' when SRAM_EN = '1' and FX68_SEL = '1' and FX68_A(23 downto 16) = x"20" and FX68_EEPROM_SEL = '0' else '0';
-FX68_EEPROM_SEL <= '1' when EEPROM_EN = '1' and FX68_SEL = '1' and FX68_A(23 downto 4) = x"20000" and FX68_A(3 downto 1) = "000" else '0';
+FX68_SRAM_SEL <= '1' when SRAM_EN = '1' and FX68_AS_N = '0' and FX68_A(23 downto 16) = x"20" and FX68_EEPROM_SEL = '0' else '0';
+FX68_EEPROM_SEL <= '1' when EEPROM_EN = '1' and FX68_AS_N = '1' and FX68_A(23 downto 4) = x"20000" and FX68_A(3 downto 1) = "000" else '0';
 
 -- SRAM CONTROL
 process( MRST_N, MCLK )
@@ -1915,8 +1930,8 @@ begin
 					sram_a <= FX68_A(15 downto 1);
 					sram_d <= FX68_DO;
 					sram_we <= not FX68_RNW;
-					sram_u_n <= FX68_UDS_N;
-					sram_l_n <= FX68_LDS_N;
+					sram_u_n <= '1';
+					sram_l_n <= '0';
 					SRAMRC <= SRAMRC_FX68;
 				end if;
 			--end if;

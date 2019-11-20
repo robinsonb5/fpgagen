@@ -41,13 +41,13 @@ set_global_assignment -name DEVICE EP3C25E144C8
 set_global_assignment -name TOP_LEVEL_ENTITY MIST_Toplevel
 set_global_assignment -name ORIGINAL_QUARTUS_VERSION "12.0 SP1"
 set_global_assignment -name PROJECT_CREATION_TIME_DATE "00:29:53  MAY 10, 2013"
-set_global_assignment -name LAST_QUARTUS_VERSION 13.1
+set_global_assignment -name LAST_QUARTUS_VERSION "13.1 SP4.26"
 set_global_assignment -name MIN_CORE_JUNCTION_TEMP 0
 set_global_assignment -name MAX_CORE_JUNCTION_TEMP 85
 set_global_assignment -name DEVICE_FILTER_PIN_COUNT 144
 set_global_assignment -name ERROR_CHECK_FREQUENCY_DIVISOR 1
 set_global_assignment -name ENABLE_SIGNALTAP OFF
-set_global_assignment -name USE_SIGNALTAP_FILE ../../syn/mist/svp.stp
+set_global_assignment -name USE_SIGNALTAP_FILE ../../syn/mist/dma.stp
 set_global_assignment -name PRE_FLOW_SCRIPT_FILE "quartus_sh:build_id.tcl"
 
 set_location_assignment PIN_54 -to CLOCK_27[0]
@@ -305,13 +305,13 @@ set_instance_assignment -name CURRENT_STRENGTH_NEW 8MA -to UART_TX
 set_global_assignment -name VHDL_FILE ../../src/virtual_toplevel.vhd
 set_global_assignment -name VHDL_FILE ../../src/os_rom.vhd
 set_global_assignment -name VHDL_FILE ../../src/gen_io.vhd
-set_global_assignment -name VHDL_FILE ../../src/chameleon_gen_sdram.vhd
-set_global_assignment -name VERILOG_FILE ../../src/TwoWayCache.v
 set_global_assignment -name VHDL_FILE ../../src/SinglePortRAM.vhd
 set_global_assignment -name VHDL_FILE ../../src/DualPortRAM.vhd
 set_global_assignment -name VHDL_FILE ../../src/vdp_common.vhd
 set_global_assignment -name VHDL_FILE ../../src/vdp.vhd
 set_global_assignment -name QIP_FILE ../../src/obj_cache.qip
+set_global_assignment -name SYSTEMVERILOG_FILE ../../src/sdram.sv
+set_global_assignment -name VHDL_FILE ../../src/sdram.vhd
 set_global_assignment -name SYSTEMVERILOG_FILE ../../src/fx68k/uaddrPla.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../src/fx68k/fx68kAlu.sv
 set_global_assignment -name SYSTEMVERILOG_FILE ../../src/fx68k/fx68k.sv
@@ -327,4 +327,6 @@ set_global_assignment -name QIP_FILE ../../Board/mist/pll.qip
 set_global_assignment -name SDC_FILE ../../Board/mist/constraints.sdc
 set_global_assignment -name VHDL_FILE build_id.vhd
 set_global_assignment -name SIGNALTAP_FILE ../../syn/mist/svp.stp
+set_global_assignment -name SIGNALTAP_FILE ../../syn/mist/sdram.stp
+set_global_assignment -name SIGNALTAP_FILE ../../syn/mist/dmabad.stp
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top

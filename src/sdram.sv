@@ -149,6 +149,7 @@ localparam STATE_CAS0      = STATE_RAS0 + RASCAS_DELAY; // CAS phase - 3
 localparam STATE_CAS1      = STATE_RAS1 + RASCAS_DELAY; // CAS phase - 5
 localparam STATE_DS0       = STATE_CAS0 + 1'd1; // 4
 localparam STATE_READ0     = STATE_CAS0 + CAS_LATENCY + 1'd1; // 7
+localparam STATE_READ0b    = STATE_CAS0 + CAS_LATENCY + 2'd2;
 localparam STATE_DS1       = STATE_CAS1 + 1'd1; // 6
 localparam STATE_DS1b      = STATE_CAS1 + 2'd2; // 7
 localparam STATE_READ1     = 4'd0;
@@ -196,8 +197,8 @@ localparam CMD_PRECHARGE       = 4'b0010;
 localparam CMD_AUTO_REFRESH    = 4'b0001;
 localparam CMD_LOAD_MODE       = 4'b0000;
 
-reg [3:0] sd_cmd;   // current command sent to sd ram
-
+reg  [3:0] sd_cmd;   // current command sent to sd ram
+reg [15:0] sd_din;
 // drive control signals according to current command
 assign SDRAM_nCS  = sd_cmd[3];
 assign SDRAM_nRAS = sd_cmd[2];
@@ -276,6 +277,7 @@ end
 always @(posedge clk) begin
 
 	// permanently latch ram data to reduce delays
+	sd_din <= SDRAM_DQ;
 	SDRAM_DQ <= 16'bZZZZZZZZZZZZZZZZ;
 	{ SDRAM_DQMH, SDRAM_DQML } <= 2'b11;
 	sd_cmd <= CMD_NOP;  // default: idle
@@ -422,12 +424,17 @@ always @(posedge clk) begin
 
 		if(t == STATE_READ0 && oe_latch[0]) begin
 			case (port[0])
-				PORT_ROM:    begin romrd_q    <= SDRAM_DQ; romrd_ack <= romrd_req;       end
-				PORT_SRAM:   begin sram_q     <= SDRAM_DQ; sram_ack <= sram_req;         end
-				PORT_RAM68K: begin ram68k_q   <= SDRAM_DQ; ram68k_ack <= ram68k_req;     end
-				PORT_SVP1:   begin svp_ram1_q <= SDRAM_DQ; svp_ram1_ack <= svp_ram1_req; end
-				PORT_SVP2:   begin svp_ram2_q <= SDRAM_DQ; svp_ram2_ack <= svp_ram2_req; end
-				PORT_SVPROM: begin svp_rom_q  <= SDRAM_DQ; svp_rom_ack <= svp_rom_req;   end
+				PORT_ROM:    begin romrd_q    <= SDRAM_DQ; romrd_ack <= romrd_req;     end
+				PORT_RAM68K: begin ram68k_q   <= SDRAM_DQ; ram68k_ack <= ram68k_req;   end
+				default: ;
+			endcase
+		end
+		if(t == STATE_READ0b && oe_latch[0]) begin
+			case (port[0])
+				PORT_SRAM:   begin sram_q     <= sd_din; sram_ack <= sram_req;         end
+				PORT_SVP1:   begin svp_ram1_q <= sd_din; svp_ram1_ack <= svp_ram1_req; end
+				PORT_SVP2:   begin svp_ram2_q <= sd_din; svp_ram2_ack <= svp_ram2_req; end
+				PORT_SVPROM: begin svp_rom_q  <= sd_din; svp_rom_ack <= svp_rom_req;   end
 				default: ;
 			endcase
 		end
@@ -437,13 +444,13 @@ always @(posedge clk) begin
 
 		if(t == STATE_READ1 && oe_latch[1]) begin
 			case (port[1])
-				PORT_VRAM:  begin vram_q <= SDRAM_DQ; vram_ack <= vram_req; end
 				PORT_VRAM32: vram32_q[15:0] <= SDRAM_DQ;
 				default: ;
 			endcase
 		end
 		if(t == STATE_READ1b && oe_latch[1]) begin
 			case (port[1])
+				PORT_VRAM:   begin vram_q <= sd_din; vram_ack <= vram_req; end
 				PORT_VRAM32: begin vram32_q[31:16] <= SDRAM_DQ; vram32_ack <= vram32_req; end
 				default: ;
 			endcase

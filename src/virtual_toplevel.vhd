@@ -131,7 +131,9 @@ type fc_t is ( FC_IDLE,
 	FC_FX68_RD,
 	FC_DMA_RD,
 	FC_T80_BR,
-	FC_T80_RD
+	FC_T80_BG,
+	FC_T80_RD,
+	FC_T80_END
 );
 signal FC : fc_t;
 
@@ -1712,7 +1714,6 @@ begin
 					FC <= FC_FX68_RD;
 				elsif T80_FLASH_SEL = '1' and T80_FLASH_DTACK_N = '1' then
 					romrd_a <= ROM_PAGE_A & BAR(18 downto 15) & T80_A(14 downto 1);
-					T80_FLASH_BR_N <= '0';
 					FC <= FC_T80_BR;
 				elsif DMA_FLASH_SEL = '1' and DMA_FLASH_DTACK_N_REG = '1' then
 					if SVP_ENABLE = '1' then
@@ -1737,6 +1738,12 @@ begin
 			end if;
 
 		when FC_T80_BR =>
+			if FX68_PHI1 = '1' then
+				T80_FLASH_BR_N <= '0';
+				FC <= FC_T80_BG;
+			end if;
+
+		when FC_T80_BG =>
 			if ZCLK_nENA = '1' and FX68_BG_N = '0' then
 				T80_FLASH_BR_N <= '1';
 				T80_FLASH_BGACK_N <= '0';
@@ -1753,6 +1760,11 @@ begin
 				end if;
 				T80_FLASH_BGACK_N <= '1';
 				T80_FLASH_DTACK_N <= '0';
+				FC <= FC_T80_END;
+			end if;
+
+		when FC_T80_END =>
+			if T80_FLASH_SEL = '0' then
 				FC <= FC_IDLE;
 			end if;
 

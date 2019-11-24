@@ -103,7 +103,6 @@ set_multicycle_path -from [get_clocks $mem_clk] -to [get_clocks $sys_clk] -start
 set_multicycle_path -from [get_clocks $mem_clk] -to [get_clocks $sys_clk] -start -hold 1
 
 set_multicycle_path -from [get_clocks $sdram_clk] -to [get_clocks $mem_clk] -setup 2
-set_multicycle_path -from [get_clocks $sdram_clk] -to [get_clocks $mem_clk] -hold 1
 
 set_multicycle_path -start -setup -from [get_keepers Virtual_Toplevel:virtualtoplevel|fx68k:fx68k_inst|Ir[*]] -to [get_keepers Virtual_Toplevel:virtualtoplevel|fx68k:fx68k_inst|microAddr[*]] 2
 set_multicycle_path -start -hold -from [get_keepers Virtual_Toplevel:virtualtoplevel|fx68k:fx68k_inst|Ir[*]] -to [get_keepers Virtual_Toplevel:virtualtoplevel|fx68k:fx68k_inst|microAddr[*]] 1

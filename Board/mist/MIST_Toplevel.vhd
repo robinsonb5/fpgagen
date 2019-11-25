@@ -185,7 +185,9 @@ component data_io
 
             sck         : in std_logic;
             ss          : in std_logic;
-            sdi         : in std_logic
+            ss4         : in std_logic;
+            sdi         : in std_logic;
+            sdo         : in std_logic  -- yes, sdo used as input
         );
     end component data_io;
 
@@ -292,7 +294,10 @@ port map(
 );
 
 user_io_inst : user_io
-    generic map (STRLEN => CONF_STR'length)
+    generic map (
+        STRLEN => CONF_STR'length,
+        ROM_DIRECT_UPLOAD => 1
+	)
     port map (
         clk_sys => MCLK,
         clk_sd => MCLK,
@@ -393,7 +398,9 @@ data_io_inst: data_io
 
         sck     => SPI_SCK,
         ss      => SPI_SS2,
-        sdi     => SPI_DI
+        ss4     => SPI_SS4,
+        sdi     => SPI_DI,
+        sdo     => SPI_DO
     );
 
 process(memclk)

@@ -22,7 +22,7 @@
 
 // parameter STRLEN and the actual length of conf_str have to match
  
-module user_io #(parameter STRLEN=0, parameter PS2DIV=100) (
+module user_io #(parameter STRLEN=0, parameter PS2DIV=100, parameter ROM_DIRECT_UPLOAD=0) (
 	input [(8*STRLEN)-1:0] conf_str,
 
 	input               clk_sys, // clock for system-related messages (kbd, joy, etc...)
@@ -99,7 +99,8 @@ assign scandoubler_disable = but_sw[4];
 assign ypbpr = but_sw[5];
 
 // this variant of user_io is for 8 bit cores (type == a4) only
-wire [7:0] core_type = 8'ha4;
+// bit 4 indicates ROM direct upload capability
+wire [7:0] core_type = ROM_DIRECT_UPLOAD ? 8'hb4 : 8'ha4;
 
 // command byte read by the io controller
 wire [7:0] sd_cmd = { 4'h5, sd_conf, sd_sdhc, sd_wr, sd_rd };

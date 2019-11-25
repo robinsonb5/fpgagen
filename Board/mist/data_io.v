@@ -24,7 +24,9 @@ module data_io (
 	// io controller spi interface
     input               sck,
     input               ss,
+    input               ss4,
     input               sdi,
+    input               sdo,
 
     output reg          downloading,   // signal indicating an active download
     output reg [7:0]    index,         // menu index used to upload the file
@@ -46,10 +48,17 @@ parameter START_ADDR = 25'h0;
 reg [6:0]      sbuf;
 reg [7:0]      cmd;
 reg [7:0]      data;
-reg [4:0]      cnt;
+reg [3:0]      cnt;
+reg            rclk = 0;
+
+reg [9:0]      bytecnt;
+reg [6:0]      sbuf2;
+reg [7:0]      data2;
+reg [2:0]      cnt2;
+reg            rclk2 = 0;
 
 reg [24:0]     addr;
-reg rclk;
+reg            addr_reset = 0;
 
 localparam UIO_FILE_TX      = 8'h53;
 localparam UIO_FILE_TX_DAT  = 8'h54;
@@ -61,22 +70,16 @@ reg [7:0] index_reg;
 // data_io has its own SPI interface to the io controller
 always@(posedge sck, posedge ss) begin
 	if(ss == 1'b1)
-		cnt <= 5'd0;
+		cnt <= 0;
 	else begin
-		rclk <= 1'b0;
-
 		// don't shift in last bit. It is evaluated directly
 		// when writing to ram
 		if(cnt != 15)
 			sbuf <= { sbuf[5:0], sdi};
 
-		// increase target address after write
-		if(rclk)
-			addr <= addr + 25'd1;
-
 		// count 0-7 8-15 8-15 ... 
-		if(cnt < 15) 	cnt <= cnt + 4'd1;
-		else cnt <= 4'd8;
+		if(cnt == 15) cnt <= 4'd8;
+		else cnt <= cnt + 1'd1;
 
 		// finished command byte
 		 if(cnt == 7)
@@ -86,7 +89,7 @@ always@(posedge sck, posedge ss) begin
 		if((cmd == UIO_FILE_TX) && (cnt == 15)) begin
 			// prepare
 			if(sdi) begin
-				addr <= START_ADDR;
+				addr_reset <= ~addr_reset;
 				downloading_reg <= 1'b1; 
 			end else
 				downloading_reg <= 1'b0; 
@@ -95,8 +98,7 @@ always@(posedge sck, posedge ss) begin
 		// command 0x54: UIO_FILE_TX
 		if((cmd == UIO_FILE_TX_DAT) && (cnt == 15)) begin
 			data <= {sbuf, sdi};
-			rclk <= 1'b1;
-			a <= addr;
+			rclk <= ~rclk;
 		end
 
 		// expose file (menu) index
@@ -105,13 +107,44 @@ always@(posedge sck, posedge ss) begin
 	end
 end
 
+// direct transfer
+always@(posedge sck, posedge ss4) begin
+	if(ss4 == 1'b1) begin
+		cnt2 <= 0;
+		bytecnt <= 0;
+	end else begin
+		// don't shift in last bit. It is evaluated directly
+		// when writing to ram
+		if(cnt2 != 7)
+			sbuf2 <= { sbuf2[5:0], sdo};
+
+		cnt2 <= cnt2 + 1'd1;
+
+		// received a byte
+		 if(cnt2 == 7) begin
+			bytecnt <= bytecnt + 1'd1;
+			// read 514 byte/sector (512 + 2 CRC)
+			if (bytecnt == 513) bytecnt <= 0;
+			// don't send the CRC bytes
+			if (~bytecnt[9]) begin
+				data2 <= {sbuf2, sdo};
+				rclk2 <= ~rclk2;
+			end
+		end
+	end
+end
+
 always@(posedge clk) begin
 	// bring rclk from spi clock domain into core clock domain
 	reg rclkD, rclkD2;
-	reg wr_int;
+	reg rclk2D, rclk2D2;
+	reg addr_resetD, addr_resetD2;
+	reg wr_int, wr_int_direct;
 
-	rclkD <= rclk;
-	rclkD2 <= rclkD;
+	{ rclkD, rclkD2 } <= { rclk, rclkD };
+	{ rclk2D ,rclk2D2 } <= { rclk2, rclk2D };
+	{ addr_resetD, addr_resetD2 } <= { addr_reset, addr_resetD };
+
 	wr <= 0;
 
 	downloading <= downloading_reg;
@@ -119,14 +152,22 @@ always@(posedge clk) begin
 
 	if (clkref) begin
 		wr_int <= 0;
-		if (wr_int) begin
-			d <= data;
+		wr_int_direct <= 0;
+		if (wr_int || wr_int_direct) begin
+			d <= wr_int ? data : data2;
 			wr <= 1'b1;
+			addr <= addr + 1'd1;
+			a <= addr;
 		end
 	end
 
-	if(rclkD && !rclkD2)
-		wr_int <= 1'b1;
+	// detect transfer start from the SPI receiver
+	if(addr_resetD ^ addr_resetD2)
+		addr <= START_ADDR;
+
+	// detect new byte from the SPI receiver
+	if (rclkD ^ rclkD2)   wr_int <= 1;
+	if (rclk2D ^ rclk2D2) wr_int_direct <= 1;
 end
 
 endmodule

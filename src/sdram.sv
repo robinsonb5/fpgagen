@@ -148,12 +148,12 @@ localparam STATE_RAS1      = 4'd2;   // Second ACTIVE command after RAS0 + tRRD 
 localparam STATE_CAS0      = STATE_RAS0 + RASCAS_DELAY; // CAS phase - 3
 localparam STATE_CAS1      = STATE_RAS1 + RASCAS_DELAY; // CAS phase - 5
 localparam STATE_DS0       = STATE_CAS0 + 1'd1; // 4
-localparam STATE_READ0     = STATE_CAS0 + CAS_LATENCY + 1'd1; // 7
-localparam STATE_READ0b    = STATE_CAS0 + CAS_LATENCY + 2'd2;
+localparam STATE_READ0     = STATE_CAS0 + CAS_LATENCY + 2'd2; // 8
+//localparam STATE_READ0b    = STATE_CAS0 + CAS_LATENCY + 2'd3; // not used
 localparam STATE_DS1       = STATE_CAS1 + 1'd1; // 6
 localparam STATE_DS1b      = STATE_CAS1 + 2'd2; // 7
-localparam STATE_READ1     = 4'd0;
-localparam STATE_READ1b    = 4'd1;
+localparam STATE_READ1     = 4'd1;
+localparam STATE_READ1b    = 4'd2;
 localparam STATE_LAST      = 4'd8;
 
 reg [3:0] t;
@@ -223,8 +223,9 @@ localparam PORT_SVP2   = 4'd7;
 localparam PORT_SVPROM = 4'd8;
 localparam PORT_ROMWR  = 4'd9;
 
-reg[3:0] port[2];
-reg[3:0] next_port[2];
+reg        port_state[10];
+reg  [3:0] port[2];
+reg  [3:0] next_port[2];
 
 reg        refresh;
 reg [10:0] refresh_cnt;
@@ -233,25 +234,25 @@ wire       need_refresh = (refresh_cnt >= RFRSH_CYCLES);
 // ROM: bank 0,1
 // SRAM, RAM68k, SVPRAM: bank 2
 always @(*) begin
-	if (sram_req ^ sram_ack) begin
+	if (sram_req ^ port_state[PORT_SRAM]) begin
 		next_port[0] = PORT_SRAM;
 		addr_latch_next[0] = { 9'b101111111, sram_a };
-	end else if (romwr_req ^ romwr_ack) begin
+	end else if (romwr_req ^ port_state[PORT_ROMWR]) begin
 		next_port[0] = PORT_ROMWR;
 		addr_latch_next[0] = { 1'b0, romwr_a };
-	end else if (romrd_req ^ romrd_ack) begin
+	end else if (romrd_req ^ port_state[PORT_ROM]) begin
 		next_port[0] = PORT_ROM;
 		addr_latch_next[0] = { 1'b0, romrd_a };
-	end else if (ram68k_req ^ ram68k_ack) begin
+	end else if (ram68k_req ^ port_state[PORT_RAM68K]) begin
 		next_port[0] = PORT_RAM68K;
 		addr_latch_next[0] <= { 9'b101111110, ram68k_a };
-	end else if (svp_ram1_req ^ svp_ram1_ack) begin
+	end else if (svp_ram1_req ^ port_state[PORT_SVP1]) begin
 		next_port[0] = PORT_SVP1;
 		addr_latch_next[0] = { 8'b10111110, svp_ram1_a };
-	end else if (svp_ram2_req ^ svp_ram2_ack) begin
+	end else if (svp_ram2_req ^ port_state[PORT_SVP2]) begin
 		next_port[0] = PORT_SVP2;
 		addr_latch_next[0] = { 8'b10111110, svp_ram2_a };
-	end else if (svp_rom_req ^ svp_rom_ack) begin
+	end else if (svp_rom_req ^ port_state[PORT_SVPROM]) begin
 		next_port[0] = PORT_SVPROM;
 		addr_latch_next[0] = { 1'b0, svp_rom_a };
 	end else begin
@@ -262,10 +263,10 @@ end
 
 // VRAM only: bank 3
 always @(*) begin
-	if (vram_req ^ vram_ack) begin
+	if (vram_req ^ port_state[PORT_VRAM]) begin
 		next_port[1] = PORT_VRAM;
 		addr_latch_next[1] = { 9'b111111111, vram_a };
-	end else if (vram32_req ^ vram32_ack) begin
+	end else if (vram32_req ^ port_state[PORT_VRAM32]) begin
 		next_port[1] = PORT_VRAM32;
 		addr_latch_next[1] = { 9'b111111111, vram32_a };
 	end else begin
@@ -309,6 +310,7 @@ always @(posedge clk) begin
 			port[0] <= next_port[0];
 			addr_latch[0] <= addr_latch_next[0];
 			if (next_port[0] != PORT_NONE) begin
+				port_state[next_port[0]] <= ~port_state[next_port[0]];
 				sd_cmd <= CMD_ACTIVE;
 				SDRAM_A <= addr_latch_next[0][22:10];
 				SDRAM_BA <= addr_latch_next[0][24:23];
@@ -360,6 +362,7 @@ always @(posedge clk) begin
 			port[1] <= next_port[1];
 			addr_latch[1] <= addr_latch_next[1];
 			if (next_port[1] != PORT_NONE) begin
+				port_state[next_port[1]] <= ~port_state[next_port[1]];
 				sd_cmd <= CMD_ACTIVE;
 				SDRAM_A <= addr_latch_next[1][22:10];
 				SDRAM_BA <= addr_latch_next[1][24:23];
@@ -424,13 +427,8 @@ always @(posedge clk) begin
 
 		if(t == STATE_READ0 && oe_latch[0]) begin
 			case (port[0])
-				PORT_ROM:    begin romrd_q    <= SDRAM_DQ; romrd_ack <= romrd_req;     end
-				PORT_RAM68K: begin ram68k_q   <= SDRAM_DQ; ram68k_ack <= ram68k_req;   end
-				default: ;
-			endcase
-		end
-		if(t == STATE_READ0b && oe_latch[0]) begin
-			case (port[0])
+				PORT_ROM:    begin romrd_q    <= sd_din; romrd_ack <= romrd_req;       end
+				PORT_RAM68K: begin ram68k_q   <= sd_din; ram68k_ack <= ram68k_req;     end
 				PORT_SRAM:   begin sram_q     <= sd_din; sram_ack <= sram_req;         end
 				PORT_SVP1:   begin svp_ram1_q <= sd_din; svp_ram1_ack <= svp_ram1_req; end
 				PORT_SVP2:   begin svp_ram2_q <= sd_din; svp_ram2_ack <= svp_ram2_req; end
@@ -444,14 +442,14 @@ always @(posedge clk) begin
 
 		if(t == STATE_READ1 && oe_latch[1]) begin
 			case (port[1])
-				PORT_VRAM32: vram32_q[15:0] <= SDRAM_DQ;
+				PORT_VRAM32: vram32_q[15:0] <= sd_din;
+				PORT_VRAM:   begin vram_q <= sd_din; vram_ack <= vram_req; end
 				default: ;
 			endcase
 		end
 		if(t == STATE_READ1b && oe_latch[1]) begin
 			case (port[1])
-				PORT_VRAM:   begin vram_q <= sd_din; vram_ack <= vram_req; end
-				PORT_VRAM32: begin vram32_q[31:16] <= SDRAM_DQ; vram32_ack <= vram32_req; end
+				PORT_VRAM32: begin vram32_q[31:16] <= sd_din; vram32_ack <= vram32_req; end
 				default: ;
 			endcase
 		end

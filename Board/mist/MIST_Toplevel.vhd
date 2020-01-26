@@ -69,6 +69,7 @@ signal joy_0: std_logic_vector(31 downto 0);
 signal joy_1: std_logic_vector(31 downto 0);
 signal ypbpr: std_logic;
 signal scandoubler_disable: std_logic;
+signal no_csync : std_logic;
 signal mouse_x: signed(8 downto 0);
 signal mouse_y: signed(8 downto 0);
 signal mouse_flags: std_logic_vector(7 downto 0);
@@ -175,19 +176,19 @@ COMPONENT hybrid_pwm_sd
 END COMPONENT;
 
 component data_io
-    port (  clk         : in std_logic;
-            clkref      : in std_logic;
-            wr          : out std_logic;
-            a           : out std_logic_vector(24 downto 0);
-            d           : out std_logic_vector(7 downto 0);
-            downloading : out std_logic;
-            index       : out std_logic_vector(7 downto 0);
+    port (  clk_sys        : in std_logic;
+            clkref         : in std_logic;
+            ioctl_wr       : out std_logic;
+            ioctl_addr     : out std_logic_vector(24 downto 0);
+            ioctl_dout     : out std_logic_vector(7 downto 0);
+            ioctl_download : out std_logic;
+            ioctl_index    : out std_logic_vector(7 downto 0);
 
-            sck         : in std_logic;
-            ss          : in std_logic;
-            ss4         : in std_logic;
-            sdi         : in std_logic;
-            sdo         : in std_logic  -- yes, sdo used as input
+            SPI_SCK        : in std_logic;
+            SPI_SS2        : in std_logic;
+            SPI_SS4        : in std_logic;
+            SPI_DI         : in std_logic;
+            SPI_DO         : in std_logic  -- yes, sdo used as input
         );
     end component data_io;
 
@@ -207,7 +208,7 @@ U00 : entity work.pll
 --SDRAM_A(12)<='0';
 
 -- reset from IO controller
--- status bit 0 is always triggered by the i ocontroller on its own reset
+-- status bit 0 is always triggered by the io controller on its own reset
 -- button 1 is the core specfic button in the mists front
 -- reset <= '0' when status(0)='1' or buttons(1)='1' or pll_locked='0' else '1';
 
@@ -308,6 +309,7 @@ user_io_inst : user_io
         conf_str => to_slv(CONF_STR),
         status => status,
         ypbpr => ypbpr,
+        no_csync => no_csync,
         scandoubler_disable => scandoubler_disable,
 
         joystick_0 => joy_0,
@@ -388,19 +390,19 @@ end process;
 
 data_io_inst: data_io
     port map (
-        clk     => memclk,
-        clkref  => data_io_clkref,
-        wr      => data_io_wr,
-        a       => open,
-        d       => data_io_d,
-        downloading => downloading,
-        index   => open,
+        clk_sys        => memclk,
+        clkref         => data_io_clkref,
+        ioctl_wr       => data_io_wr,
+        ioctl_addr     => open,
+        ioctl_dout     => data_io_d,
+        ioctl_download => downloading,
+        ioctl_index    => open,
 
-        sck     => SPI_SCK,
-        ss      => SPI_SS2,
-        ss4     => SPI_SS4,
-        sdi     => SPI_DI,
-        sdo     => SPI_DO
+        SPI_SCK        => SPI_SCK,
+        SPI_SS2        => SPI_SS2,
+        SPI_SS4        => SPI_SS4,
+        SPI_DI         => SPI_DI,
+        SPI_DO         => SPI_DO
     );
 
 process(memclk)
@@ -458,6 +460,7 @@ mist_video : work.mist.mist_video
         scanlines   => status(12 downto 11),
         scandoubler_disable => scandoubler_disable,
         ypbpr       => ypbpr,
+        no_csync    => no_csync,
         rotate      => "00",
         blend       => status(20),
 

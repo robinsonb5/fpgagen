@@ -1,7 +1,7 @@
 //
 // data_io.v
 //
-// io controller writable ram for the MiST board
+// data_io for the MiST board
 // http://code.google.com/p/mist-board/
 //
 // Copyright (c) 2014 Till Harbaum <till@harbaum.org>
@@ -19,151 +19,149 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
+///////////////////////////////////////////////////////////////////////
 
-module data_io (
-	// io controller spi interface
-    input               sck,
-    input               ss,
-    input               ss4,
-    input               sdi,
-    input               sdo,
+module data_io
+(
+	input             clk_sys,
+	input             SPI_SCK,
+	input             SPI_SS2,
+	input             SPI_SS4,
+	input             SPI_DI,
+	input             SPI_DO, // yes, SPI_DO is input when SS4 active
 
-    output reg          downloading,   // signal indicating an active download
-    output reg [7:0]    index,         // menu index used to upload the file
+	input             clkref, // assert ioctl_wr one cycle after clkref stobe
 
-    // external ram interface
-    input               clk,
-    input               clkref,
-    output reg          wr,
-    output reg [24:0]   a,
-    output reg [7:0]    d
+	// ARM -> FPGA download
+	output reg        ioctl_download = 0, // signal indicating an active download
+	output reg  [7:0] ioctl_index,        // menu index used to upload the file
+	output reg        ioctl_wr,           // strobe indicating ioctl_dout valid
+	output reg [24:0] ioctl_addr,
+	output reg  [7:0] ioctl_dout
 );
 
-parameter START_ADDR = 25'h0;
+parameter START_ADDR = 25'd0;
 
-// *********************************************************************************
-// spi client
-// *********************************************************************************
+///////////////////////////////   DOWNLOADING   ///////////////////////////////
 
-reg [6:0]      sbuf;
-reg [7:0]      cmd;
-reg [7:0]      data;
-reg [3:0]      cnt;
-reg            rclk = 0;
+reg  [7:0] data_w;
+reg  [7:0] data_w2;
+reg        rclk   = 0;
+reg        rclk2  = 0;
+reg        addr_reset = 0;
 
-reg [9:0]      bytecnt;
-reg [6:0]      sbuf2;
-reg [7:0]      data2;
-reg [2:0]      cnt2;
-reg            rclk2 = 0;
+reg        downloading_reg = 0;
+reg  [7:0] index_reg = 0;
 
-reg [24:0]     addr;
-reg            addr_reset = 0;
-
-localparam UIO_FILE_TX      = 8'h53;
-localparam UIO_FILE_TX_DAT  = 8'h54;
-localparam UIO_FILE_INDEX   = 8'h55;
-
-reg       downloading_reg = 1'b0;
-reg [7:0] index_reg;
+localparam DIO_FILE_TX      = 8'h53;
+localparam DIO_FILE_TX_DAT  = 8'h54;
+localparam DIO_FILE_INDEX   = 8'h55;
 
 // data_io has its own SPI interface to the io controller
-always@(posedge sck, posedge ss) begin
-	if(ss == 1'b1)
-		cnt <= 0;
+always@(posedge SPI_SCK, posedge SPI_SS2) begin
+	reg  [6:0] sbuf;
+	reg  [7:0] cmd;
+	reg  [3:0] cnt;
+	reg [24:0] addr;
+
+	if(SPI_SS2) cnt <= 0;
 	else begin
 		// don't shift in last bit. It is evaluated directly
 		// when writing to ram
-		if(cnt != 15)
-			sbuf <= { sbuf[5:0], sdi};
+		if(cnt != 15) sbuf <= { sbuf[5:0], SPI_DI};
 
-		// count 0-7 8-15 8-15 ... 
-		if(cnt == 15) cnt <= 4'd8;
-		else cnt <= cnt + 1'd1;
+		// count 0-7 8-15 8-15 ...
+		if(cnt != 15) cnt <= cnt + 1'd1;
+			else cnt <= 8;
 
 		// finished command byte
-		 if(cnt == 7)
-			cmd <= {sbuf, sdi};
+		if(cnt == 7) cmd <= {sbuf, SPI_DI};
 
 		// prepare/end transmission
-		if((cmd == UIO_FILE_TX) && (cnt == 15)) begin
+		if((cmd == DIO_FILE_TX) && (cnt == 15)) begin
 			// prepare
-			if(sdi) begin
+			if(SPI_DI) begin
 				addr_reset <= ~addr_reset;
-				downloading_reg <= 1'b1; 
-			end else
-				downloading_reg <= 1'b0; 
+				downloading_reg <= 1;
+			end else begin
+				downloading_reg <= 0;
+			end
 		end
 
 		// command 0x54: UIO_FILE_TX
-		if((cmd == UIO_FILE_TX_DAT) && (cnt == 15)) begin
-			data <= {sbuf, sdi};
+		if((cmd == DIO_FILE_TX_DAT) && (cnt == 15)) begin
+			data_w <= {sbuf, SPI_DI};
 			rclk <= ~rclk;
 		end
 
 		// expose file (menu) index
-		if((cmd == UIO_FILE_INDEX) && (cnt == 15))
-			index_reg <= {sbuf[3:0], sdi};
+		if((cmd == DIO_FILE_INDEX) && (cnt == 15)) index_reg <= {sbuf, SPI_DI};
 	end
 end
 
-// direct transfer
-always@(posedge sck, posedge ss4) begin
-	if(ss4 == 1'b1) begin
+// direct SD Card->FPGA transfer
+always@(posedge SPI_SCK, posedge SPI_SS4) begin
+	reg  [6:0] sbuf2;
+	reg  [2:0] cnt2;
+	reg  [9:0] bytecnt;
+
+	if(SPI_SS4) begin
 		cnt2 <= 0;
 		bytecnt <= 0;
 	end else begin
 		// don't shift in last bit. It is evaluated directly
 		// when writing to ram
 		if(cnt2 != 7)
-			sbuf2 <= { sbuf2[5:0], sdo};
+			sbuf2 <= { sbuf2[5:0], SPI_DO };
 
 		cnt2 <= cnt2 + 1'd1;
 
 		// received a byte
-		 if(cnt2 == 7) begin
+		if(cnt2 == 7) begin
 			bytecnt <= bytecnt + 1'd1;
 			// read 514 byte/sector (512 + 2 CRC)
 			if (bytecnt == 513) bytecnt <= 0;
 			// don't send the CRC bytes
 			if (~bytecnt[9]) begin
-				data2 <= {sbuf2, sdo};
+				data_w2 <= {sbuf2, SPI_DO};
 				rclk2 <= ~rclk2;
 			end
 		end
 	end
 end
 
-always@(posedge clk) begin
-	// bring rclk from spi clock domain into core clock domain
+always@(posedge clk_sys) begin
+	// bring flags from spi clock domain into core clock domain
 	reg rclkD, rclkD2;
 	reg rclk2D, rclk2D2;
 	reg addr_resetD, addr_resetD2;
 	reg wr_int, wr_int_direct;
+	reg [24:0] addr;
 
 	{ rclkD, rclkD2 } <= { rclk, rclkD };
 	{ rclk2D ,rclk2D2 } <= { rclk2, rclk2D };
 	{ addr_resetD, addr_resetD2 } <= { addr_reset, addr_resetD };
 
-	wr <= 0;
+	ioctl_wr <= 0;
 
-	downloading <= downloading_reg;
-	index <= index_reg;
+	ioctl_download <= downloading_reg;
 
 	if (clkref) begin
 		wr_int <= 0;
 		wr_int_direct <= 0;
 		if (wr_int || wr_int_direct) begin
-			d <= wr_int ? data : data2;
-			wr <= 1'b1;
+			ioctl_dout <= wr_int ? data_w : data_w2;
+			ioctl_wr <= 1;
 			addr <= addr + 1'd1;
-			a <= addr;
+			ioctl_addr <= addr;
 		end
 	end
 
 	// detect transfer start from the SPI receiver
-	if(addr_resetD ^ addr_resetD2)
+	if(addr_resetD ^ addr_resetD2) begin
 		addr <= START_ADDR;
+		ioctl_index <= index_reg;
+	end
 
 	// detect new byte from the SPI receiver
 	if (rclkD ^ rclkD2)   wr_int <= 1;

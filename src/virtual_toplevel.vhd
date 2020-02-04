@@ -1910,7 +1910,7 @@ end process;
 SRAM_EN <= (SRAM_EN_AUTO or SRAM_EN_PAGEIN) and not SVP_ENABLE;
 
 FX68_SRAM_SEL <= '1' when SRAM_EN = '1' and FX68_AS_N = '0' and FX68_A(23 downto 16) = x"20" and FX68_EEPROM_SEL = '0' else '0';
-FX68_EEPROM_SEL <= '1' when EEPROM_EN = '1' and FX68_AS_N = '1' and FX68_A(23 downto 4) = x"20000" and FX68_A(3 downto 1) = "000" else '0';
+FX68_EEPROM_SEL <= '1' when EEPROM_EN = '1' and FX68_SEL = '1' and FX68_A(23 downto 4) = x"20000" and FX68_A(3 downto 1) = "000" else '0';
 
 -- SRAM CONTROL
 process( MRST_N, MCLK )

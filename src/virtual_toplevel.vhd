@@ -1100,7 +1100,7 @@ begin
 				RAM_RFRSH_CNT <= (others => '0');
 				RAM_RFRSH_DELAY <= '0';
 			elsif RAM_RFRSH_CNT >= 116 then
-				RAM_RFRSH_DELAY <= not CPU_TURBO;
+				--RAM_RFRSH_DELAY <= not CPU_TURBO; -- disable, causes issues
 				if RAM_RFRSH_CNT = 137 or RAM_RFRSH_DONE = '1' then
 					RAM_RFRSH_CNT <= (others => '0');
 					RAM_RFRSH_DELAY <= '0';
@@ -1114,7 +1114,7 @@ begin
 			elsif CART_RFRSH_CNT = 133 then
 				if FX68_AS_N = '1' then
 					CART_RFRSH_CNT <= CART_RFRSH_CNT + 1;
-					CART_RFRSH_DELAY <= not CPU_TURBO;
+					--CART_RFRSH_DELAY <= not CPU_TURBO; -- disable, causes issues
 				end if;
 			elsif CART_RFRSH_CNT = 136 then
 				CART_RFRSH_CNT <= (others => '0');

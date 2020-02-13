@@ -177,7 +177,7 @@ END COMPONENT;
 
 component data_io
     port (  clk_sys        : in std_logic;
-            clkref         : in std_logic;
+            clkref_n       : in std_logic;
             ioctl_wr       : out std_logic;
             ioctl_addr     : out std_logic_vector(24 downto 0);
             ioctl_dout     : out std_logic_vector(7 downto 0);
@@ -391,7 +391,7 @@ end process;
 data_io_inst: data_io
     port map (
         clk_sys        => memclk,
-        clkref         => data_io_clkref,
+        clkref_n       => not data_io_clkref,
         ioctl_wr       => data_io_wr,
         ioctl_addr     => open,
         ioctl_dout     => data_io_d,

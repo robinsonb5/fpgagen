@@ -319,9 +319,9 @@ set_global_assignment -name QIP_FILE ../../src/SVP/SVP.qip
 set_global_assignment -name QIP_FILE ../../src/T80/T80.qip
 set_global_assignment -name QIP_FILE ../../jt89/hdl/jt89.qip
 set_global_assignment -name QIP_FILE ../../jt12/hdl/jt12.qip
-set_global_assignment -name QIP_FILE mist.qip
-set_global_assignment -name VHDL_FILE ../../../Board/mist/MIST_Toplevel.vhd
-set_global_assignment -name VERILOG_FILE ../../Board/mist/data_io.v
+set_global_assignment -name VHDL_FILE ../../Board/mist/MIST_Toplevel.vhd
+set_global_assignment -name QIP_FILE "../../Board/mist/mist-modules/mist_core.qip"
+set_global_assignment -name VERILOG_FILE "../../Board/mist/mist-modules/data_io.v"
 set_global_assignment -name VERILOG_FILE ../../Board/mist/hybrid_pwm_sd.v
 set_global_assignment -name QIP_FILE ../../Board/mist/pll.qip
 set_global_assignment -name SDC_FILE ../../Board/mist/constraints.sdc

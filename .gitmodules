@@ -10,3 +10,6 @@
 [submodule "src/fx68k"]
 	path = src/fx68k
 	url = https://github.com/ijor/fx68k.git
+[submodule "Board/mist/mist-modules"]
+	path = Board/mist/mist-modules
+	url = https://github.com/mist-devel/mist-modules.git

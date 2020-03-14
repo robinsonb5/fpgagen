@@ -1100,7 +1100,7 @@ begin
 				RAM_RFRSH_CNT <= (others => '0');
 				RAM_RFRSH_DELAY <= '0';
 			elsif RAM_RFRSH_CNT >= 116 then
-				--RAM_RFRSH_DELAY <= not CPU_TURBO; -- disable, causes issues
+				RAM_RFRSH_DELAY <= not CPU_TURBO;
 				if RAM_RFRSH_CNT = 137 or RAM_RFRSH_DONE = '1' then
 					RAM_RFRSH_CNT <= (others => '0');
 					RAM_RFRSH_DELAY <= '0';
@@ -1108,19 +1108,15 @@ begin
 			end if;
 
 			-- Cart slot refresh (probably leftover for DRAM based dev carts?)
+			CART_RFRSH_CNT <= CART_RFRSH_CNT + 1;
 			if VDP_BGACK_N = '0' then
 				CART_RFRSH_CNT <= (others => '0');
 				CART_RFRSH_DELAY <= '0';
-			elsif CART_RFRSH_CNT = 133 then
-				if FX68_AS_N = '1' then
-					CART_RFRSH_CNT <= CART_RFRSH_CNT + 1;
-					--CART_RFRSH_DELAY <= not CPU_TURBO; -- disable, causes issues
-				end if;
-			elsif CART_RFRSH_CNT = 136 then
+			elsif CART_RFRSH_CNT = 137 then
+				CART_RFRSH_DELAY <= not CPU_TURBO;
+			elsif CART_RFRSH_CNT = 140 then
 				CART_RFRSH_CNT <= (others => '0');
 				CART_RFRSH_DELAY <= '0';
-			else
-				CART_RFRSH_CNT <= CART_RFRSH_CNT + 1;
 			end if;
 
 		end if;
@@ -1728,9 +1724,6 @@ begin
 			--end if;
 
 		when FC_FX68_RD =>
-			if CART_RFRSH_DELAY = '0' and CPU_TURBO = '0' then
-				FX68_FLASH_DTACK_N_REG <= '0';
-			end if;
 			if romrd_req = romrd_ack and CART_RFRSH_DELAY = '0' then
 				FX68_FLASH_D_REG <= romrd_q;
 				FX68_FLASH_DTACK_N_REG <= '0';

@@ -47,7 +47,7 @@ END entity;
 
 architecture rtl of MIST_Toplevel is
 
-signal reset : std_logic;
+signal reset_n : std_logic;
 signal reset_d : std_logic;
 signal pll_locked : std_logic;
 signal MCLK      : std_logic;
@@ -217,7 +217,7 @@ process(MCLK)
 begin
 	if rising_edge(MCLK) then
 		reset_d<=not (status(0) or buttons(1)) and pll_locked;
-		reset<=reset_d;
+		reset_n<=reset_d;
 	end if;
 end process;
 
@@ -239,7 +239,7 @@ ext_sw(15) <= status(19); -- Border
 --SDRAM_A(12)<='0';
 virtualtoplevel : entity work.Virtual_Toplevel
 port map(
-	reset => reset,
+	reset_n => reset_n,
 	MCLK => MCLK,
 	SDR_CLK => memclk,
 
@@ -420,11 +420,10 @@ begin
             ext_reset_n(0) <= '0';
             d_state <= "00";
             data_io_clkref <= '1';
-        elsif (downloading = '0' and downloadingD = '1') then
+        elsif (downloading = '0') then
             -- ROM downloading finished
             ext_bootdone <= '1';
             data_io_clkref <= '0';
-            ext_reset_n(0) <= '0';
         elsif (downloading = '1') then
             -- ROM downloading in progress
             case d_state is
@@ -490,7 +489,7 @@ leftsd: component hybrid_pwm_sd
 	port map
 	(
 		clk => MCLK,
-		n_reset => reset,
+		n_reset => reset_n,
 		din => not audiol(15) & std_logic_vector(audiol(14 downto 0)),
 		dout => AUDIO_L
 	);
@@ -499,7 +498,7 @@ rightsd: component hybrid_pwm_sd
 	port map
 	(
 		clk => MCLK,
-		n_reset => reset,
+		n_reset => reset_n,
 		din => not audior(15) & std_logic_vector(audior(14 downto 0)),
 		dout => AUDIO_R
 	);

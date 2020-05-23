@@ -45,7 +45,7 @@ use work.sdram.all;
 
 entity Virtual_Toplevel is
 	port(
-		reset : in std_logic;
+		reset_n : in std_logic;
 		MCLK : in std_logic;		-- 54MHz
 		SDR_CLK : in std_logic;		-- 108MHz
 
@@ -412,7 +412,6 @@ signal VDP_RNW				: std_logic;
 signal VDP_DI				: std_logic_vector(15 downto 0);
 signal VDP_DO				: std_logic_vector(15 downto 0);
 signal VDP_DTACK_N			: std_logic;
-signal VDP_RST_N			: std_logic;
 signal VDP_VRAM_SPEED		: std_logic;
 signal VDP_BR_N             : std_logic;
 signal VDP_BGACK_N          : std_logic;
@@ -503,6 +502,7 @@ signal SDR_INIT_DONE	: std_logic;
 
 type bootStates is (BOOT_READ_1, BOOT_WRITE_1, BOOT_WRITE_2, BOOT_DONE);
 signal bootState : bootStates := BOOT_DONE;
+signal boot_reset_n : std_logic;
 
 signal FL_DQ : std_logic_vector(15 downto 0);
 
@@ -567,16 +567,13 @@ begin
 -- Global assignments
 -- -----------------------------------------------------------------------
 
+boot_reset_n <= '1' when bootState = BOOT_DONE else '0';
+
 -- Reset
 process(MRST_N,MCLK)
 begin
 	if rising_edge(MCLK) then
-		MRST_N <= reset and ext_reset_n;
-		if bootState = BOOT_DONE then
-			VDP_RST_N <= '1';
-		else
-			VDP_RST_N <= '0';
-		end if;
+		MRST_N <= reset_n and ext_reset_n and boot_reset_n;
 	end if;
 end process;
 
@@ -858,7 +855,7 @@ port map(
 
 vdp : entity work.vdp
 port map(
-	RST_N		=> MRST_N and VDP_RST_N,
+	RST_N		=> MRST_N,
 	CLK		=> MCLK,
 
 	SEL		=> VDP_SEL,

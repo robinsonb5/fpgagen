@@ -571,7 +571,7 @@ begin
 process(MRST_N,MCLK)
 begin
 	if rising_edge(MCLK) then
-		MRST_N <= reset and ext_bootdone and ext_reset_n;
+		MRST_N <= reset and ext_reset_n;
 		if bootState = BOOT_DONE then
 			VDP_RST_N <= '1';
 		else
@@ -2134,10 +2134,6 @@ begin
 			bootState<=BOOT_READ_1;
 			SRAM_EN_AUTO <= '0';
 			BIG_CART <= '0';
-		elsif reset = '0' then
-			ext_data_req <= '0';
-			romwr_req <= '0';
-			bootState <= BOOT_DONE;
 		else
 			case bootState is 
 				when BOOT_READ_1 =>

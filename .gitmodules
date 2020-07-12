@@ -13,3 +13,6 @@
 [submodule "Board/mist/mist-modules"]
 	path = Board/mist/mist-modules
 	url = https://github.com/mist-devel/mist-modules.git
+[submodule "src/T80"]
+	path = src/T80
+	url = https://github.com/mist-devel/T80.git

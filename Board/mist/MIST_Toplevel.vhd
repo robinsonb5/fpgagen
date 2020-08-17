@@ -134,17 +134,20 @@ constant CONF_STR : string := core_name &
     ";BINGENMD ;"&
     "S,SAV,Mount;"&
     "TE,Write Save RAM;"&
-    "O78,Region,Auto,EU,JP,US;"&
-    "OBC,Scanlines,Off,25%,50%,75%;"&
-    "O6,Joystick swap,Off,On;"&
-    "O9,Swap Y axis,Off,On;"&
-    "OA,Only 3 buttons,Off,On;"&
-    "OFG,Mouse,Off,Port 1,Port 2;"&
-    "OD,Fake EEPROM,Off,On;"&
-    "OI,CPU Turbo,Off,On;"&
-    "OH,PCM HiFi sound,Disable,Enable;"&
-    "OJ,Border,Disable,Enable;"&
-    "OK,Blending,Disable,Enable;"&
+    "P1,Video & Audio;"&
+    "P2,Controls;"&
+    "P3,System;"&
+    "P1OBC,Scanlines,Off,25%,50%,75%;"&
+    "P1OH,PCM HiFi sound,Disable,Enable;"&
+    "P1OJ,Border,Disable,Enable;"&
+    "P1OK,Blending,Disable,Enable;"&
+    "P2O6,Joystick swap,Off,On;"&
+    "P2O9,Swap Y axis,Off,On;"&
+    "P2OA,Only 3 buttons,Off,On;"&
+    "P2OFG,Mouse,Off,Port 1,Port 2;"&
+    "P3O78,Region,Auto,EU,JP,US;"&
+    "P3OD,Fake EEPROM,Off,On;"&
+    "P3OI,CPU Turbo,Off,On;"&
     CONF_DBG_STR&
     "T0,Reset;"&
     "V,v"&BUILD_DATE;

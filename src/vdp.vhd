@@ -73,13 +73,16 @@ entity vdp is
 		vram32_a   : out std_logic_vector(15 downto 1);
 		vram32_q   : in  std_logic_vector(31 downto 0);
 
-		HINT		: out std_logic;
-		VINT_TG68	: out std_logic;
-		VINT_T80	: out std_logic;
-		INTACK		: in std_logic;
-		BR_N		: out std_logic;
-		BG_N		: in std_logic;
-		BGACK_N		: out std_logic;
+		HINT      : out std_logic;
+		VINT_TG68 : out std_logic;
+		VINT_T80  : out std_logic;
+		INTACK    : in std_logic;
+		BR_N_I    : in std_logic;
+		BR_N_O    : out std_logic;
+		BG_N      : in std_logic;
+		BGACK_N_I : in std_logic;
+		BGACK_N_O : out std_logic;
+		AS_N      : in std_logic;
 
 		VBUS_ADDR		: out std_logic_vector(23 downto 1);
 		VBUS_DATA		: in std_logic_vector(15 downto 0);
@@ -930,7 +933,7 @@ STATUS <= "111111" & FIFO_EMPTY & FIFO_FULL & VINT_TG68_PENDING & SOVR & SCOL & 
 -- CPU INTERFACE
 ----------------------------------------------------------------
 
-BGACK_N <= BGACK_N_REG;
+BGACK_N_O <= BGACK_N_REG;
 
 ----------------------------------------------------------------
 -- VRAM CONTROLLER
@@ -2974,7 +2977,7 @@ begin
 		DTC <= DTC_IDLE;
 		DMAC <= DMA_IDLE;
 
-		BR_N <= '1';
+		BR_N_O <= '1';
 		BGACK_N_REG <= '1';
 
 	elsif rising_edge(CLK) then
@@ -3025,7 +3028,6 @@ begin
 							if DI(7) = '1' then
 								if REG(23)(7) = '0' then
 									DMA_VBUS <= '1';
-									BR_N <= '0';
 								else
 									if REG(23)(6) = '0' then
 										DMA_FILL <= '1';
@@ -3559,15 +3561,18 @@ begin
 				write(L, string'("]"));
 				writeline(F,L);
 -- synthesis translate_on
-				DMA_LENGTH <= REG(20) & REG(19);
-				DMA_SOURCE <= REG(22) & REG(21);
-				DMA_VBUS_TIMER <= "10";
-				DMAC <= DMA_VBUS_WAIT;
+				if BR_N_I = '1' and BG_N = '1' and BGACK_N_I = '1' then
+					BR_N_O <= '0';
+					DMA_LENGTH <= REG(20) & REG(19);
+					DMA_SOURCE <= REG(22) & REG(21);
+					DMA_VBUS_TIMER <= "10";
+					DMAC <= DMA_VBUS_WAIT;
+				end if;
 
 			when DMA_VBUS_WAIT =>
-				if BG_N = '0' then
+				if BG_N = '0' and AS_N = '1' then
 					BGACK_N_REG <= '0';
-					BR_N <= '1';
+					BR_N_O <= '1';
 				end if;
 				if SLOT_EN = '1' then
 					if DMA_VBUS_TIMER = 0 then

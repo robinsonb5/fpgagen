@@ -130,12 +130,17 @@ signal romrd_q : std_logic_vector(15 downto 0);
 type fc_t is ( FC_IDLE, 
 	FC_FX68_RD,
 	FC_DMA_RD,
-	FC_T80_BR,
-	FC_T80_BG,
 	FC_T80_RD,
 	FC_T80_END
 );
 signal FC : fc_t;
+
+type t80brrc_t is ( T80BR_IDLE,
+	T80_BG,
+	T80_BGACK
+);
+
+signal T80BRRC : t80brrc_t;
 
 -- 68000 RAM
 signal ram68k_req : std_logic;
@@ -187,20 +192,18 @@ signal vram32_a   : std_logic_vector(15 downto 1);
 signal vram32_q   : std_logic_vector(31 downto 0);
 
 -- Z80 RAM
-signal zram_a : std_logic_vector(12 downto 0);
-signal zram_d : std_logic_vector(7 downto 0);
-signal zram_q : std_logic_vector(7 downto 0);
-signal zram_we : std_logic;
+signal FX68_ZRAM_A       : std_logic_vector(12 downto 0);
+signal FX68_ZRAM_WE      : std_logic;
+signal FX68_ZRAM_SEL     : std_logic;
+signal FX68_ZRAM_D       : std_logic_vector(7 downto 0);
+signal FX68_ZRAM_Q       : std_logic_vector(7 downto 0);
+signal FX68_ZRAM_DTACK_N : std_logic;
 
-signal FX68_ZRAM_SEL		: std_logic;
-signal FX68_ZRAM_D			: std_logic_vector(15 downto 0);
-signal FX68_ZRAM_DTACK_N	: std_logic;
+signal T80_ZRAM_SEL      : std_logic;
+signal T80_ZRAM_WE       : std_logic;
+signal T80_ZRAM_Q        : std_logic_vector(7 downto 0);
 
-signal T80_ZRAM_SEL		: std_logic;
-signal T80_ZRAM_D			: std_logic_vector(7 downto 0);
-signal T80_ZRAM_DTACK_N	: std_logic;
-
-type zrc_t is ( ZRC_IDLE, ZRC_ACC1, ZRC_ACC2 );
+type zrc_t is ( ZRC_IDLE, ZRC_ACC1 );
 signal ZRC : zrc_t;
 
 -- SVP
@@ -707,17 +710,23 @@ port map(
 -- -----------------------------------------------------------------------
 -- Z80 RAM
 -- -----------------------------------------------------------------------
-zram : entity work.SinglePortRAM
+zram : entity work.DualPortRAM
 generic map (
 	addrbits => 13,
 	databits => 8
 )
 port map(
-	address	  => zram_a,
 	clock     => MCLK,
-	data      => zram_d,
-	wren      => zram_we,
-	q         => zram_q
+
+	address_a => FX68_ZRAM_A,
+	data_a    => FX68_ZRAM_D,
+	wren_a    => FX68_ZRAM_WE,
+	q_a       => FX68_ZRAM_Q,
+
+	address_b => T80_A(12 downto 0),
+	data_b    => T80_DO,
+	wren_b    => T80_ZRAM_WE,
+	q_b       => T80_ZRAM_Q
 );
 
 -- -----------------------------------------------------------------------
@@ -860,6 +869,7 @@ port map(
 
 	SEL		=> VDP_SEL,
 	A			=> VDP_A,
+	AS_N  => FX68_AS_N,
 	RNW		=> VDP_RNW,
 	DI			=> VDP_DI,
 	DO			=> VDP_DO,
@@ -882,10 +892,12 @@ port map(
 	HINT			=> HINT,
 	VINT_TG68		=> VINT_FX68,
 	VINT_T80			=> VINT_T80,
-	INTACK			=> FX68_INTACK,
-	BR_N		=> VDP_BR_N,
-	BG_N		=> FX68_BG_N,
-	BGACK_N		=> VDP_BGACK_N,
+	INTACK      => FX68_INTACK,
+	BR_N_I      => T80_FLASH_BR_N,
+	BR_N_O      => VDP_BR_N,
+	BG_N        => FX68_BG_N,
+	BGACK_N_I   => T80_FLASH_BGACK_N,
+	BGACK_N_O   => VDP_BGACK_N,
 
 	VBUS_ADDR		=> VBUS_ADDR,
 	VBUS_DATA		=> VBUS_DATA,
@@ -1167,7 +1179,7 @@ FX68_DTACK_N <= '1' when bootState /= BOOT_DONE
 FX68_DI(15 downto 8) <= FX68_FLASH_D(15 downto 8) when FX68_FLASH_SEL = '1' and FX68_UDS_N = '0'
 	else FX68_SDRAM_D(15 downto 8) when FX68_SDRAM_SEL = '1' and FX68_UDS_N = '0'
 	else FX68_SRAM_D(15 downto 8) when FX68_SRAM_SEL = '1' and FX68_UDS_N = '0'
-	else FX68_ZRAM_D(15 downto 8) when FX68_ZRAM_SEL = '1' and FX68_UDS_N = '0'
+	else FX68_ZRAM_Q when FX68_ZRAM_SEL = '1'
 	else FX68_CTRL_D(15 downto 8) when FX68_CTRL_SEL = '1' and FX68_UDS_N = '0'
 	else FX68_OS_D(15 downto 8) when FX68_OS_SEL = '1' and FX68_UDS_N = '0'
 	else FX68_IO_D(15 downto 8) when FX68_IO_SEL = '1' and FX68_UDS_N = '0'
@@ -1181,7 +1193,7 @@ FX68_DI(15 downto 8) <= FX68_FLASH_D(15 downto 8) when FX68_FLASH_SEL = '1' and 
 FX68_DI(7 downto 0) <= FX68_FLASH_D(7 downto 0) when FX68_FLASH_SEL = '1' and FX68_LDS_N = '0'
 	else FX68_SDRAM_D(7 downto 0) when FX68_SDRAM_SEL = '1' and FX68_LDS_N = '0'
 	else FX68_SRAM_D(7 downto 0) when FX68_SRAM_SEL = '1' and FX68_LDS_N = '0'
-	else FX68_ZRAM_D(7 downto 0) when FX68_ZRAM_SEL = '1' and FX68_LDS_N = '0'
+	else FX68_ZRAM_Q when FX68_ZRAM_SEL = '1'
 	else FX68_CTRL_D(7 downto 0) when FX68_CTRL_SEL = '1' and FX68_LDS_N = '0'
 	else FX68_OS_D(7 downto 0) when FX68_OS_SEL = '1' and FX68_LDS_N = '0'
 	else FX68_IO_D(7 downto 0) when FX68_IO_SEL = '1' and FX68_LDS_N = '0'
@@ -1230,7 +1242,7 @@ T80_WAIT_N <= '0' when bootState /= BOOT_DONE
 	else not T80_VDP_DTACK_N when T80_VDP_SEL = '1'
 	else '1';
 T80_DI <= T80_SDRAM_D when T80_SDRAM_SEL = '1'
-	else T80_ZRAM_D when T80_ZRAM_SEL = '1'
+	else T80_ZRAM_Q when T80_ZRAM_SEL = '1'
 	else T80_FLASH_D when T80_FLASH_SEL = '1'
 	else T80_CTRL_D when T80_CTRL_SEL = '1'
 	else T80_IO_D when T80_IO_SEL = '1'
@@ -1641,11 +1653,11 @@ begin
 end process;
 
 ROM_PAGE <= FX68_A(21 downto 19) when FX68_FLASH_SEL = '1' and FX68_DTACK_N = '1'
-          else BAR(21 downto 19) when T80_FLASH_SEL = '1' and T80_FLASH_DTACK_N = '1'
+          else BAR(21 downto 19) when T80_FLASH_SEL = '1' and T80_FLASH_DTACK_N = '1' and T80_FLASH_BGACK_N = '0'
           else VBUS_ADDR(21 downto 19);
 
 ROM_PAGE_A <= FX68_A(23 downto 19) when FX68_FLASH_SEL = '1' and FX68_DTACK_N = '1' and SSF2_USE_MAP = '0' else
-              BAR(23 downto 19) when T80_FLASH_SEL = '1' and T80_FLASH_DTACK_N = '1' and SSF2_USE_MAP = '0' else
+              BAR(23 downto 19) when T80_FLASH_SEL = '1' and T80_FLASH_DTACK_N = '1' and SSF2_USE_MAP = '0' and T80_FLASH_BGACK_N = '0' else
               VBUS_ADDR(23 downto 19) when SSF2_USE_MAP = '0' else
               SSF2_MAP(4 downto 0) when ROM_PAGE = "000" else
               SSF2_MAP(10 downto 6) when ROM_PAGE = "001" else
@@ -1673,6 +1685,37 @@ DMA_FLASH_D <= romrd_q when FC = FC_DMA_RD and romrd_req = romrd_ack else DMA_FL
 FX68_FLASH_DTACK_N <= '0' when FC = FC_FX68_RD and romrd_req = romrd_ack and CART_RFRSH_DELAY = '0' else FX68_FLASH_DTACK_N_REG;
 FX68_FLASH_D <= romrd_q when FC = FC_FX68_RD and romrd_req = romrd_ack and CART_RFRSH_DELAY = '0' else FX68_FLASH_D_REG;
 
+-- T80 bus request control
+process( MRST_N, MCLK )
+begin
+	if MRST_N = '0' then
+		T80BRRC <= T80BR_IDLE;
+		T80_FLASH_BR_N <= '1';
+		T80_FLASH_BGACK_N <= '1';
+	elsif rising_edge( MCLK ) then
+		case T80BRRC is
+		when T80BR_IDLE =>
+			if T80_FLASH_SEL = '1' and T80_FLASH_DTACK_N = '1' and VDP_BR_N = '1' and VDP_BGACK_N = '1' and FX68_BG_N = '1' then
+				T80_FLASH_BR_N <= '0';
+				T80BRRC <= T80_BG;
+			end if;
+		when T80_BG =>
+			if FX68_AS_N = '1' and FX68_BG_N = '0' then
+				T80_FLASH_BR_N <= '1';
+				T80_FLASH_BGACK_N <= '0';
+				T80BRRC <= T80_BGACK;
+			end if;
+		when T80_BGACK =>
+			if T80_FLASH_SEL = '0' then
+				T80_FLASH_BGACK_N <= '1';
+				T80BRRC <= T80BR_IDLE;
+			end if;
+		when others => null;
+		end case;
+
+	end if;
+end process;
+
 process( MRST_N, MCLK )
 variable dma_a : std_logic_vector(23 downto 1);
 begin
@@ -1682,8 +1725,6 @@ begin
 		FX68_FLASH_DTACK_N_REG <= '1';
 		T80_FLASH_DTACK_N <= '1';
 		DMA_FLASH_DTACK_N_REG <= '1';
-		T80_FLASH_BR_N <= '1';
-		T80_FLASH_BGACK_N <= '1';
 
 		romrd_req <= '0';
 		
@@ -1705,9 +1746,6 @@ begin
 					romrd_req <= not romrd_req;
 					romrd_a <= ROM_PAGE_A & FX68_A(18 downto 1);
 					FC <= FC_FX68_RD;
-				elsif T80_FLASH_SEL = '1' and T80_FLASH_DTACK_N = '1' then
-					romrd_a <= ROM_PAGE_A & BAR(18 downto 15) & T80_A(14 downto 1);
-					FC <= FC_T80_BR;
 				elsif DMA_FLASH_SEL = '1' and DMA_FLASH_DTACK_N_REG = '1' then
 					if SVP_ENABLE = '1' then
 						dma_a := VBUS_ADDR - 1;
@@ -1717,6 +1755,10 @@ begin
 					romrd_req <= not romrd_req;
 					romrd_a <= ROM_PAGE_A & dma_a(18 downto 1);
 					FC <= FC_DMA_RD;
+				elsif T80_FLASH_SEL = '1' and T80_FLASH_DTACK_N = '1' and T80_FLASH_BGACK_N = '0' then
+					romrd_req <= not romrd_req;
+					romrd_a <= ROM_PAGE_A & BAR(18 downto 15) & T80_A(14 downto 1);
+					FC <= FC_T80_RD;
 				end if;
 			--end if;
 
@@ -1727,20 +1769,6 @@ begin
 				FC <= FC_IDLE;
 			end if;
 
-		when FC_T80_BR =>
-			if FX68_PHI1 = '1' then
-				T80_FLASH_BR_N <= '0';
-				FC <= FC_T80_BG;
-			end if;
-
-		when FC_T80_BG =>
-			if ZCLK_nENA = '1' and FX68_BG_N = '0' then
-				T80_FLASH_BR_N <= '1';
-				T80_FLASH_BGACK_N <= '0';
-				romrd_req <= not romrd_req;
-				FC <= FC_T80_RD;
-			end if;
-
 		when FC_T80_RD =>
 			if ZCLK_nENA = '1' and CART_RFRSH_DELAY = '0' and romrd_req = romrd_ack then
 				if T80_A(0) = '1' then
@@ -1748,13 +1776,12 @@ begin
 				else
 					T80_FLASH_D <= romrd_q(15 downto 8);
 				end if;
-				T80_FLASH_BGACK_N <= '1';
-				T80_FLASH_DTACK_N <= '0';
 				FC <= FC_T80_END;
 			end if;
 
 		when FC_T80_END =>
-			if T80_FLASH_SEL = '0' then
+			if ZCLK_nENA = '1' then
+				T80_FLASH_DTACK_N <= '0';
 				FC <= FC_IDLE;
 			end if;
 
@@ -1973,63 +2000,38 @@ begin
 	end if;
 end process;
 
-FX68_ZRAM_SEL <= '1' when FX68_A(23 downto 16) = x"A0" and FX68_A(14) = '0' and FX68_SEL = '1' else '0';
-T80_ZRAM_SEL <= '1' when T80_A(15 downto 14) = "00" and T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0') and ZBUSACK_N = '1' else '0';
-
 -- Z80 RAM CONTROL
+FX68_ZRAM_SEL <= '1' when FX68_A(23 downto 16) = x"A0" and FX68_A(14) = '0' and FX68_SEL = '1' else '0';
+FX68_ZRAM_A <= FX68_A(12 downto 1) & FX68_UDS_N;
+FX68_ZRAM_D <= FX68_DO(15 downto 8) when FX68_UDS_N = '0' else FX68_DO(7 downto 0);
+FX68_ZRAM_WE <= FX68_ZRAM_SEL and not FX68_RNW and not ZBUSACK_N;
+
+T80_ZRAM_SEL <= '1' when T80_A(15 downto 14) = "00" and T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0') else '0';
+T80_ZRAM_WE <= T80_ZRAM_SEL and not T80_WR_N;
+
 process( MRST_N, MCLK )
 begin
 	if MRST_N = '0' then
 		FX68_ZRAM_DTACK_N <= '1';
-		T80_ZRAM_DTACK_N <= '1';
-
-		zram_we <= '0';
 		ZRC <= ZRC_IDLE;
-
 	elsif rising_edge(MCLK) then
-		if FX68_ZRAM_SEL = '0' then 
+		if FX68_ZRAM_SEL = '0' then
 			FX68_ZRAM_DTACK_N <= '1';
-		end if;	
-		if T80_ZRAM_SEL = '0' then 
-			T80_ZRAM_DTACK_N <= '1';
-		end if;	
+		end if;
 
 		case ZRC is
 		when ZRC_IDLE =>
-			if FX68_ZRAM_SEL = '1' and FX68_ZRAM_DTACK_N = '1' then
-				zram_a <= T80_A(12 downto 0);
-				if FX68_UDS_N = '0' then
-					zram_a <= FX68_A(12 downto 1) & "0";
-					zram_d <= FX68_DO(15 downto 8);
-				else
-					zram_a <= FX68_A(12 downto 1) & "1";
-					zram_d <= FX68_DO(7 downto 0);
-				end if;
-				zram_we <= not FX68_RNW and not ZBUSACK_N;
-				ZRC <= ZRC_ACC1;
-			elsif T80_ZRAM_SEL = '1' and T80_ZRAM_DTACK_N = '1' then
-				zram_a <= T80_A(12 downto 0);
-				zram_d <= T80_DO;
-				zram_we <= not T80_WR_N;
+			if FX68_PHI1 = '1' and FX68_ZRAM_SEL = '1' and FX68_ZRAM_DTACK_N = '1' then
 				ZRC <= ZRC_ACC1;
 			end if;
 		when ZRC_ACC1 =>
-			zram_we <= '0';
-			ZRC <= ZRC_ACC2;
-		when ZRC_ACC2 =>
-			if ZBUSACK_N = '0' then
-				FX68_ZRAM_D <= zram_q & zram_q;
-			else
-				FX68_ZRAM_D <= NO_DATA;
+			if FX68_PHI1 = '1' then
+				FX68_ZRAM_DTACK_N <= '0';
+				ZRC <= ZRC_IDLE;
 			end if;
-			T80_ZRAM_D <= zram_q;
-			FX68_ZRAM_DTACK_N <= '0';
-			T80_ZRAM_DTACK_N <= '0';
-			ZRC <= ZRC_IDLE;
 		when others => null;
 		end case;
 	end if;
-
 end process;
 
 -- SVP RAM CONTROL

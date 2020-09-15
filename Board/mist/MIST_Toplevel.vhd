@@ -240,7 +240,7 @@ ext_sw(14) <= status(18); -- CPU Turbo
 ext_sw(15) <= status(19); -- Border
 
 --SDRAM_A(12)<='0';
-virtualtoplevel : entity work.Virtual_Toplevel
+sdram_top : entity work.fpgagen_sdram_top
 port map(
 	reset_n => reset_n,
 	MCLK => MCLK,
@@ -396,7 +396,7 @@ end process;
 
 data_io_inst: data_io
     port map (
-        clk_sys        => memclk,
+        clk_sys        => MCLK,
         clkref_n       => not data_io_clkref,
         ioctl_wr       => data_io_wr,
         ioctl_addr     => open,
@@ -411,9 +411,9 @@ data_io_inst: data_io
         SPI_DO         => SPI_DO
     );
 
-process(memclk)
+process(MCLK)
 begin
-    if rising_edge( memclk ) then
+    if rising_edge( MCLK ) then
         downloadingD <= downloading;
         ext_reset_n <= ext_reset_n(1 downto 0)&'1'; --stretch reset
         ext_data_ack <= '0';

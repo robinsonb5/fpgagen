@@ -41,92 +41,130 @@ use IEEE.STD_LOGIC_UNSIGNED.ALL;
 use IEEE.STD_LOGIC_TEXTIO.all;
 use work.jt12.all;
 use work.jt89.all;
-use work.sdram.all;
 
-entity Virtual_Toplevel is
-	port(
-		reset_n : in std_logic;
-		MCLK : in std_logic;		-- 54MHz
-		SDR_CLK : in std_logic;		-- 108MHz
+entity fpgagen_top is
+port(
+	reset_n        : in std_logic;
+	MCLK           : in std_logic;  -- 54MHz
 
-		FPGA_INIT_N : in std_logic;
+	DAC_LDATA      : out std_logic_vector(15 downto 0);
+	DAC_RDATA      : out std_logic_vector(15 downto 0);
 
-		DRAM_ADDR	: out std_logic_vector(12 downto 0);
-		DRAM_BA_0	: out std_logic;
-		DRAM_BA_1	: out std_logic;
-		DRAM_CAS_N	: out std_logic;
-		DRAM_CKE	: out std_logic;
-		DRAM_CS_N	: out std_logic;
-		DRAM_DQ		: inout std_logic_vector(15 downto 0);
-		DRAM_LDQM	: out std_logic;
-		DRAM_RAS_N	: out std_logic;
-		DRAM_UDQM	: out std_logic;
-		DRAM_WE_N	: out std_logic;
-		
-		DAC_LDATA : out std_logic_vector(15 downto 0);
-		DAC_RDATA : out std_logic_vector(15 downto 0);
-		
-		RED			: out std_logic_vector(3 downto 0);
-		GREEN		: out std_logic_vector(3 downto 0);
-		BLUE		: out std_logic_vector(3 downto 0);
-		VS			: out std_logic;
-		HS			: out std_logic;
-		
-		LED : out std_logic;
+	RED            : out std_logic_vector(3 downto 0);
+	GREEN          : out std_logic_vector(3 downto 0);
+	BLUE           : out std_logic_vector(3 downto 0);
+	VS             : out std_logic;
+	HS             : out std_logic;
 
-		joya : in std_logic_vector(11 downto 0) := (others =>'1');
-		joyb : in std_logic_vector(11 downto 0) := (others =>'1');
+	LED            : out std_logic;
 
-		mouse_x: in std_logic_vector(7 downto 0);
-		mouse_y: in std_logic_vector(7 downto 0);
-		mouse_flags: in std_logic_vector(7 downto 0);
-		mouse_strobe: in std_logic;
+	joya           : in std_logic_vector(11 downto 0) := (others =>'1');
+	joyb           : in std_logic_vector(11 downto 0) := (others =>'1');
 
-		saveram_addr : in std_logic_vector(14 downto 0);
-		saveram_we   : in std_logic;
-		saveram_din  : in std_logic_vector(7 downto 0);
-		saveram_rd   : in std_logic;
-		saveram_dout : out std_logic_vector(7 downto 0);
+	mouse_x        : in std_logic_vector(7 downto 0);
+	mouse_y        : in std_logic_vector(7 downto 0);
+	mouse_flags    : in std_logic_vector(7 downto 0);
+	mouse_strobe   : in std_logic;
 
-        -- ROM Loader / Host boot data
-		ext_reset_n    : in std_logic := '1';
-		ext_bootdone   : in std_logic := '0';
-		ext_data       : in std_logic_vector(15 downto 0) := (others => '0');
-		ext_data_req   : out std_logic;
-		ext_data_ack   : in std_logic := '0';
+	saveram_addr   : in std_logic_vector(14 downto 0);
+	saveram_we     : in std_logic;
+	saveram_din    : in std_logic_vector(7 downto 0);
+	saveram_rd     : in std_logic;
+	saveram_dout   : out std_logic_vector(7 downto 0);
+
+	-- ROM Loader / Host boot data
+	ext_reset_n    : in std_logic := '1';
+	ext_bootdone   : in std_logic := '0';
+	ext_data       : in std_logic_vector(15 downto 0) := (others => '0');
+	ext_data_req   : out std_logic;
+	ext_data_ack   : in std_logic := '0';
 
         -- DIP switches
-		ext_sw         : in std_logic_vector(15 downto 0) -- 1 - SVP
-														  -- 2 - joy swap
-														  -- 3 - PSG EN
-														  -- 4 - FM EN
-														  -- 5 - Export
-														  -- 6 - PAL
-														  -- 7 - Swap y
-														  -- 8 - 3 Buttons only
-														  -- 9 - VRAM speed emu
-														  -- 10 - EEPROM emu (fake)
-														  -- 12-11 - Mouse
-														  -- 13 - HiFi PCM
-														  -- 14 - CPU Turbo
-														  -- 15 - Border
-	);
+	ext_sw         : in std_logic_vector(15 downto 0); -- 1 - SVP
+	                                                   -- 2 - joy swap
+	                                                   -- 3 - PSG EN
+	                                                   -- 4 - FM EN
+	                                                   -- 5 - Export
+	                                                   -- 6 - PAL
+	                                                   -- 7 - Swap y
+	                                                   -- 8 - 3 Buttons only
+	                                                   -- 9 - VRAM speed emu
+	                                                   -- 10 - EEPROM emu (fake)
+	                                                   -- 12-11 - Mouse
+	                                                   -- 13 - HiFi PCM
+	                                                   -- 14 - CPU Turbo
+	                                                   -- 15 - Border
+
+	-- RAM/ROM control
+	romwr_req : buffer std_logic;
+	romwr_ack : in std_logic;
+	romwr_a : buffer unsigned(23 downto 1);
+	romwr_d : out std_logic_vector(15 downto 0);
+
+	romrd_req : buffer std_logic;
+	romrd_ack : in std_logic;
+	romrd_a : out std_logic_vector(23 downto 1);
+	romrd_q : in std_logic_vector(15 downto 0);
+
+	ram68k_req : buffer std_logic;
+	ram68k_ack : in std_logic;
+	ram68k_we : out std_logic;
+	ram68k_a : out std_logic_vector(15 downto 1);
+	ram68k_d : out std_logic_vector(15 downto 0);
+	ram68k_q : in std_logic_vector(15 downto 0);
+	ram68k_u_n : out std_logic;
+	ram68k_l_n : out std_logic;
+
+	sram_req : buffer std_logic;
+	sram_ack : in std_logic;
+	sram_we : out std_logic;
+	sram_a : out std_logic_vector(15 downto 1);
+	sram_d : out std_logic_vector(15 downto 0);
+	sram_q : in std_logic_vector(15 downto 0);
+	sram_u_n : out std_logic;
+	sram_l_n : out std_logic;
+
+	vram_req : out std_logic;
+	vram_ack : in std_logic;
+	vram_we : out std_logic;
+	vram_a : out std_logic_vector(15 downto 1);
+	vram_d : out std_logic_vector(15 downto 0);
+	vram_q : in std_logic_vector(15 downto 0);
+	vram_u_n : out std_logic;
+	vram_l_n : out std_logic;
+
+	vram32_req : out std_logic;
+	vram32_ack : in std_logic;
+	vram32_a   : out std_logic_vector(15 downto 1);
+	vram32_q   : in std_logic_vector(31 downto 0);
+
+	svp_ram1_req : out std_logic;
+	svp_ram1_ack : in std_logic;
+	svp_ram1_we : out std_logic;
+	svp_ram1_a : out std_logic_vector(16 downto 1);
+	svp_ram1_d : out std_logic_vector(15 downto 0);
+	svp_ram1_q : in std_logic_vector(15 downto 0);
+
+	svp_ram2_req : buffer std_logic;
+	svp_ram2_ack : in std_logic;
+	svp_ram2_we : out std_logic;
+	svp_ram2_a : out std_logic_vector(16 downto 1);
+	svp_ram2_d : out std_logic_vector(15 downto 0);
+	svp_ram2_q : in std_logic_vector(15 downto 0);
+	svp_ram2_u_n : out std_logic;
+	svp_ram2_l_n : out std_logic;
+
+	svp_rom_req : out std_logic;
+	svp_rom_ack : in std_logic;
+	svp_rom_a : out std_logic_vector(20 downto 1);
+	svp_rom_q : in std_logic_vector(15 downto 0)
+
+);
 end entity;
 
-architecture rtl of Virtual_Toplevel is
+architecture rtl of fpgagen_top is
 
-signal SDRAM_BA : std_logic_vector(1 downto 0);
 -- "FLASH"
-signal romwr_req : std_logic := '0';
-signal romwr_ack : std_logic;
-signal romwr_a : unsigned(23 downto 1);
-signal romwr_d : std_logic_vector(15 downto 0);
-
-signal romrd_req : std_logic := '0';
-signal romrd_ack : std_logic;
-signal romrd_a : std_logic_vector(23 downto 1);
-signal romrd_q : std_logic_vector(15 downto 0);
-
 type fc_t is ( FC_IDLE, 
 	FC_FX68_RD,
 	FC_DMA_RD,
@@ -142,16 +180,6 @@ type t80brrc_t is ( T80BR_IDLE,
 
 signal T80BRRC : t80brrc_t;
 
--- 68000 RAM
-signal ram68k_req : std_logic;
-signal ram68k_ack : std_logic;
-signal ram68k_we : std_logic;
-signal ram68k_a : std_logic_vector(15 downto 1);
-signal ram68k_d : std_logic_vector(15 downto 0);
-signal ram68k_q : std_logic_vector(15 downto 0);
-signal ram68k_l_n : std_logic;
-signal ram68k_u_n : std_logic;
-
 type sdrc_t is ( SDRC_IDLE,
 	SDRC_FX68,
 	SDRC_DMA,
@@ -159,36 +187,12 @@ type sdrc_t is ( SDRC_IDLE,
 signal SDRC : sdrc_t;
 
 -- SRAM
-signal sram_req : std_logic := '0';
-signal sram_ack : std_logic;
-signal sram_we : std_logic := '0';
-signal sram_a : std_logic_vector(15 downto 1);
-signal sram_d : std_logic_vector(15 downto 0);
-signal sram_q : std_logic_vector(15 downto 0);
-signal sram_l_n : std_logic;
-signal sram_u_n : std_logic;
-
 type sramrc_t is ( SRAMRC_IDLE,	SRAMRC_EXT, SRAMRC_FX68);
 signal SRAMRC : sramrc_t;
 signal SRAM_EN : std_logic;
 signal SRAM_EN_AUTO : std_logic;
 signal SRAM_EN_PAGEIN : std_logic;
 signal EEPROM_EN : std_logic;
-
--- VRAM
-signal vram_req : std_logic;
-signal vram_ack : std_logic;
-signal vram_we : std_logic;
-signal vram_a : std_logic_vector(15 downto 1);
-signal vram_d : std_logic_vector(15 downto 0);
-signal vram_q : std_logic_vector(15 downto 0);
-signal vram_l_n : std_logic;
-signal vram_u_n : std_logic;
-
-signal vram32_req : std_logic;
-signal vram32_ack : std_logic;
-signal vram32_a   : std_logic_vector(15 downto 1);
-signal vram32_q   : std_logic_vector(31 downto 0);
 
 -- Z80 RAM
 signal FX68_ZRAM_A       : std_logic_vector(12 downto 0);
@@ -204,28 +208,6 @@ signal T80_ZRAM_Q        : std_logic_vector(7 downto 0);
 
 type zrc_t is ( ZRC_IDLE, ZRC_ACC1 );
 signal ZRC : zrc_t;
-
--- SVP
-signal svp_ram1_req : std_logic;
-signal svp_ram1_ack : std_logic;
-signal svp_ram1_we  : std_logic;
-signal svp_ram1_a   : std_logic_vector(16 downto 1);
-signal svp_ram1_d   : std_logic_vector(15 downto 0);
-signal svp_ram1_q   : std_logic_vector(15 downto 0);
-
-signal svp_ram2_req : std_logic;
-signal svp_ram2_ack : std_logic;
-signal svp_ram2_we  : std_logic;
-signal svp_ram2_a   : std_logic_vector(16 downto 1);
-signal svp_ram2_d   : std_logic_vector(15 downto 0);
-signal svp_ram2_q   : std_logic_vector(15 downto 0);
-signal svp_ram2_u_n : std_logic;
-signal svp_ram2_l_n : std_logic;
-
-signal svp_rom_req  : std_logic;
-signal svp_rom_ack  : std_logic;
-signal svp_rom_a    : std_logic_vector(20 downto 1);
-signal svp_rom_q    : std_logic_vector(15 downto 0);
 
 type svprc_t is ( SVPRC_IDLE, SVPRC_FX68, SVPRC_DMA);
 signal SVPRC : svprc_t;
@@ -614,118 +596,8 @@ BORDER <= SW(15);
 -- DIP Switches
 SW <= ext_sw;
 
--- SDRAM
-DRAM_CKE <= '1';
-DRAM_CS_N <= '0';
-
 -- LED
 LED <= '0';
-
--- -----------------------------------------------------------------------
--- SDRAM Controller
--- -----------------------------------------------------------------------		
-DRAM_BA_0 <= SDRAM_BA(0);
-DRAM_BA_1 <= SDRAM_BA(1);
-
-sdc : sdram
-port map(
-	clk         => SDR_CLK,
-	init_n      => FPGA_INIT_N,
-
-	std_logic_vector(SDRAM_DQ)	=> DRAM_DQ,
-	std_logic_vector(SDRAM_A)	=> DRAM_ADDR,
-	SDRAM_nWE					=> DRAM_WE_N,
-	SDRAM_nRAS					=> DRAM_RAS_N,
-	SDRAM_nCAS					=> DRAM_CAS_N,
-	SDRAM_BA					=> SDRAM_BA,
-	SDRAM_DQML					=> DRAM_LDQM,
-	SDRAM_DQMH					=> DRAM_UDQM,
-
-	romwr_req	=> romwr_req,
-	romwr_ack	=> romwr_ack,
-	romwr_a		=> std_logic_vector(romwr_a),
-	romwr_d		=> romwr_d,
-
-	romrd_req	=> romrd_req,
-	romrd_ack	=> romrd_ack,
-	romrd_a		=> romrd_a,
-	romrd_q		=> romrd_q,
-
-	ram68k_req	=> ram68k_req,
-	ram68k_ack	=> ram68k_ack,
-	ram68k_we	=> ram68k_we,
-	ram68k_a	=> ram68k_a,
-	ram68k_d	=> ram68k_d,
-	ram68k_q	=> ram68k_q,
-	ram68k_u_n	=> ram68k_u_n,
-	ram68k_l_n	=> ram68k_l_n,
-
-	sram_req	=> sram_req,
-	sram_ack	=> sram_ack,
-	sram_we	=> sram_we,
-	sram_a		=> sram_a,
-	sram_d		=> sram_d,
-	sram_q		=> sram_q,
-	sram_u_n	=> sram_u_n,
-	sram_l_n	=> sram_l_n,
-
-	vram_req	=> vram_req,
-	vram_ack => vram_ack,
-	vram_we	=> vram_we,
-	vram_a	=> vram_a,
-	vram_d	=> vram_d,
-	vram_q	=> vram_q,
-	vram_u_n => vram_u_n,
-	vram_l_n => vram_l_n,
-
-	vram32_req => vram32_req,
-	vram32_ack => vram32_ack,
-	vram32_a   => vram32_a,
-	vram32_q   => vram32_q,
-
-	svp_ram1_req => svp_ram1_req,
-	svp_ram1_ack => svp_ram1_ack,
-	svp_ram1_we  => svp_ram1_we,
-	svp_ram1_a   => svp_ram1_a,
-	svp_ram1_d   => svp_ram1_d,
-	svp_ram1_q   => svp_ram1_q,
-
-	svp_ram2_req => svp_ram2_req,
-	svp_ram2_ack => svp_ram2_ack,
-	svp_ram2_we  => svp_ram2_we,
-	svp_ram2_a   => svp_ram2_a,
-	svp_ram2_d   => svp_ram2_d,
-	svp_ram2_q   => svp_ram2_q,
-	svp_ram2_u_n => svp_ram2_u_n,
-	svp_ram2_l_n => svp_ram2_l_n,
-
-	svp_rom_req	=> svp_rom_req,
-	svp_rom_ack	=> svp_rom_ack,
-	svp_rom_a	=> "000" & svp_rom_a,
-	svp_rom_q	=> svp_rom_q
-);
-
--- -----------------------------------------------------------------------
--- Z80 RAM
--- -----------------------------------------------------------------------
-zram : entity work.DualPortRAM
-generic map (
-	addrbits => 13,
-	databits => 8
-)
-port map(
-	clock     => MCLK,
-
-	address_a => FX68_ZRAM_A,
-	data_a    => FX68_ZRAM_D,
-	wren_a    => FX68_ZRAM_WE,
-	q_a       => FX68_ZRAM_Q,
-
-	address_b => T80_A(12 downto 0),
-	data_b    => T80_DO,
-	wren_b    => T80_ZRAM_WE,
-	q_b       => T80_ZRAM_Q
-);
 
 -- -----------------------------------------------------------------------
 -- -----------------------------------------------------------------------
@@ -741,37 +613,37 @@ FX68_BGACK_N <= VDP_BGACK_N and T80_BGACK_N;
 
 -- 68K
 fx68k_inst: fx68k
-	port map (
-		clk			=> MCLK,
-		extReset	=> not FX68_RES_N,
-		pwrUp		=> not FX68_RES_N,
-		enPhi1		=> FX68_PHI1,
-		enPhi2		=> FX68_PHI2,
+port map (
+	clk			=> MCLK,
+	extReset	=> not FX68_RES_N,
+	pwrUp		=> not FX68_RES_N,
+	enPhi1		=> FX68_PHI1,
+	enPhi2		=> FX68_PHI2,
 
-		eRWn		=> FX68_RNW,
-		ASn			=> FX68_AS_N,
-		LDSn		=> FX68_LDS_N,
-		UDSn		=> FX68_UDS_N,
-		E			=> open,
-		VMAn		=> open,
-		FC0			=> FX68_FC(0),
-		FC1			=> FX68_FC(1),
-		FC2			=> FX68_FC(2),
-		BGn			=> FX68_BG_N,
-		oRESETn		=> open,
-		oHALTEDn	=> open,
-		DTACKn		=> FX68_DTACK_N,
-		VPAn		=> FX68_VPA_N,
-		BERRn		=> '1',
-		BRn			=> FX68_BR_N,
-		BGACKn		=> FX68_BGACK_N,
-		IPL0n		=> FX68_IPL_N(0),
-		IPL1n		=> FX68_IPL_N(1),
-		IPL2n		=> FX68_IPL_N(2),
-		iEdb		=> FX68_DI,
-		oEdb		=> FX68_DO,
-		eab			=> FX68_A(23 downto 1)
-	);
+	eRWn		=> FX68_RNW,
+	ASn			=> FX68_AS_N,
+	LDSn		=> FX68_LDS_N,
+	UDSn		=> FX68_UDS_N,
+	E			=> open,
+	VMAn		=> open,
+	FC0			=> FX68_FC(0),
+	FC1			=> FX68_FC(1),
+	FC2			=> FX68_FC(2),
+	BGn			=> FX68_BG_N,
+	oRESETn		=> open,
+	oHALTEDn	=> open,
+	DTACKn		=> FX68_DTACK_N,
+	VPAn		=> FX68_VPA_N,
+	BERRn		=> '1',
+	BRn			=> FX68_BR_N,
+	BGACKn		=> FX68_BGACK_N,
+	IPL0n		=> FX68_IPL_N(0),
+	IPL1n		=> FX68_IPL_N(1),
+	IPL2n		=> FX68_IPL_N(2),
+	iEdb		=> FX68_DI,
+	oEdb		=> FX68_DO,
+	eab			=> FX68_A(23 downto 1)
+);
 
 -- Z80
 t80 : entity work.t80pa
@@ -796,6 +668,28 @@ port map(
 	DI			=> T80_DI,
 	DO			=> T80_DO
 );
+-- -----------------------------------------------------------------------
+-- Z80 RAM
+-- -----------------------------------------------------------------------
+zram : entity work.DualPortRAM
+generic map (
+	addrbits => 13,
+	databits => 8
+)
+port map(
+	clock     => MCLK,
+
+	address_a => FX68_ZRAM_A,
+	data_a    => FX68_ZRAM_D,
+	wren_a    => FX68_ZRAM_WE,
+	q_a       => FX68_ZRAM_Q,
+
+	address_b => T80_A(12 downto 0),
+	data_b    => T80_DO,
+	wren_b    => T80_ZRAM_WE,
+	q_b       => T80_ZRAM_Q
+);
+
 
 -- OS ROM
 os : entity work.os_rom
@@ -862,34 +756,34 @@ port map(
 
 vdp : entity work.vdp
 port map(
-	RST_N		=> MRST_N,
-	CLK		=> MCLK,
+	RST_N       => MRST_N,
+	CLK         => MCLK,
 
-	SEL		=> VDP_SEL,
-	A			=> VDP_A,
-	AS_N  => FX68_AS_N,
-	RNW		=> VDP_RNW,
-	DI			=> VDP_DI,
-	DO			=> VDP_DO,
-	DTACK_N		=> VDP_DTACK_N,
+	SEL         => VDP_SEL,
+	A           => VDP_A,
+	AS_N        => FX68_AS_N,
+	RNW         => VDP_RNW,
+	DI          => VDP_DI,
+	DO          => VDP_DO,
+	DTACK_N     => VDP_DTACK_N,
 
-	vram_req => vram_req,
-	vram_ack => vram_ack,
-	vram_we	=> vram_we,
-	vram_a	=> vram_a,
-	vram_d	=> vram_d,
-	vram_q	=> vram_q,
-	vram_u_n	=> vram_u_n,
-	vram_l_n	=> vram_l_n,
+	vram_req    => vram_req,
+	vram_ack    => vram_ack,
+	vram_we     => vram_we,
+	vram_a      => vram_a,
+	vram_d      => vram_d,
+	vram_q      => vram_q,
+	vram_u_n    => vram_u_n,
+	vram_l_n    => vram_l_n,
 
-	vram32_req => vram32_req,
-	vram32_ack => vram32_ack,
-	vram32_a   => vram32_a,
-	vram32_q   => vram32_q,
+	vram32_req  => vram32_req,
+	vram32_ack  => vram32_ack,
+	vram32_a    => vram32_a,
+	vram32_q    => vram32_q,
 
-	HINT			=> HINT,
-	VINT_TG68		=> VINT_FX68,
-	VINT_T80			=> VINT_T80,
+	HINT        => HINT,
+	VINT_TG68   => VINT_FX68,
+	VINT_T80    => VINT_T80,
 	INTACK      => FX68_INTACK,
 	BR_N_I      => T80_BR_N,
 	BR_N_O      => VDP_BR_N,
@@ -897,53 +791,53 @@ port map(
 	BGACK_N_I   => T80_BGACK_N,
 	BGACK_N_O   => VDP_BGACK_N,
 
-	VBUS_ADDR		=> VBUS_ADDR,
-	VBUS_DATA		=> VBUS_DATA,
+	VBUS_ADDR   => VBUS_ADDR,
+	VBUS_DATA   => VBUS_DATA,
 		
-	VBUS_SEL			=> VBUS_SEL,
-	VBUS_DTACK_N	=> VBUS_DTACK_N,
+	VBUS_SEL    => VBUS_SEL,
+	VBUS_DTACK_N=> VBUS_DTACK_N,
 
-	PAL					=> PAL_IO,
-	R					=> VDP_RED,
-	G					=> VDP_GREEN,
-	B					=> VDP_BLUE,
-	HS					=> VDP_HS_N,
-	VS					=> VDP_VS_N,
+	PAL         => PAL_IO,
+	R           => VDP_RED,
+	G           => VDP_GREEN,
+	B           => VDP_BLUE,
+	HS          => VDP_HS_N,
+	VS          => VDP_VS_N,
 
-	VRAM_SPEED			=> VDP_VRAM_SPEED,
-	VSCROLL_BUG			=> '0',
-	BORDER_EN			=> BORDER
+	VRAM_SPEED  => VDP_VRAM_SPEED,
+	VSCROLL_BUG => '0',
+	BORDER_EN   => BORDER
 );
 
 -- PSG
 
 u_psg : jt89
 port map(
-	rst    	=> not MRST_N,
-	clk		=> MCLK,
-	clk_en	=> ZCLK_ENA,
-	wr_n	=> not PSG_SEL,
-	din  	=> PSG_DI,
-	sound	=> PSG_SND
+	rst         => not MRST_N,
+	clk         => MCLK,
+	clk_en      => ZCLK_ENA,
+	wr_n        => not PSG_SEL,
+	din         => PSG_DI,
+	sound       => PSG_SND
 );
 
 -- FM
 
 fm : jt12
 port map(
-	rst		=> not T80_RESET_N,
-	clk		=> MCLK,
-	cen		=> FCLK_EN,
-	addr	=> FM_A,
-	cs_n	=> '0',
-	wr_n	=> FM_RNW,
-	din		=> FM_DI,
-	dout	=> FM_DO,
+	rst         => not T80_RESET_N,
+	clk         => MCLK,
+	cen         => FCLK_EN,
+	addr        => FM_A,
+	cs_n        => '0',
+	wr_n        => FM_RNW,
+	din         => FM_DI,
+	dout        => FM_DO,
 	-- Real time configuration
 	en_hifi_pcm => FM_HIFI,
 
-	snd_left  => FM_LEFT,
-	snd_right => FM_RIGHT
+	snd_left    => FM_LEFT,
+	snd_right   => FM_RIGHT
 );
 
 -- Audio control
@@ -953,16 +847,16 @@ FM_HIFI    <=     SW(13);
 
 genmix : jt12_genmix
 port map(
-	rst		=> not T80_RESET_N,
-	clk		=> MCLK,
-    fm_left => FM_LEFT,
-    fm_right=> FM_RIGHT,
-    psg_snd => PSG_SND,
-    fm_en   => FM_ENABLE,
-    psg_en  => PSG_ENABLE,
-    -- Mixed sound at 54 MHz
-    snd_left  => DAC_LDATA,
-    snd_right => DAC_RDATA
+	rst         => not T80_RESET_N,
+	clk         => MCLK,
+	fm_left     => FM_LEFT,
+	fm_right    => FM_RIGHT,
+	psg_snd     => PSG_SND,
+	fm_en       => FM_ENABLE,
+	psg_en      => PSG_ENABLE,
+	-- Mixed sound at 54 MHz
+	snd_left    => DAC_LDATA,
+	snd_right   => DAC_RDATA
 );
 
 SVP_ENABLE <= SW(1);
@@ -1024,9 +918,7 @@ end process;
 
 FX68_SEL <= '1' when FX68_AS_N = '0' and (FX68_UDS_N = '0' or FX68_LDS_N = '0') else '0';
 
-----------------------------------------------------------------
 -- INTERRUPTS CONTROL
-----------------------------------------------------------------
 
 T80_INT_N <= not VINT_T80;
 --FX68_IPL_N <= "001" when VINT_FX68 = '1' else "011" when HINT = '1' else "111";
@@ -1051,14 +943,6 @@ begin
 		end if;
 	end if;
 end process;
-
-----------------------------------------------------------------
--- SWITCHES CONTROL
-----------------------------------------------------------------
-
--- #############################################################################
--- #############################################################################
--- #############################################################################
 
 -- CLOCK GENERATION
 process( MRST_N, MCLK, VCLKCNT )
@@ -1265,13 +1149,13 @@ T80_CTRL_SEL <= '1' when T80_A(15) = '1' and
 process( MRST_N, MCLK )
 begin
 	if MRST_N = '0' then
-		FX68_CTRL_DTACK_N <= '1';	
-		T80_CTRL_DTACK_N <= '1';	
+		FX68_CTRL_DTACK_N <= '1';
+		T80_CTRL_DTACK_N <= '1';
 		
 		ZBUSREQ <= '0';
 		ZRESET_N <= '0';
 		CART_EN <= '0';
-		
+
 	elsif rising_edge(MCLK) then
 		if FX68_CTRL_SEL = '0' then 
 			FX68_CTRL_DTACK_N <= '1';
@@ -1293,12 +1177,12 @@ begin
 					-- ZRESET_N
 					if FX68_UDS_N = '0' then
 						ZRESET_N <= FX68_DO(8);
-					end if;			
+					end if;
 				elsif FX68_A(15 downto 8) = x"41" then
 					-- Cartridge Control Register
 					if FX68_LDS_N = '0' then
 						CART_EN <= FX68_DO(0);
-					end if;								
+					end if;
 				end if;
 			else
 				-- Read
@@ -1307,7 +1191,7 @@ begin
 					-- ZBUSACK_N
 					FX68_CTRL_D(8) <= ZBUSACK_N;
 				end if;
-			end if;		
+			end if;
 		elsif T80_CTRL_SEL = '1' and T80_CTRL_DTACK_N = '1' then
 			T80_CTRL_DTACK_N <= '0';
 			if T80_WR_N = '0' then
@@ -1321,12 +1205,12 @@ begin
 					-- ZRESET_N
 					if T80_A(0) = '0' then
 						ZRESET_N <= T80_DO(0);
-					end if;			
+					end if;	
 				elsif BAR(15) & T80_A(14 downto 8) = x"41" then
 					-- Cartridge Control Register
 					if T80_A(0) = '1' then
 						CART_EN <= T80_DO(0);
-					end if;								
+					end if;
 				end if;
 			else
 				-- Read
@@ -1335,7 +1219,7 @@ begin
 					-- ZBUSACK_N
 					T80_CTRL_D(0) <= ZBUSACK_N;
 				end if;
-			end if;			
+			end if;
 		end if;
 		
 	end if;
@@ -1387,10 +1271,10 @@ begin
 					IO_LDS_N <= '1';
 				else
 					IO_UDS_N <= '1';
-					IO_LDS_N <= '0';				
+					IO_LDS_N <= '0';
 				end if;
 				IO_DI <= T80_DO & T80_DO;
-				IOC <= IOC_T80_ACC;			
+				IOC <= IOC_T80_ACC;
 			end if;
 
 		when IOC_FX68_ACC =>
@@ -1449,7 +1333,7 @@ T80_VDP_SEL <= '1' when T80_MREQ_N = '0' and (T80_RD_N = '0' or T80_WR_N = '0') 
 process( MRST_N, MCLK )
 begin
 	if MRST_N = '0' then
-		FX68_VDP_DTACK_N <= '1';	
+		FX68_VDP_DTACK_N <= '1';
 		T80_VDP_DTACK_N <= '1';	
 
 		VDP_SEL <= '0';
@@ -1559,7 +1443,7 @@ T80_BAR_SEL <= '1' when (T80_A(15 downto 13) = "011" and T80_A(12 downto 8) /= "
 process( MRST_N, MCLK )
 begin
 	if MRST_N = '0' then
-		FX68_BAR_DTACK_N <= '1';	
+		FX68_BAR_DTACK_N <= '1';
 		T80_BAR_DTACK_N <= '1';
 		
 		BAR <= (others => '0');
@@ -1594,11 +1478,6 @@ begin
 	end if;
 end process;
 
--- -----------------------------------------------------------------------
--- -----------------------------------------------------------------------
--- -----------------------------------------------------------------------
--- -----------------------------------------------------------------------
--- MiST Memory Handling
 -- -----------------------------------------------------------------------
 -- -----------------------------------------------------------------------
 -- -----------------------------------------------------------------------
@@ -1639,46 +1518,46 @@ FX68_TIME_SEL <= '1' when FX68_A(23 downto 8) = x"a130" and FX68_SEL = '1' else 
 
 process( MRST_N, MCLK )
 begin
-    if rising_edge( MCLK ) then
-        if ( MRST_N = '0' ) then
-            SSF2_USE_MAP <= '0';
-            SRAM_EN_PAGEIN <= '0';
-            SSF2_MAP( 5 downto  0) <= "00"&x"0";
-            SSF2_MAP(11 downto  6) <= "00"&x"1";
-            SSF2_MAP(17 downto 12) <= "00"&x"2";
-            SSF2_MAP(23 downto 18) <= "00"&x"3";
-            SSF2_MAP(29 downto 24) <= "00"&x"4";
-            SSF2_MAP(35 downto 30) <= "00"&x"5";
-            SSF2_MAP(41 downto 36) <= "00"&x"6";
-            SSF2_MAP(47 downto 42) <= "00"&x"7";
-        elsif FX68_A(23 downto 4) = x"a130f" and FX68_SEL = '1' and FX68_RNW = '0' then
-            if BIG_CART = '1' then
-                -- use for ROM bank switch when cart > 4 MB
-                SSF2_USE_MAP <= '1';
-                case FX68_A(3 downto 1) is
-                when "000" =>
-                    null; -- always 0;
-                when "001" =>
-                    SSF2_MAP(11 downto 6) <= FX68_DO(5 downto 0);
-                when "010" =>
-                    SSF2_MAP(17 downto 12) <= FX68_DO(5 downto 0);
-                when "011" =>
-                    SSF2_MAP(23 downto 18) <= FX68_DO(5 downto 0);
-                when "100" =>
-                    SSF2_MAP(29 downto 24) <= FX68_DO(5 downto 0);
-                when "101" =>
-                    SSF2_MAP(35 downto 30) <= FX68_DO(5 downto 0);
-                when "110" =>
-                    SSF2_MAP(41 downto 36) <= FX68_DO(5 downto 0);
-                when "111" =>
-                    SSF2_MAP(47 downto 42) <= FX68_DO(5 downto 0);
-                end case;
-            else
-                -- use for SRAM paging
-                SRAM_EN_PAGEIN <= FX68_DO(0);
-            end if;
-        end if;
-    end if;
+	if rising_edge( MCLK ) then
+		if ( MRST_N = '0' ) then
+			SSF2_USE_MAP <= '0';
+			SRAM_EN_PAGEIN <= '0';
+			SSF2_MAP( 5 downto  0) <= "00"&x"0";
+			SSF2_MAP(11 downto  6) <= "00"&x"1";
+			SSF2_MAP(17 downto 12) <= "00"&x"2";
+			SSF2_MAP(23 downto 18) <= "00"&x"3";
+			SSF2_MAP(29 downto 24) <= "00"&x"4";
+			SSF2_MAP(35 downto 30) <= "00"&x"5";
+			SSF2_MAP(41 downto 36) <= "00"&x"6";
+			SSF2_MAP(47 downto 42) <= "00"&x"7";
+		elsif FX68_A(23 downto 4) = x"a130f" and FX68_SEL = '1' and FX68_RNW = '0' then
+			if BIG_CART = '1' then
+				-- use for ROM bank switch when cart > 4 MB
+				SSF2_USE_MAP <= '1';
+				case FX68_A(3 downto 1) is
+				when "000" =>
+					null; -- always 0;
+				when "001" =>
+					SSF2_MAP(11 downto 6) <= FX68_DO(5 downto 0);
+				when "010" =>
+					SSF2_MAP(17 downto 12) <= FX68_DO(5 downto 0);
+				when "011" =>
+					SSF2_MAP(23 downto 18) <= FX68_DO(5 downto 0);
+				when "100" =>
+					SSF2_MAP(29 downto 24) <= FX68_DO(5 downto 0);
+				when "101" =>
+					SSF2_MAP(35 downto 30) <= FX68_DO(5 downto 0);
+				when "110" =>
+					SSF2_MAP(41 downto 36) <= FX68_DO(5 downto 0);
+				when "111" =>
+					SSF2_MAP(47 downto 42) <= FX68_DO(5 downto 0);
+				end case;
+			else
+				-- use for SRAM paging
+				SRAM_EN_PAGEIN <= FX68_DO(0);
+			end if;
+		end if;
+	end if;
 end process;
 
 ROM_PAGE <= FX68_A(21 downto 19) when FX68_FLASH_SEL = '1' and FX68_DTACK_N = '1'
@@ -1720,13 +1599,13 @@ variable dma_a : std_logic_vector(23 downto 1);
 begin
 	if MRST_N = '0' then
 		FC <= FC_IDLE;
-		
+
 		FX68_FLASH_DTACK_N_REG <= '1';
 		T80_FLASH_DTACK_N <= '1';
 		DMA_FLASH_DTACK_N_REG <= '1';
 
 		romrd_req <= '0';
-		
+
 	elsif rising_edge( MCLK ) then
 		if FX68_FLASH_SEL = '0' then 
 			FX68_FLASH_DTACK_N_REG <= '1';
@@ -1739,7 +1618,7 @@ begin
 		end if;
 
 		case FC is
-		when FC_IDLE =>			
+		when FC_IDLE =>
 			--if VCLKCNT = "001" then
 				if FX68_FLASH_SEL = '1' and FX68_FLASH_DTACK_N = '1' then
 					romrd_req <= not romrd_req;
@@ -1793,7 +1672,7 @@ begin
 
 		when others => null;
 		end case;
-	
+
 	end if;
 
 end process;
@@ -1820,9 +1699,9 @@ begin
 		RAM_DELAY_CNT <= "000";
 
 		ram68k_req <= '0';
-		
+
 		SDRC <= SDRC_IDLE;
-		
+
 	elsif rising_edge(MCLK) then
 		if FX68_SDRAM_SEL = '0' then 
 			FX68_SDRAM_DTACK_N_REG <= '1';
@@ -1862,7 +1741,7 @@ begin
 					ram68k_a <= VBUS_ADDR(15 downto 1);
 					ram68k_we <= '0';
 					ram68k_u_n <= '0';
-					ram68k_l_n <= '0';					
+					ram68k_l_n <= '0';
 					SDRC <= SDRC_DMA;
 				end if;
 			--end if;
@@ -2107,10 +1986,10 @@ end process;
 
 FL_DQ <= ext_data;
 
-process( SDR_CLK )
+process( MCLK )
 variable rom_last_addr: unsigned(23 downto 1);
 begin
-	if rising_edge( SDR_CLK ) then
+	if rising_edge( MCLK ) then
 		if ext_reset_n = '0' then
 
 			ext_data_req <= '0';
@@ -2151,7 +2030,7 @@ begin
 						bootState <= BOOT_READ_1;
 					end if;
 				when others => null;
-			end case;	
+			end case;
 		end if;
 	end if;
 end process;
@@ -2206,7 +2085,7 @@ begin
 				if FX68_LDS_N = '0' then rom_q(7 downto 0) := romrd_q(55 downto 48); end if;
 
 			when others => null;
-			end case;				
+			end case;
 			if FX68_UDS_N = '0' and FX68_LDS_N = '0' then
 				hwrite(L, rom_q);
 			elsif FX68_UDS_N = '0' then
@@ -2215,10 +2094,10 @@ begin
 			else
 				write(L, string'("  "));
 				hwrite(L, rom_q(7 downto 0));
-			end if;								
+			end if;
 			write(L, string'("]"));
-			writeline(F,L);			
-		end if;		
+			writeline(F,L);	
+		end if;
 
 	
 		-- 68K RAM ACCESS
@@ -2241,7 +2120,7 @@ begin
 				else
 					write(L, string'("  "));
 					hwrite(L, FX68_DO(7 downto 0));
-				end if;				
+				end if;
 			else
 				if FX68_UDS_N = '0' and FX68_LDS_N = '0' then
 					hwrite(L, ram68k_q);
@@ -2251,13 +2130,13 @@ begin
 				else
 					write(L, string'("  "));
 					hwrite(L, ram68k_q(7 downto 0));
-				end if;								
+				end if;
 			end if;
 			write(L, string'("]"));
-			writeline(F,L);			
-		end if;		
+			writeline(F,L);
+		end if;
 
-		
+
 		-- Z80 RAM ACCESS
 		if ZRC = ZRC_ACC3 and ZRCP = ZRCP_FX68 then
 			write(L, string'("68K "));
@@ -2291,10 +2170,10 @@ begin
 				end if;				
 			end if;
 			write(L, string'("]"));
-			writeline(F,L);			
-		end if;		
+			writeline(F,L);
+		end if;
 
-		
+
 		-- 68K CTRL ACCESS
 		if FX68_CTRL_SEL = '1' and FX68_CTRL_DTACK_N = '1' then
 			write(L, string'("68K "));
@@ -2351,7 +2230,7 @@ begin
 				else
 					write(L, string'("  "));
 					hwrite(L, FX68_DO(7 downto 0));
-				end if;				
+				end if;
 			else
 				if FX68_UDS_N = '0' and FX68_LDS_N = '0' then
 					hwrite(L, IO_DO);
@@ -2361,10 +2240,10 @@ begin
 				else
 					write(L, string'("  "));
 					hwrite(L, IO_DO(7 downto 0));
-				end if;								
+				end if;
 			end if;
 			write(L, string'("]"));
-			writeline(F,L);					
+			writeline(F,L);
 		end if;
 		
 		-- 68K VDP ACCESS
@@ -2387,7 +2266,7 @@ begin
 				else
 					write(L, string'("  "));
 					hwrite(L, FX68_DO(7 downto 0));
-				end if;				
+				end if;
 			else
 				if FX68_UDS_N = '0' and FX68_LDS_N = '0' then
 					hwrite(L, VDP_DO);
@@ -2397,10 +2276,10 @@ begin
 				else
 					write(L, string'("  "));
 					hwrite(L, VDP_DO(7 downto 0));
-				end if;								
+				end if;
 			end if;
 			write(L, string'("]"));
-			writeline(F,L);					
+			writeline(F,L);
 		end if;
 		
 	end if;

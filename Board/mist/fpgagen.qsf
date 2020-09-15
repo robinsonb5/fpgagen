@@ -302,7 +302,8 @@ set_instance_assignment -name CURRENT_STRENGTH_NEW 4MA -to SPI_DO
 set_instance_assignment -name CURRENT_STRENGTH_NEW 8MA -to AUDIO_L
 set_instance_assignment -name CURRENT_STRENGTH_NEW 8MA -to AUDIO_R
 set_instance_assignment -name CURRENT_STRENGTH_NEW 8MA -to UART_TX
-set_global_assignment -name VHDL_FILE ../../src/virtual_toplevel.vhd
+set_global_assignment -name VHDL_FILE ../../src/fpgagen_top.vhd
+set_global_assignment -name VHDL_FILE ../../src/fpgagen_sdram_top.vhd
 set_global_assignment -name VHDL_FILE ../../src/os_rom.vhd
 set_global_assignment -name VHDL_FILE ../../src/gen_io.vhd
 set_global_assignment -name VHDL_FILE ../../src/SinglePortRAM.vhd

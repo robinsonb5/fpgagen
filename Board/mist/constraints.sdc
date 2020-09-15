@@ -104,13 +104,13 @@ set_multicycle_path -from [get_clocks $mem_clk] -to [get_clocks $sys_clk] -start
 
 set_multicycle_path -from [get_clocks $sdram_clk] -to [get_clocks $mem_clk] -setup 2
 
-set_multicycle_path -start -setup -from [get_keepers Virtual_Toplevel:virtualtoplevel|fx68k:fx68k_inst|Ir[*]] -to [get_keepers Virtual_Toplevel:virtualtoplevel|fx68k:fx68k_inst|microAddr[*]] 2
-set_multicycle_path -start -hold -from [get_keepers Virtual_Toplevel:virtualtoplevel|fx68k:fx68k_inst|Ir[*]] -to [get_keepers Virtual_Toplevel:virtualtoplevel|fx68k:fx68k_inst|microAddr[*]] 1
-set_multicycle_path -start -setup -from [get_keepers Virtual_Toplevel:virtualtoplevel|fx68k:fx68k_inst|Ir[*]] -to [get_keepers Virtual_Toplevel:virtualtoplevel|fx68k:fx68k_inst|nanoAddr[*]] 2
-set_multicycle_path -start -hold -from [get_keepers Virtual_Toplevel:virtualtoplevel|fx68k:fx68k_inst|Ir[*]] -to [get_keepers Virtual_Toplevel:virtualtoplevel|fx68k:fx68k_inst|nanoAddr[*]] 1
+set_multicycle_path -start -setup -from [get_keepers fpgagen_sdram_top:sdram_top|fpgagen_top:fpgagen|fx68k:fx68k_inst|Ir[*]] -to [get_keepers fpgagen_sdram_top:sdram_top|fpgagen_top:fpgagen|fx68k:fx68k_inst|microAddr[*]] 2
+set_multicycle_path -start -hold -from [get_keepers fpgagen_sdram_top:sdram_top|fpgagen_top:fpgagen|fx68k:fx68k_inst|Ir[*]] -to [get_keepers fpgagen_sdram_top:sdram_top|fpgagen_top:fpgagen|fx68k:fx68k_inst|microAddr[*]] 1
+set_multicycle_path -start -setup -from [get_keepers fpgagen_sdram_top:sdram_top|fpgagen_top:fpgagen|fx68k:fx68k_inst|Ir[*]] -to [get_keepers fpgagen_sdram_top:sdram_top|fpgagen_top:fpgagen|fx68k:fx68k_inst|nanoAddr[*]] 2
+set_multicycle_path -start -hold -from [get_keepers fpgagen_sdram_top:sdram_top|fpgagen_top:fpgagen|fx68k:fx68k_inst|Ir[*]] -to [get_keepers fpgagen_sdram_top:sdram_top|fpgagen_top:fpgagen|fx68k:fx68k_inst|nanoAddr[*]] 1
 
-set_multicycle_path -from {Virtual_Toplevel:virtualtoplevel|T80pa:t80|T80:u0|*} -setup 2
-set_multicycle_path -from {Virtual_Toplevel:virtualtoplevel|T80pa:t80|T80:u0|*} -hold 1
+set_multicycle_path -from {fpgagen_sdram_top:sdram_top|fpgagen_top:fpgagen|T80pa:t80|T80:u0|*} -setup 2
+set_multicycle_path -from {fpgagen_sdram_top:sdram_top|fpgagen_top:fpgagen|T80pa:t80|T80:u0|*} -hold 1
 
 set_multicycle_path -to {VGA_*[*]} -setup 2
 set_multicycle_path -to {VGA_*[*]} -hold 1

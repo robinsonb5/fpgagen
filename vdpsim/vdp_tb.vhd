@@ -45,17 +45,20 @@ component vdp
 
                 HINT            : out std_logic;
                 INTACK          : in std_logic;
-                BR_N            : out std_logic;
-                BG_N            : in std_logic;
-                BGACK_N         : out std_logic;
-
                 VINT_TG68       : out std_logic;
                 VINT_T80        : out std_logic;
 
-                VBUS_ADDR               : out std_logic_vector(23 downto 1);
-                VBUS_DATA               : in std_logic_vector(15 downto 0);
+                BR_N_I          : in std_logic := '1';
+                BR_N_O          : out std_logic;
+                BG_N            : in std_logic := '1';
+                BGACK_N_I       : in std_logic := '1';
+                BGACK_N_O       : out std_logic;
+                AS_N            : in std_logic := '1';
 
-                VBUS_SEL                : out std_logic;
+                VBUS_ADDR       : out std_logic_vector(23 downto 1);
+                VBUS_DATA       : in std_logic_vector(15 downto 0);
+
+                VBUS_SEL        : out std_logic;
                 VBUS_DTACK_N    : in std_logic;
 
                 PAL             : in std_logic := '0';
@@ -138,6 +141,9 @@ begin
 
       INTACK => '0',
       BG_N => '0',
+      BR_N_I => '1',
+      BGACK_N_I => '1',
+      AS_N => '1',
 
       VBUS_DATA => "0000000000000000",
 

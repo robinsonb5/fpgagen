@@ -2488,6 +2488,10 @@ begin
 					PRE_V_ACTIVE <= '0';
 					V_ACTIVE <= '0';
 				end if;
+
+				-- Clear the VINT here, prevents interrupt re-triggering in Metal Blast 2277
+				VINT_T80_CLR <= '1';
+
 			end if;
 
 			if HV_HCNT = HBLANK_START then
@@ -2532,9 +2536,6 @@ begin
 					FIELD <= not FIELD;
 					VINT_TG68_PENDING_SET <= '1';
 					VINT_T80_SET <= '1';
-				elsif HV_VCNT = V_INT_POS + 1
-				then
-					VINT_T80_CLR <= '1';
 				end if;
 			end if;
 

@@ -1536,7 +1536,7 @@ begin
 				SSF2_USE_MAP <= '1';
 				case FX68_A(3 downto 1) is
 				when "000" =>
-					null; -- always 0;
+					SRAM_EN_PAGEIN <= FX68_DO(0);
 				when "001" =>
 					SSF2_MAP(11 downto 6) <= FX68_DO(5 downto 0);
 				when "010" =>

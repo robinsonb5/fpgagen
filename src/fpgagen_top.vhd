@@ -58,13 +58,15 @@ port(
 
 	LED            : out std_logic;
 
-	joya           : in std_logic_vector(11 downto 0) := (others =>'1');
-	joyb           : in std_logic_vector(11 downto 0) := (others =>'1');
+	-- Port 1
+	DINA     : in  std_logic_vector(7 downto 0);
+	DOUTA    : out std_logic_vector(7 downto 0);
+	OEA      : out std_logic_vector(7 downto 0);
 
-	mouse_x        : in std_logic_vector(7 downto 0);
-	mouse_y        : in std_logic_vector(7 downto 0);
-	mouse_flags    : in std_logic_vector(7 downto 0);
-	mouse_strobe   : in std_logic;
+	-- Port 2
+	DINB     : in  std_logic_vector(7 downto 0);
+	DOUTB    : out std_logic_vector(7 downto 0);
+	OEB      : out std_logic_vector(7 downto 0);
 
 	saveram_addr   : in std_logic_vector(14 downto 0);
 	saveram_we     : in std_logic;
@@ -81,16 +83,12 @@ port(
 
         -- DIP switches
 	ext_sw         : in std_logic_vector(15 downto 0); -- 1 - SVP
-	                                                   -- 2 - joy swap
 	                                                   -- 3 - PSG EN
 	                                                   -- 4 - FM EN
 	                                                   -- 5 - Export
 	                                                   -- 6 - PAL
-	                                                   -- 7 - Swap y
-	                                                   -- 8 - 3 Buttons only
 	                                                   -- 9 - VRAM speed emu
 	                                                   -- 10 - EEPROM emu (fake)
-	                                                   -- 12-11 - Mouse
 	                                                   -- 13 - HiFi PCM
 	                                                   -- 14 - CPU Turbo
 	                                                   -- 15 - Border
@@ -471,17 +469,6 @@ signal VDP_BLUE	: std_logic_vector(3 downto 0);
 signal VDP_VS_N	: std_logic;
 signal VDP_HS_N	: std_logic;
 
--- Joystick signals
-signal JOY_SWAP	    : std_logic;
-signal JOY_Y_SWAP   : std_logic;
-signal JOY_1_UP     : std_logic;
-signal JOY_1_DOWN   : std_logic;
-signal JOY_2_UP     : std_logic;
-signal JOY_2_DOWN   : std_logic;
-signal JOY_1        : std_logic_vector(11 downto 0);
-signal JOY_2        : std_logic_vector(11 downto 0);
-signal JOY_3BUT		: std_logic;
-
 signal SDR_INIT_DONE	: std_logic;
 
 type bootStates is (BOOT_READ_1, BOOT_WRITE_1, BOOT_WRITE_2, BOOT_DONE);
@@ -502,8 +489,6 @@ signal KEY : std_logic_vector(3 downto 0);
 signal PAL : std_logic;
 signal model: std_logic;
 signal PAL_IO: std_logic;
-signal MSEL : std_logic_vector(1 downto 0);
-signal MOUSE_Y_ADJ : std_logic_vector(8 downto 0);
 signal CPU_TURBO : std_logic;
 signal BORDER : std_logic;
 signal CRAM_DOTS : std_logic;
@@ -562,42 +547,17 @@ begin
 	end if;
 end process;
 
--- Joystick swapping
-JOY_SWAP <= SW(2);
-JOY_Y_SWAP <= SW(7);
-JOY_3BUT <= SW(8);
-
-JOY_1_DOWN <= joya(3) when JOY_Y_SWAP = '1' else joya(2);
-JOY_1_UP <= joya(2) when JOY_Y_SWAP = '1' else joya(3);
-JOY_2_DOWN <= joyb(3) when JOY_Y_SWAP = '1' else joyb(2);
-JOY_2_UP <= joyb(2) when JOY_Y_SWAP = '1' else joyb(3);
-
-JOY_1(1 downto 0) <= joyb(1 downto 0) when JOY_SWAP = '1' else joya(1 downto 0);
-JOY_1(2) <= JOY_2_DOWN when JOY_SWAP = '1' else JOY_1_DOWN;
-JOY_1(3) <= JOY_2_UP when JOY_SWAP = '1' else JOY_1_UP;
-JOY_1(11 downto 4) <= joyb(11 downto 4) when JOY_SWAP = '1' else joya(11 downto 4);
-
-JOY_2(1 downto 0) <= joyb(1 downto 0) when JOY_SWAP = '0' else joya(1 downto 0);
-JOY_2(2) <= JOY_2_DOWN when JOY_SWAP = '0' else JOY_1_DOWN;
-JOY_2(3) <= JOY_2_UP when JOY_SWAP = '0' else JOY_1_UP;
-JOY_2(11 downto 4) <= joyb(11 downto 4) when JOY_SWAP = '0' else joya(11 downto 4);
+-- DIP Switches
+SW <= ext_sw;
 
 model <= SW(5);
 PAL <= SW(6);
 
 VDP_VRAM_SPEED <= SW(9);
 EEPROM_EN <= SW(10);
-MSEL <= SW(12 downto 11);
-
-MOUSE_Y_ADJ <= mouse_flags(5) & mouse_y when JOY_Y_SWAP = '0' else (not mouse_flags(5) & not mouse_y) + 1;
-JOY_Y_SWAP <= SW(7);
-
 CPU_TURBO <= SW(14);
 BORDER <= SW(15);
 CRAM_DOTS <= SW(0);
-
--- DIP Switches
-SW <= ext_sw;
 
 -- LED
 LED <= '0';
@@ -708,38 +668,13 @@ port map(
 	RST_N		=> MRST_N,
 	CLK			=> MCLK,
 
-	J3BUT		=> JOY_3BUT,
-	P1_UP		=> not JOY_1(3),
-	P1_DOWN		=> not JOY_1(2),
-	P1_LEFT		=> not JOY_1(1),
-	P1_RIGHT	=> not JOY_1(0),
-	P1_A		=> not JOY_1(4),
-	P1_B		=> not JOY_1(5),
-	P1_C		=> not JOY_1(6),
-	P1_START	=> not JOY_1(7),
-	P1_X		=> not JOY_1(8),
-	P1_Y		=> not JOY_1(9),
-	P1_Z		=> not JOY_1(10),
-	P1_MODE		=> not JOY_1(11),
+	DINA    => DINA,
+	DOUTA   => DOUTA,
+	OEA     => OEA,
 
-	P2_UP		=> not JOY_2(3),
-	P2_DOWN		=> not JOY_2(2),
-	P2_LEFT		=> not JOY_2(1),
-	P2_RIGHT	=> not JOY_2(0),
-	P2_A		=> not JOY_2(4),
-	P2_B		=> not JOY_2(5),
-	P2_C		=> not JOY_2(6),
-	P2_START	=> not JOY_2(7),
-	P2_X		=> not JOY_2(8),
-	P2_Y		=> not JOY_2(9),
-	P2_Z		=> not JOY_2(10),
-	P2_MODE		=> not JOY_2(11),
-
-	MSEL		=> MSEL,
-	mouse_x		=> mouse_x,
-	mouse_y		=> MOUSE_Y_ADJ(7 downto 0),
-	mouse_flags => mouse_flags(7 downto 6) & MOUSE_Y_ADJ(8) & mouse_flags(4 downto 0),
-	mouse_strobe => mouse_strobe,
+	DINB    => DINB,
+	DOUTB   => DOUTB,
+	OEB     => OEB,
 
 	SEL		=> IO_SEL,
 	A			=> IO_A,

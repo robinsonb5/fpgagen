@@ -62,11 +62,25 @@ signal gen_blue     : std_logic_vector(3 downto 0);
 signal gen_hs		: std_logic;
 signal gen_vs		: std_logic;
 
+-- controllers
+signal DINA       : std_logic_vector(7 downto 0);
+signal DOUTA      : std_logic_vector(7 downto 0);
+signal OEA        : std_logic_vector(7 downto 0);
+signal DINB       : std_logic_vector(7 downto 0);
+signal DOUTB      : std_logic_vector(7 downto 0);
+signal OEB        : std_logic_vector(7 downto 0);
+signal JOY_SWAP   : std_logic;
+signal JOY_Y_SWAP : std_logic;
+signal JOY_1      : std_logic_vector(11 downto 0);
+signal JOY_2      : std_logic_vector(11 downto 0);
+signal JOY_3BUT   : std_logic;
+signal MSEL       : std_logic_vector(1 downto 0);
+
 -- user_io
 signal buttons: std_logic_vector(1 downto 0);
 signal status:  std_logic_vector(31 downto 0) := (others => '0');
-signal joy_0: std_logic_vector(31 downto 0);
-signal joy_1: std_logic_vector(31 downto 0);
+signal joya: std_logic_vector(31 downto 0);
+signal joyb: std_logic_vector(31 downto 0);
 signal ypbpr: std_logic;
 signal scandoubler_disable: std_logic;
 signal no_csync : std_logic;
@@ -226,20 +240,25 @@ begin
 end process;
 
 ext_sw(1) <= SVP_EN; -- SVP
-ext_sw(2) <= status(6); --joy swap
 ext_sw(3) <= status(5); --psg en
 ext_sw(4) <= status(4); --fm en
 ext_sw(5) <= status(7); --Export
 ext_sw(6) <= not status(8); --PAL
 ext_sw(7) <= status(9); --swap Y
-ext_sw(8) <= status(10); --3 buttons
 ext_sw(9) <= not status(3); -- VRAM speed emulation
 ext_sw(10) <= status(13); -- Fake EEPROM
-ext_sw(12 downto 11) <= status(16 downto 15); -- Mouse
 ext_sw(13) <= status(17); -- HiFi PCM
 ext_sw(14) <= status(18); -- CPU Turbo
 ext_sw(15) <= status(19); -- Border
 ext_sw(0) <= status(21); -- CRAM dots
+
+JOY_SWAP <= status(6);
+JOY_Y_SWAP <= status(9);
+JOY_3BUT <= status(10);
+MSEL <= status(16 downto 15);
+
+JOY_1 <= joya(11 downto 0) when JOY_SWAP = '0' else joyb(11 downto 0);
+JOY_2 <= joyb(11 downto 0) when JOY_SWAP = '0' else joya(11 downto 0);
 
 --SDRAM_A(12)<='0';
 sdram_top : entity work.fpgagen_sdram_top
@@ -261,15 +280,14 @@ port map(
     DRAM_ADDR => SDRAM_A,
     DRAM_DQ => SDRAM_DQ,
 
-    -- Joystick ports (Port_A, Port_B)
-	joya => joy_1(11 downto 0),
-	joyb => joy_0(11 downto 0),
+	-- Joystick ports (Port_A, Port_B)
+	DINA => DINA,
+	DOUTA => DOUTA,
+	OEA => OEA,
 
-    -- Mouse
-    mouse_x => std_logic_vector(mouse_x)(7 downto 0),
-    mouse_y => std_logic_vector(mouse_y)(7 downto 0),
-    mouse_flags => mouse_flags,
-    mouse_strobe => mouse_strobe,
+	DINB => DINB,
+	DOUTB => DOUTB,
+	OEB => OEB,
 
 	-- Video, Audio/CMT ports
     RED => gen_red,
@@ -300,6 +318,69 @@ port map(
     ext_sw       => ext_sw
 );
 
+gen_ctrlA : entity work.gen_ctrl
+port map (
+	RST_N        => reset_n,
+	CLK          => MCLK,
+
+	-- controller port pins
+	DAT          => DOUTA,
+	DOUT         => DINA,
+	CTL          => OEA,
+
+	J3BUT        => JOY_3BUT,
+	SWAP_Y       => JOY_Y_SWAP,
+	UP           => not JOY_1(3),
+	DOWN         => not JOY_1(2),
+	LEFT         => not JOY_1(1),
+	RIGHT        => not JOY_1(0),
+	A            => not JOY_1(4),
+	B            => not JOY_1(5),
+	C            => not JOY_1(6),
+	START        => not JOY_1(7),
+	X            => not JOY_1(8),
+	Y            => not JOY_1(9),
+	Z            => not JOY_1(10),
+	MODE         => not JOY_1(11),
+
+	MSEL         => MSEL(0),
+	mouse_x      => std_logic_vector(mouse_x(7 downto 0)),
+	mouse_y      => std_logic_vector(mouse_y(7 downto 0)),
+	mouse_flags  => mouse_flags,
+	mouse_strobe => mouse_strobe
+);
+
+gen_ctrlB : entity work.gen_ctrl
+port map (
+	RST_N        => reset_n,
+	CLK          => MCLK,
+
+	-- controller port pins
+	DAT          => DOUTB,
+	DOUT         => DINB,
+	CTL          => OEB,
+
+	J3BUT        => JOY_3BUT,
+	SWAP_Y       => JOY_Y_SWAP,
+	UP           => not JOY_2(3),
+	DOWN         => not JOY_2(2),
+	LEFT         => not JOY_2(1),
+	RIGHT        => not JOY_2(0),
+	A            => not JOY_2(4),
+	B            => not JOY_2(5),
+	C            => not JOY_2(6),
+	START        => not JOY_2(7),
+	X            => not JOY_2(8),
+	Y            => not JOY_2(9),
+	Z            => not JOY_2(10),
+	MODE         => not JOY_2(11),
+
+	MSEL         => MSEL(1),
+	mouse_x      => std_logic_vector(mouse_x(7 downto 0)),
+	mouse_y      => std_logic_vector(mouse_y(7 downto 0)),
+	mouse_flags  => mouse_flags,
+	mouse_strobe => mouse_strobe
+);
 sd_conf <= '0';
 
 user_io_inst : user_io
@@ -320,8 +401,8 @@ user_io_inst : user_io
         no_csync => no_csync,
         scandoubler_disable => scandoubler_disable,
 
-        joystick_0 => joy_0,
-        joystick_1 => joy_1,
+        joystick_0 => joya,
+        joystick_1 => joyb,
         joystick_analog_0 => open,
         joystick_analog_1 => open,
 --      switches => switches,

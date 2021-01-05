@@ -306,6 +306,7 @@ set_global_assignment -name VHDL_FILE ../../src/fpgagen_top.vhd
 set_global_assignment -name VHDL_FILE ../../src/fpgagen_sdram_top.vhd
 set_global_assignment -name VHDL_FILE ../../src/os_rom.vhd
 set_global_assignment -name VHDL_FILE ../../src/gen_io.vhd
+set_global_assignment -name VHDL_FILE ../../src/gen_ctrl.vhd
 set_global_assignment -name VHDL_FILE ../../src/SinglePortRAM.vhd
 set_global_assignment -name VHDL_FILE ../../src/DualPortRAM.vhd
 set_global_assignment -name VHDL_FILE ../../src/vdp_common.vhd

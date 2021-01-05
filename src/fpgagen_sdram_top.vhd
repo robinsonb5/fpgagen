@@ -71,13 +71,15 @@ port(
 
 	LED          : out std_logic;
 
-	joya         : in std_logic_vector(11 downto 0) := (others =>'1');
-	joyb         : in std_logic_vector(11 downto 0) := (others =>'1');
+	-- Port 1
+	DINA     : in  std_logic_vector(7 downto 0);
+	DOUTA    : out std_logic_vector(7 downto 0);
+	OEA      : out std_logic_vector(7 downto 0);
 
-	mouse_x      : in std_logic_vector(7 downto 0);
-	mouse_y      : in std_logic_vector(7 downto 0);
-	mouse_flags  : in std_logic_vector(7 downto 0);
-	mouse_strobe : in std_logic;
+	-- Port 2
+	DINB     : in  std_logic_vector(7 downto 0);
+	DOUTB    : out std_logic_vector(7 downto 0);
+	OEB      : out std_logic_vector(7 downto 0);
 
 	saveram_addr : in std_logic_vector(14 downto 0);
 	saveram_we   : in std_logic;
@@ -93,20 +95,17 @@ port(
 	ext_data_ack : in std_logic := '0';
 
         -- DIP switches
-	ext_sw       : in std_logic_vector(15 downto 0) -- 1 - SVP
-	                                                -- 2 - joy swap
-	                                                -- 3 - PSG EN
-	                                                -- 4 - FM EN
-	                                                -- 5 - Export
-	                                                -- 6 - PAL
-	                                                -- 7 - Swap y
-	                                                -- 8 - 3 Buttons only
-	                                                -- 9 - VRAM speed emu
-	                                                -- 10 - EEPROM emu (fake)
-	                                                -- 12-11 - Mouse
-	                                                -- 13 - HiFi PCM
-	                                                -- 14 - CPU Turbo
-	                                                -- 15 - Border
+	ext_sw         : in std_logic_vector(15 downto 0)  -- 1 - SVP
+	                                                   -- 3 - PSG EN
+	                                                   -- 4 - FM EN
+	                                                   -- 5 - Export
+	                                                   -- 6 - PAL
+	                                                   -- 9 - VRAM speed emu
+	                                                   -- 10 - EEPROM emu (fake)
+	                                                   -- 13 - HiFi PCM
+	                                                   -- 14 - CPU Turbo
+	                                                   -- 15 - Border
+	                                                   -- 0 - CRAM dots
 );
 end entity;
 
@@ -292,13 +291,13 @@ port map (
 
 	LED          => LED,
 
-	joya         => joya,
-	joyb         => joyb,
+	DINA         => DINA,
+	DOUTA        => DOUTA,
+	OEA          => OEA,
 
-	mouse_x      => mouse_x,
-	mouse_y      => mouse_y,
-	mouse_flags  => mouse_flags,
-	mouse_strobe => mouse_strobe,
+	DINB         => DINB,
+	DOUTB        => DOUTB,
+	OEB          => OEB,
 
 	saveram_addr => saveram_addr,
 	saveram_we   => saveram_we,

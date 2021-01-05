@@ -141,6 +141,7 @@ constant CONF_STR : string := core_name &
     "P1OH,PCM HiFi sound,Disable,Enable;"&
     "P1OJ,Border,Disable,Enable;"&
     "P1OK,Blending,Disable,Enable;"&
+    "P1OL,CRAM dots,Disable,Enable;"&
     "P2O6,Joystick swap,Off,On;"&
     "P2O9,Swap Y axis,Off,On;"&
     "P2OA,Only 3 buttons,Off,On;"&
@@ -238,6 +239,7 @@ ext_sw(12 downto 11) <= status(16 downto 15); -- Mouse
 ext_sw(13) <= status(17); -- HiFi PCM
 ext_sw(14) <= status(18); -- CPU Turbo
 ext_sw(15) <= status(19); -- Border
+ext_sw(0) <= status(21); -- CRAM dots
 
 --SDRAM_A(12)<='0';
 sdram_top : entity work.fpgagen_sdram_top

@@ -94,6 +94,7 @@ port(
 	                                                   -- 13 - HiFi PCM
 	                                                   -- 14 - CPU Turbo
 	                                                   -- 15 - Border
+	                                                   -- 0 - CRAM dots
 
 	-- RAM/ROM control
 	romwr_req : buffer std_logic;
@@ -505,6 +506,7 @@ signal MSEL : std_logic_vector(1 downto 0);
 signal MOUSE_Y_ADJ : std_logic_vector(8 downto 0);
 signal CPU_TURBO : std_logic;
 signal BORDER : std_logic;
+signal CRAM_DOTS : std_logic;
 
 -- DEBUG
 signal HEXVALUE			: std_logic_vector(15 downto 0);
@@ -592,6 +594,7 @@ JOY_Y_SWAP <= SW(7);
 
 CPU_TURBO <= SW(14);
 BORDER <= SW(15);
+CRAM_DOTS <= SW(0);
 
 -- DIP Switches
 SW <= ext_sw;
@@ -806,7 +809,8 @@ port map(
 
 	VRAM_SPEED  => VDP_VRAM_SPEED,
 	VSCROLL_BUG => '0',
-	BORDER_EN   => BORDER
+	BORDER_EN   => BORDER,
+	CRAM_DOTS => CRAM_DOTS
 );
 
 -- PSG

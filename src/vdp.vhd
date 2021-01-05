@@ -107,7 +107,8 @@ entity vdp is
 
 		VRAM_SPEED  : in std_logic := '1'; -- 0 - full speed, 1 - FIFO throttle emulation
 		VSCROLL_BUG : in std_logic := '1'; -- 0 - use nicer effect, 1 - HW original
-		BORDER_EN   : in std_logic := '1'  -- Enable border
+		BORDER_EN   : in std_logic := '1'; -- Enable border
+		CRAM_DOTS   : in std_logic := '1'  -- CRAM dots are visible
 	);
 end vdp;
 
@@ -2652,6 +2653,7 @@ process( RST_N, CLK )
 	variable col : std_logic_vector(5 downto 0);
 	variable cold: std_logic_vector(5 downto 0);
 	variable x   : std_logic_vector(8 downto 0);
+	variable col_out : std_logic_vector(8 downto 0);
 begin
 	if rising_edge(CLK) then
 
@@ -2749,6 +2751,12 @@ begin
 				CRAM_ADDR_B <= col;
 
 			when "0101" =>
+				if CRAM_WE_A = '1' and CRAM_DOTS = '1' then
+					col_out := CRAM_D_A;
+				else
+					col_out := CRAM_Q_B;
+				end if;
+
 				if ((x >= H_DISP_WIDTH or V_ACTIVE_DISP = '0') and (BORDER_EN = '0' or DBG(8 downto 7) = "01")) or
 				   (V_ACTIVE_DISP = '0' and DBG(8) = '1') -- blank upper border garbage even if the left and right are rendered
 				then
@@ -2759,21 +2767,21 @@ begin
 				else case PIX_MODE is
 					when PIX_SHADOW =>
 						-- half brightness
-						FF_B <= '0' & CRAM_Q_B(8 downto 6);
-						FF_G <= '0' & CRAM_Q_B(5 downto 3);
-						FF_R <= '0' & CRAM_Q_B(2 downto 0);
+						FF_B <= '0' & col_out(8 downto 6);
+						FF_G <= '0' & col_out(5 downto 3);
+						FF_R <= '0' & col_out(2 downto 0);
 
 					when PIX_NORMAL =>
 						-- normal brightness
-						FF_B <= CRAM_Q_B(8 downto 6) & '0';
-						FF_G <= CRAM_Q_B(5 downto 3) & '0';
-						FF_R <= CRAM_Q_B(2 downto 0) & '0';
+						FF_B <= col_out(8 downto 6) & '0';
+						FF_G <= col_out(5 downto 3) & '0';
+						FF_R <= col_out(2 downto 0) & '0';
 					
 					when PIX_HIGHLIGHT =>
 						-- increased brightness
-						FF_B <= '0' & CRAM_Q_B(8 downto 6) + 7;
-						FF_G <= '0' & CRAM_Q_B(5 downto 3) + 7;
-						FF_R <= '0' & CRAM_Q_B(2 downto 0) + 7;
+						FF_B <= '0' & col_out(8 downto 6) + 7;
+						FF_G <= '0' & col_out(5 downto 3) + 7;
+						FF_R <= '0' & col_out(2 downto 0) + 7;
 					end case;
 				end if;
 
@@ -2995,7 +3003,9 @@ begin
 			if FIFO_DELAY(3) /= "00" then FIFO_DELAY(3) <= FIFO_DELAY(3) - 1; end if;
 		end if;
 
-		CRAM_WE_A <= '0';
+		if HV_PIXDIV = "0101" then
+			CRAM_WE_A <= '0';
+		end if;
 
 		SOVR_CLR <= '0';
 		SCOL_CLR <= '0';

@@ -78,7 +78,8 @@ component vdp
 
                 VRAM_SPEED      : in std_logic := '1';
                 VSCROLL_BUG     : in std_logic := '0';
-                BORDER_EN       : in std_logic := '1'
+                BORDER_EN       : in std_logic := '1';
+                CRAM_DOTS       : in std_logic := '0'
 
         );
 end component ;

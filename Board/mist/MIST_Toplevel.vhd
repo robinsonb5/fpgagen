@@ -56,11 +56,14 @@ signal memclk      : std_logic;
 signal audiol : std_logic_vector(15 downto 0);
 signal audior : std_logic_vector(15 downto 0);
 
-signal gen_red      : std_logic_vector(3 downto 0);
-signal gen_green    : std_logic_vector(3 downto 0);
-signal gen_blue     : std_logic_vector(3 downto 0);
-signal gen_hs		: std_logic;
-signal gen_vs		: std_logic;
+signal gen_red    : std_logic_vector(3 downto 0);
+signal gen_green  : std_logic_vector(3 downto 0);
+signal gen_blue   : std_logic_vector(3 downto 0);
+signal gen_hs     : std_logic;
+signal gen_vs     : std_logic;
+signal gen_hbl    : std_logic;
+signal gen_vbl    : std_logic;
+signal gen_ce_pix : std_logic;
 
 -- controllers
 signal DINA       : std_logic_vector(7 downto 0);
@@ -75,7 +78,19 @@ signal JOY_1      : std_logic_vector(11 downto 0);
 signal JOY_2      : std_logic_vector(11 downto 0);
 signal JOY_3BUT   : std_logic;
 signal MSEL       : std_logic_vector(1 downto 0);
-
+signal LG_SEL     : std_logic_vector(1 downto 0);
+signal LG_TARGET  : std_logic;
+signal LG_SENSOR  : std_logic;
+signal LG_A       : std_logic;
+signal LG_B       : std_logic;
+signal LG_C       : std_logic;
+signal LG_START   : std_logic;
+signal LG_TARGET2 : std_logic;
+signal LG_SENSOR2 : std_logic;
+signal LG_A2      : std_logic;
+signal LG_START2  : std_logic;
+signal LG1_CH     : std_logic;
+signal LG2_CH     : std_logic;
 -- user_io
 signal buttons: std_logic_vector(1 downto 0);
 signal status:  std_logic_vector(31 downto 0) := (others => '0');
@@ -88,6 +103,7 @@ signal mouse_x: signed(8 downto 0);
 signal mouse_y: signed(8 downto 0);
 signal mouse_flags: std_logic_vector(7 downto 0);
 signal mouse_strobe: std_logic;
+signal mouse_idx: std_logic;
 
 -- sd io
 signal sd_lba:  unsigned(31 downto 0);
@@ -159,6 +175,7 @@ constant CONF_STR : string := core_name &
     "P2O6,Joystick swap,Off,On;"&
     "P2O9,Swap Y axis,Off,On;"&
     "P2OA,Only 3 buttons,Off,On;"&
+    "P2OMN,Lightgun,Off,Menacer,Justifier 1P,Justifier 2P;"&
     "P2OFG,Mouse,Off,Port 1,Port 2;"&
     "P3O78,Region,Auto,EU,JP,US;"&
     "P3OD,Fake EEPROM,Off,On;"&
@@ -256,6 +273,7 @@ JOY_SWAP <= status(6);
 JOY_Y_SWAP <= status(9);
 JOY_3BUT <= status(10);
 MSEL <= status(16 downto 15);
+LG_SEL <= status(23 downto 22);
 
 JOY_1 <= joya(11 downto 0) when JOY_SWAP = '0' else joyb(11 downto 0);
 JOY_2 <= joyb(11 downto 0) when JOY_SWAP = '0' else joya(11 downto 0);
@@ -290,14 +308,18 @@ port map(
 	OEB => OEB,
 
 	-- Video, Audio/CMT ports
-    RED => gen_red,
-    GREEN => gen_green,
-    BLUE => gen_blue,
+	RED => gen_red,
+	GREEN => gen_green,
+	BLUE => gen_blue,
 
-    HS => gen_hs,
-    VS => gen_vs,
-	 
-    LED => core_led,
+	HS => gen_hs,
+	VS => gen_vs,
+	CE_PIX => gen_ce_pix,
+	VBL => open,
+	IN_BORDER => gen_vbl,
+	HBL => gen_hbl,
+
+	LED => core_led,
 
     DAC_LDATA => audiol,
     DAC_RDATA => audior,
@@ -343,6 +365,16 @@ port map (
 	Z            => not JOY_1(10),
 	MODE         => not JOY_1(11),
 
+	LG_SEL       => "00",
+	LG_SENSOR    => '0',
+	LG_A         => '0',
+	LG_B         => '0',
+	LG_C         => '0',
+	LG_START     => '0',
+	LG_SENSOR2   => '0',
+	LG_A2        => '0',
+	LG_START2    => '0',
+
 	MSEL         => MSEL(0),
 	mouse_x      => std_logic_vector(mouse_x(7 downto 0)),
 	mouse_y      => std_logic_vector(mouse_y(7 downto 0)),
@@ -375,12 +407,74 @@ port map (
 	Z            => not JOY_2(10),
 	MODE         => not JOY_2(11),
 
+	LG_SEL       => LG_SEL,
+	LG_SENSOR    => LG_SENSOR,
+	LG_A         => LG_A,
+	LG_B         => LG_B,
+	LG_C         => LG_C,
+	LG_START     => LG_START,
+	LG_SENSOR2   => LG_SENSOR2,
+	LG_A2        => LG_A2,
+	LG_START2    => LG_START2,
+
 	MSEL         => MSEL(1),
 	mouse_x      => std_logic_vector(mouse_x(7 downto 0)),
 	mouse_y      => std_logic_vector(mouse_y(7 downto 0)),
 	mouse_flags  => mouse_flags,
 	mouse_strobe => mouse_strobe
 );
+
+gen_lg : entity work.gen_lightgun
+port map (
+	RST_N        => reset_n,
+	CLK          => MCLK,
+
+	CE_PIX       => gen_ce_pix,
+	VBL          => gen_vbl,
+	HBL          => gen_hbl,
+
+	mouse_x      => std_logic_vector(mouse_x(7 downto 0)),
+	mouse_y      => std_logic_vector(mouse_y(7 downto 0)),
+	mouse_flags  => mouse_flags,
+	mouse_strobe => mouse_strobe and (not mouse_idx or not LG_SEL(1)), -- mouse 0 only with Justifier
+
+	JUSTIFIER    => LG_SEL(1),
+	TARGET       => LG_TARGET,
+	SENSOR       => LG_SENSOR,
+	A            => LG_A,
+	B            => LG_B,
+	C            => LG_C,
+	START        => LG_START
+);
+
+LG1_CH <= '1' when LG_TARGET = '1' and LG_SEL(1) = '1' else '0';
+
+-- second Justifier
+gen_lg2 : entity work.gen_lightgun
+port map (
+	RST_N        => reset_n,
+	CLK          => MCLK,
+
+	CE_PIX       => gen_ce_pix,
+	VBL          => gen_vbl,
+	HBL          => gen_hbl,
+
+	mouse_x      => std_logic_vector(mouse_x(7 downto 0)),
+	mouse_y      => std_logic_vector(mouse_y(7 downto 0)),
+	mouse_flags  => mouse_flags,
+	mouse_strobe => mouse_strobe and mouse_idx, -- mouse 1 only
+
+	JUSTIFIER    => '1',
+	TARGET       => LG_TARGET2,
+	SENSOR       => LG_SENSOR2,
+	A            => LG_A2,
+	B            => open,
+	C            => open,
+	START        => LG_START2
+);
+
+LG2_CH <= '1' when LG_TARGET2 = '1' and LG_SEL = "11" else '0';
+
 sd_conf <= '0';
 
 user_io_inst : user_io
@@ -429,7 +523,8 @@ user_io_inst : user_io
         mouse_x => mouse_x,
         mouse_y => mouse_y,
         mouse_flags => mouse_flags,
-        mouse_strobe => mouse_strobe
+        mouse_strobe => mouse_strobe,
+        mouse_idx => mouse_idx
  );
 
 process (MCLK) begin
@@ -559,9 +654,9 @@ mist_video : work.mist.mist_video
 
         HSync       => gen_hs,
         VSync       => gen_vs,
-        R           => gen_red,
+        R           => gen_red or (LG1_CH&LG1_CH&LG1_CH&LG1_CH),
         G           => gen_green,
-        B           => gen_blue,
+        B           => gen_blue or (LG2_CH&LG2_CH&LG2_CH&LG2_CH),
 
         VGA_HS      => VGA_HS,
         VGA_VS      => VGA_VS,

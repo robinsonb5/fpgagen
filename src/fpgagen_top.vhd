@@ -55,6 +55,10 @@ port(
 	BLUE           : out std_logic_vector(3 downto 0);
 	VS             : out std_logic;
 	HS             : out std_logic;
+	HBL            : out std_logic;
+	VBL            : out std_logic;
+	IN_BORDER      : out std_logic;
+	CE_PIX         : out std_logic;
 
 	LED            : out std_logic;
 
@@ -452,6 +456,7 @@ signal T80_BAR_DTACK_N		: std_logic;
 signal FX68_TIME_SEL        : std_logic;
 
 -- INTERRUPTS
+signal EXINT  : std_logic;
 signal HINT		: std_logic;
 signal VINT_FX68	: std_logic;
 signal VINT_T80		: std_logic;
@@ -485,6 +490,10 @@ signal romState : romStates := ROM_IDLE;
 
 signal SW : std_logic_vector(15 downto 0);
 signal KEY : std_logic_vector(3 downto 0);
+
+signal VDP_HL : std_logic;
+signal CTLA   : std_logic_vector(7 downto 0);
+signal CTLB   : std_logic_vector(7 downto 0);
 
 signal PAL : std_logic;
 signal model: std_logic;
@@ -662,6 +671,9 @@ port map(
 	D			=> FX68_OS_D
 );
 
+OEA <= CTLA;
+OEB <= CTLB;
+
 -- I/O
 io : entity work.gen_io
 port map(
@@ -670,11 +682,11 @@ port map(
 
 	DINA    => DINA,
 	DOUTA   => DOUTA,
-	OEA     => OEA,
+	OEA     => CTLA,
 
 	DINB    => DINB,
 	DOUTB   => DOUTB,
-	OEB     => OEB,
+	OEB     => CTLB,
 
 	SEL		=> IO_SEL,
 	A			=> IO_A,
@@ -691,6 +703,8 @@ port map(
 );
 
 -- VDP
+
+VDP_HL <= '1' when (CTLA(7) = '1' and DINA(6) = '1') or (CTLB(7) = '1' and DINB(6) = '1') else '0';
 
 vdp : entity work.vdp
 port map(
@@ -719,6 +733,8 @@ port map(
 	vram32_a    => vram32_a,
 	vram32_q    => vram32_q,
 
+	HL          => VDP_HL,
+	EXINT       => EXINT,
 	HINT        => HINT,
 	VINT_TG68   => VINT_FX68,
 	VINT_T80    => VINT_T80,
@@ -731,7 +747,7 @@ port map(
 
 	VBUS_ADDR   => VBUS_ADDR,
 	VBUS_DATA   => VBUS_DATA,
-		
+
 	VBUS_SEL    => VBUS_SEL,
 	VBUS_DTACK_N=> VBUS_DTACK_N,
 
@@ -741,6 +757,10 @@ port map(
 	B           => VDP_BLUE,
 	HS          => VDP_HS_N,
 	VS          => VDP_VS_N,
+	VBL         => VBL,
+	HBL         => HBL,
+	IN_BORDER   => IN_BORDER,
+	CE_PIX      => CE_PIX,
 
 	VRAM_SPEED  => VDP_VRAM_SPEED,
 	VSCROLL_BUG => '0',
@@ -876,6 +896,8 @@ begin
 				FX68_IPL_N <= "001";
 			elsif HINT = '1' then
 				FX68_IPL_N <= "011";
+			elsif EXINT = '1' then
+				FX68_IPL_N <= "101";
 			else
 				FX68_IPL_N <= "111";
 			end if;

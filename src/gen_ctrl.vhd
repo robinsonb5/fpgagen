@@ -64,6 +64,16 @@ entity gen_ctrl is
 		Y      : in  std_logic;
 		Z      : in  std_logic;
 
+		LG_SEL     : in  std_logic_vector(1 downto 0);
+		LG_SENSOR  : in std_logic;
+		LG_A       : in  std_logic;
+		LG_B       : in  std_logic;
+		LG_C       : in  std_logic;
+		LG_START   : in std_logic;
+		LG_SENSOR2 : in std_logic;
+		LG_A2      : in  std_logic;
+		LG_START2  : in std_logic;
+
 		MSEL   : in  std_logic;
 		mouse_x: in  std_logic_vector(7 downto 0);
 		mouse_y: in  std_logic_vector(7 downto 0);
@@ -81,6 +91,7 @@ signal TH                : std_logic;
 signal TH_D              : std_logic;
 signal TR                : std_logic;
 signal TR_D              : std_logic;
+signal TL                : std_logic;
 signal JCNT              : integer range 0 to 3;
 signal JTMR              : integer range 0 to 129000;
 signal MSTATE            : std_logic_vector(3 downto 0);
@@ -97,10 +108,13 @@ signal mouse_x_latch_d   : std_logic_vector(7 downto 0);
 signal mouse_y_latch_d   : std_logic_vector(7 downto 0);
 signal mouse_flags_latch_d: std_logic_vector(7 downto 0);
 
+signal MTH               : std_logic;
+signal JDO               : std_logic_vector(2 downto 0);
 begin
 
 TH <= DAT(6) or not CTL(6);
 TR <= DAT(5) or not CTL(5);
+TL <= DAT(4) or not CTL(4);
 
 J_UP <= UP when SWAP_Y = '0' else DOWN;
 J_DOWN <= DOWN when SWAP_Y = '0' else UP;
@@ -140,7 +154,53 @@ begin
 
 		DOUT <= DAT;
 		if CTL(7) = '0' then DOUT(7) <= '1'; end if;
-		if MSEL = '0' and DAT(6) = '1' then
+		if LG_SEL = "01" then -- Menacer
+			if TR_D = '1' and TR = '0' then
+				MTH <= '1';
+			end if;
+			if LG_SENSOR = '1' then
+				MTH <= '0';
+			end if;
+			if CTL(6) = '0' then DOUT(6) <= MTH;   end if;
+			if CTL(5) = '0' then DOUT(5) <= '0';   end if;
+			if CTL(4) = '0' then DOUT(4) <= '0';   end if;
+			if CTL(3) = '0' then DOUT(3) <= (not START) or LG_START; end if;
+			if CTL(2) = '0' then DOUT(2) <= (not C) or LG_C;         end if;
+			if CTL(1) = '0' then DOUT(1) <= (not A) or LG_A;         end if;
+			if CTL(0) = '0' then DOUT(0) <= (not B) or LG_B;         end if;
+		elsif LG_SEL(1) = '1' then -- Justifier
+			if DAT(6) = '1' then -- TH high
+				JDO <= "100";
+			elsif TL = '0' then
+				-- gun enabled
+				if TR = '0' then
+					-- blue gun
+					JDO(1) <= START and (not LG_START);
+					JDO(0) <= A and (not LG_A);
+					if LG_SENSOR = '1' then
+						JDO(2) <= '0';
+					end if;
+				elsif LG_SEL(0) = '1' then
+					-- pink gun
+					JDO(1) <= not LG_START2;
+					JDO(0) <= not LG_A2;
+					if LG_SENSOR2 = '1' then
+						JDO(2) <= '0';
+					end if;
+				else
+					JDO <= "111";
+				end if;
+			else
+				JDO <= "111";
+			end if;
+			if CTL(6) = '0' then DOUT(6) <= JDO(2); end if;
+			if CTL(5) = '0' then DOUT(5) <= '1'; end if;
+			if CTL(4) = '0' then DOUT(4) <= '1'; end if;
+			if CTL(3) = '0' then DOUT(3) <= '0'; end if;
+			if CTL(2) = '0' then DOUT(2) <= '0'; end if;
+			if CTL(1) = '0' then DOUT(1) <= JDO(1); end if;
+			if CTL(0) = '0' then DOUT(0) <= JDO(0); end if;
+		elsif MSEL = '0' and DAT(6) = '1' then
 			-- joy TH = 1
 			if(J3BUT='1' or JCNT/=3) then
 				if CTL(5) = '0' then DOUT(5) <= C;       end if;

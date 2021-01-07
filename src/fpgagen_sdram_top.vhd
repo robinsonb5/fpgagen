@@ -68,6 +68,10 @@ port(
 	BLUE         : out std_logic_vector(3 downto 0);
 	VS           : out std_logic;
 	HS           : out std_logic;
+	HBL          : out std_logic;
+	VBL          : out std_logic;
+	IN_BORDER    : out std_logic;
+	CE_PIX       : out std_logic;
 
 	LED          : out std_logic;
 
@@ -288,6 +292,10 @@ port map (
 	BLUE         => BLUE,
 	VS           => VS,
 	HS           => HS,
+	VBL          => VBL,
+	HBL          => HBL,
+	IN_BORDER    => IN_BORDER,
+	CE_PIX       => CE_PIX,
 
 	LED          => LED,
 

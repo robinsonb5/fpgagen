@@ -65,6 +65,10 @@ signal gen_hbl    : std_logic;
 signal gen_vbl    : std_logic;
 signal gen_ce_pix : std_logic;
 
+signal red_out    : std_logic_vector(3 downto 0);
+signal green_out  : std_logic_vector(3 downto 0);
+signal blue_out   : std_logic_vector(3 downto 0);
+
 -- controllers
 signal DINA       : std_logic_vector(7 downto 0);
 signal DOUTA      : std_logic_vector(7 downto 0);
@@ -633,6 +637,10 @@ begin
     end if;
 end process;
 
+red_out   <= (gen_red and not (LG1_CH&LG1_CH&LG1_CH&LG1_CH)) or (LG2_CH&LG2_CH&LG2_CH&LG2_CH);
+green_out <= gen_green and not ((LG1_CH or LG2_CH)&(LG1_CH or LG2_CH)&(LG1_CH or LG2_CH)&(LG1_CH or LG2_CH));
+blue_out  <= (gen_blue and not (LG2_CH&LG2_CH&LG2_CH&LG2_CH)) or (LG1_CH&LG1_CH&LG1_CH&LG1_CH);
+
 mist_video : work.mist.mist_video
     generic map (
         SD_HCNT_WIDTH => 10,
@@ -654,9 +662,9 @@ mist_video : work.mist.mist_video
 
         HSync       => gen_hs,
         VSync       => gen_vs,
-        R           => gen_red or (LG1_CH&LG1_CH&LG1_CH&LG1_CH),
-        G           => gen_green,
-        B           => gen_blue or (LG2_CH&LG2_CH&LG2_CH&LG2_CH),
+        R           => red_out,
+        G           => green_out,
+        B           => blue_out,
 
         VGA_HS      => VGA_HS,
         VGA_VS      => VGA_VS,

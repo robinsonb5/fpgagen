@@ -188,7 +188,10 @@ begin
 						JDO(2) <= '0';
 					end if;
 				else
-					JDO <= "111";
+					if LG_SENSOR = '1' then
+						JDO(2) <= '0';
+					end if;
+					JDO(1 downto 0) <= "11";
 				end if;
 			else
 				JDO <= "111";

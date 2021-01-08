@@ -265,7 +265,6 @@ ext_sw(3) <= status(5); --psg en
 ext_sw(4) <= status(4); --fm en
 ext_sw(5) <= status(7); --Export
 ext_sw(6) <= not status(8); --PAL
-ext_sw(7) <= status(9); --swap Y
 ext_sw(9) <= not status(3); -- VRAM speed emulation
 ext_sw(10) <= status(13); -- Fake EEPROM
 ext_sw(13) <= status(17); -- HiFi PCM
@@ -540,7 +539,7 @@ process (MCLK) begin
         end if;
 
         img_mountedD <= img_mounted(0);
-        if img_mountedD = '0' and img_mounted(0) = '1' then
+        if img_mountedD = '0' and img_mounted(0) = '1' and img_size /= x"00000000" then
             bk_ena <= '1';
             bk_load <= '1';
         end if;

@@ -51,6 +51,7 @@ entity vdp is
 	port(
 		RST_N		: in std_logic;
 		CLK			: in std_logic;
+		PHI1    : in std_logic;
 		
 		SEL			: in std_logic;
 		A			: in std_logic_vector(4 downto 0);
@@ -346,7 +347,6 @@ signal DMA_COPY		: std_logic;
 signal DMA_LENGTH	: std_logic_vector(15 downto 0);
 signal DMA_SOURCE	: std_logic_vector(15 downto 0);
 
-signal DMA_VBUS_TIMER : std_logic_vector(1 downto 0);
 signal BGACK_N_REG  : std_logic;
 
 ----------------------------------------------------------------
@@ -3601,24 +3601,19 @@ begin
 					BR_N_O <= '0';
 					DMA_LENGTH <= REG(20) & REG(19);
 					DMA_SOURCE <= REG(22) & REG(21);
-					DMA_VBUS_TIMER <= "10";
 					DMAC <= DMA_VBUS_WAIT;
 				end if;
 
 			when DMA_VBUS_WAIT =>
-				if BG_N = '0' and AS_N = '1' then
+				if BG_N = '0' and AS_N = '1' and PHI1 = '1' then
 					BGACK_N_REG <= '0';
 					BR_N_O <= '1';
 				end if;
 				if SLOT_EN = '1' then
-					if DMA_VBUS_TIMER = 0 then
-						if BGACK_N_REG = '0' then
-							DMAC <= DMA_VBUS_RD;
-							FF_VBUS_SEL <= '1';
-							FF_VBUS_ADDR <= REG(23)(6 downto 0) & DMA_SOURCE;
-						end if;
-					else
-						DMA_VBUS_TIMER <= DMA_VBUS_TIMER - 1;
+					if BGACK_N_REG = '0' then
+						DMAC <= DMA_VBUS_RD;
+						FF_VBUS_SEL <= '1';
+						FF_VBUS_ADDR <= REG(23)(6 downto 0) & DMA_SOURCE;
 					end if;
 				end if;
 
@@ -3653,7 +3648,6 @@ begin
 				REG(22) <= DMA_SOURCE(15 downto 8);
 				REG(21) <= DMA_SOURCE(7 downto 0);
 				if DMA_LENGTH = 0 then
-					DMA_VBUS_TIMER <= "01";
 					DMAC <= DMA_VBUS_END;
 -- synthesis translate_off										
 					write(L, string'("VDP DMA VBUS END"));
@@ -3666,13 +3660,10 @@ begin
 				end if;
 
 			when DMA_VBUS_END =>
-				if SLOT_EN = '1' then
-					DMA_VBUS_TIMER <= DMA_VBUS_TIMER - 1;
-					if DMA_VBUS_TIMER = 0 then
-						DMA_VBUS <= '0';
-						BGACK_N_REG <= '1';
-						DMAC <= DMA_IDLE;
-					end if;
+				if PHI1 = '1' then
+					DMA_VBUS <= '0';
+					BGACK_N_REG <= '1';
+					DMAC <= DMA_IDLE;
 				end if;
 			when others => null;
 		end case;

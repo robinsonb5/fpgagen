@@ -1,7 +1,7 @@
 -- Copyright (c) 2010 Gregory Estrade (greg@torlus.com)
 -- Copyright (c) 2018 Till Harbaum
 -- Copyright (c) 2018-2019 Alexey Melnikov
--- Copyright (c) 2018-2019 György Szombathelyi
+-- Copyright (c) 2018-2021 György Szombathelyi
 --
 -- All rights reserved
 --
@@ -1640,7 +1640,6 @@ begin
 					if BGA_LEFT_BORDER = '1' or BGA_RIGHT_BORDER = '1' then
 						t_pal := T_BGB_PAL; -- border garbage using the last palette no. fetched to BGB
 					else
---						bga_tile_data := vram32_q;
 						t_pal := T_BGA_PAL;
 					end if;
 

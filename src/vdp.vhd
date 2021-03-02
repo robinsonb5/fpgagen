@@ -418,7 +418,6 @@ signal RAM_REQ_PROGRESS : std_logic;
 
 signal HSC_VRAM_ADDR    : std_logic_vector(15 downto 1);
 signal HSC_VRAM32_DO    : std_logic_vector(31 downto 0);
-signal HSC_VRAM32_DO_REG: std_logic_vector(31 downto 0);
 signal HSC_VRAM32_ACK   : std_logic;
 signal HSC_SEL          : std_logic;
 
@@ -473,8 +472,6 @@ signal BGB_HF		: std_logic;
 
 signal BGB_NAMETABLE_ITEMS  : std_logic_vector(31 downto 0);
 signal BGB_VRAM_ADDR        : std_logic_vector(15 downto 1);
-signal BGB_VRAM32_DO        : std_logic_vector(31 downto 0);
-signal BGB_VRAM32_DO_REG    : std_logic_vector(31 downto 0);
 signal BGB_VRAM32_ACK       : std_logic;
 signal BGB_VRAM32_ACK_REG   : std_logic;
 signal BGB_SEL		        : std_logic;
@@ -533,8 +530,6 @@ signal BGA_HF		: std_logic;
 
 signal BGA_NAMETABLE_ITEMS  : std_logic_vector(31 downto 0);
 signal BGA_VRAM_ADDR        : std_logic_vector(15 downto 1);
-signal BGA_VRAM32_DO        : std_logic_vector(31 downto 0);
-signal BGA_VRAM32_DO_REG    : std_logic_vector(31 downto 0);
 signal BGA_VRAM32_ACK       : std_logic;
 signal BGA_VRAM32_ACK_REG   : std_logic;
 signal BGA_SEL              : std_logic;
@@ -642,8 +637,6 @@ signal SP2C	: SP2C_t;
 signal SP2_Y			: std_logic_vector(8 downto 0);
 signal SP2_EN			: std_logic;
 signal SP2_VRAM_ADDR	: std_logic_vector(15 downto 1);
-signal SP2_VRAM32_DO     : std_logic_vector(31 downto 0);
-signal SP2_VRAM32_DO_REG : std_logic_vector(31 downto 0);
 signal SP2_VRAM32_ACK    : std_logic;
 signal SP2_SEL			: std_logic;
 
@@ -664,8 +657,6 @@ type sp3c_t is (
 signal SP3C		: SP3C_t;
 
 signal SP3_VRAM_ADDR	: std_logic_vector(15 downto 1);
-signal SP3_VRAM32_DO    : std_logic_vector(31 downto 0);
-signal SP3_VRAM32_DO_REG: std_logic_vector(31 downto 0);
 signal SP3_VRAM32_ACK   : std_logic;
 signal SP3_VRAM32_ACK_REG: std_logic;
 signal SP3_SEL          : std_logic;
@@ -952,13 +943,7 @@ BGACK_N_O <= BGACK_N_REG;
 vram32_req <= not vram32_req_reg when VMC32_NEXT /= VMC32_IDLE and RAM_REQ_PROGRESS = '0' and vram32_req_reg = vram32_ack else vram32_req_reg;
 vram32_a <= vram32_a_next when VMC32_NEXT /= VMC32_IDLE and RAM_REQ_PROGRESS = '0' and vram32_req_reg = vram32_ack else vram32_a_reg;
 
--- Get the ack and data one cycle earlier
-SP2_VRAM32_DO <= vram32_q when VMC32 = VMC32_SP2 else SP2_VRAM32_DO_REG;
-SP3_VRAM32_DO <= vram32_q when VMC32 = VMC32_SP3 else SP3_VRAM32_DO_REG;
-HSC_VRAM32_DO <= vram32_q when VMC32 = VMC32_HSC else HSC_VRAM32_DO_REG;
-BGB_VRAM32_DO <= vram32_q when VMC32 = VMC32_BGB else BGB_VRAM32_DO_REG;
-BGA_VRAM32_DO <= vram32_q when VMC32 = VMC32_BGA else BGA_VRAM32_DO_REG;
-
+-- Get the ack one cycle earlier
 SP2_VRAM32_ACK <= '1' when VMC32 = VMC32_SP2 and vram32_req_reg = vram32_ack and RAM_REQ_PROGRESS = '1' else '0';
 SP3_VRAM32_ACK <= '1' when VMC32 = VMC32_SP3 and vram32_req_reg = vram32_ack and RAM_REQ_PROGRESS = '1' else SP3_VRAM32_ACK_REG;
 HSC_VRAM32_ACK <= '1' when VMC32 = VMC32_HSC and vram32_req_reg = vram32_ack and RAM_REQ_PROGRESS = '1' else '0';
@@ -1029,17 +1014,14 @@ begin
 				when VMC32_IDLE =>
 					null;
 				when VMC32_SP2 =>
-					SP2_VRAM32_DO_REG <= vram32_q;
+					null;
 				when VMC32_SP3 =>
-					SP3_VRAM32_DO_REG <= vram32_q;
 					SP3_VRAM32_ACK_REG <= '1';
 				when VMC32_HSC =>
-					HSC_VRAM32_DO_REG <= vram32_q;
+					null;
 				when VMC32_BGB =>
-					BGB_VRAM32_DO_REG <= vram32_q;
 					BGB_VRAM32_ACK_REG <= '1';
 				when VMC32_BGA =>
-					BGA_VRAM32_DO_REG <= vram32_q;
 					BGA_VRAM32_ACK_REG <= '1';
 				end case;
 				RAM_REQ_PROGRESS <= '0';
@@ -1082,6 +1064,7 @@ process (RST_N, CLK) begin
 			HSC_SEL <= '1';
 		elsif HSC_VRAM32_ACK = '1' then
 			HSC_SEL <= '0';
+			HSC_VRAM32_DO <= vram32_q;
 		end if;
 	end if;
 end process;
@@ -1255,12 +1238,12 @@ begin
 					write(L, string'(" BASE_RD ["));
 					hwrite(L, BGB_VRAM_ADDR & '0');					
 					write(L, string'("] = ["));
-					hwrite(L, BGB_VRAM32_DO);
+					hwrite(L, vram32_q);
 					write(L, string'("]"));
 					writeline(F,L);									
 -- synthesis translate_on
 					BGB_SEL <= '0';
-					BGB_NAMETABLE_ITEMS <= BGB_VRAM32_DO;
+					BGB_NAMETABLE_ITEMS <= vram32_q;
 					BGBC <= BGBC_TILE_RD;
 				end if;
 
@@ -1307,11 +1290,7 @@ begin
 						BGB_PATTERN_EN_LATE <= '1';
 					end if;
 
-					if BGB_LEFT_BORDER = '1' or BGB_RIGHT_BORDER = '1' then
-						bgb_tile_data := SP3_VRAM32_DO;
-					else
-						bgb_tile_data := BGB_VRAM32_DO;
-					end if;
+					bgb_tile_data := vram32_q;
 					BGB_COLINFO_ADDR_A <= BGB_POS(8 downto 0) + HSC_VRAM32_DO(19 downto 16);
 
 					BGB_COLINFO_WE_A <= '1';
@@ -1601,12 +1580,12 @@ begin
 					write(L, string'(" BASE_RD ["));
 					hwrite(L, BGA_VRAM_ADDR & '0');					
 					write(L, string'("] = ["));
-					hwrite(L, BGA_VRAM32_DO);
+					hwrite(L, vram32_q);
 					write(L, string'("]"));
 					writeline(F,L);									
 -- synthesis translate_on											
 					BGA_SEL <= '0';
-					BGA_NAMETABLE_ITEMS <= BGA_VRAM32_DO;
+					BGA_NAMETABLE_ITEMS <= vram32_q;
 					BGAC <= BGAC_TILE_RD;
 				end if;
 
@@ -1657,15 +1636,11 @@ begin
 						BGA_PATTERN_EN_LATE <= '1';
 					end if;
 
+					bga_tile_data := vram32_q;
 					if BGA_LEFT_BORDER = '1' or BGA_RIGHT_BORDER = '1' then
-						if BGA_COL = "111101" then
-							bga_tile_data := HSC_VRAM32_DO;
-						else
-							bga_tile_data := SP3_VRAM32_DO;
-						end if;
 						t_pal := T_BGB_PAL; -- border garbage using the last palette no. fetched to BGB
 					else
-						bga_tile_data := BGA_VRAM32_DO;
+--						bga_tile_data := vram32_q;
 						t_pal := T_BGA_PAL;
 					end if;
 
@@ -2011,12 +1986,12 @@ begin
 			when SP2C_RD =>
 				if SP2_VRAM32_ACK = '1' then
 					SP2_SEL <= '0';
-					OBJ_SPINFO_D(34) <= SP2_VRAM32_DO(15); --PRI
-					OBJ_SPINFO_D(33 downto 32) <= SP2_VRAM32_DO(14 downto 13); --PAL
-					OBJ_SPINFO_D(31) <= SP2_VRAM32_DO(12); --VF
-					OBJ_SPINFO_D(30) <= SP2_VRAM32_DO(11); --HF
-					OBJ_SPINFO_D(29 downto 19) <= SP2_VRAM32_DO(10 downto 0); --PAT
-					OBJ_SPINFO_D(18 downto 10) <= SP2_VRAM32_DO(24 downto 16); --X
+					OBJ_SPINFO_D(34) <= vram32_q(15); --PRI
+					OBJ_SPINFO_D(33 downto 32) <= vram32_q(14 downto 13); --PAL
+					OBJ_SPINFO_D(31) <= vram32_q(12); --VF
+					OBJ_SPINFO_D(30) <= vram32_q(11); --HF
+					OBJ_SPINFO_D(29 downto 19) <= vram32_q(10 downto 0); --PAT
+					OBJ_SPINFO_D(18 downto 10) <= vram32_q(24 downto 16); --X
 					OBJ_SPINFO_ADDR_WR <= OBJ_IDX;
 					OBJ_SPINFO_WE <= '1';
 					SP2C <= SP2C_NEXT;
@@ -2221,21 +2196,21 @@ begin
 
 					case OBJ_X_OFS(2 downto 0) is
 					when "100" =>
-						obj_color := SP3_VRAM32_DO(31 downto 28);
+						obj_color := vram32_q(31 downto 28);
 					when "101" =>
-						obj_color := SP3_VRAM32_DO(27 downto 24);
+						obj_color := vram32_q(27 downto 24);
 					when "110" =>
-						obj_color := SP3_VRAM32_DO(23 downto 20);
+						obj_color := vram32_q(23 downto 20);
 					when "111" =>
-						obj_color := SP3_VRAM32_DO(19 downto 16);
+						obj_color := vram32_q(19 downto 16);
 					when "000" =>
-						obj_color := SP3_VRAM32_DO(15 downto 12);
+						obj_color := vram32_q(15 downto 12);
 					when "001" =>
-						obj_color := SP3_VRAM32_DO(11 downto  8);
+						obj_color := vram32_q(11 downto  8);
 					when "010" =>
-						obj_color := SP3_VRAM32_DO( 7 downto  4);
+						obj_color := vram32_q( 7 downto  4);
 					when "011" =>
-						obj_color := SP3_VRAM32_DO( 3 downto  0);
+						obj_color := vram32_q( 3 downto  0);
 					when others => null;
 					end case;
 

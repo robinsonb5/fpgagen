@@ -3713,10 +3713,12 @@ begin
 	if RST_N = '0' then
 		EXINT_FF <= '0';
 	elsif rising_edge( CLK) then
-		if EXINT_PENDING = '1' and IE2 = '1' then
-			EXINT_FF <= '1';
-		else
-			EXINT_FF <= '0';
+		if PHI1 = '1' and AS_N = '1' then
+			if EXINT_PENDING = '1' and IE2 = '1' then
+				EXINT_FF <= '1';
+			else
+				EXINT_FF <= '0';
+			end if;
 		end if;
 	end if;
 end process;
@@ -3728,10 +3730,12 @@ begin
 	if RST_N = '0' then
 		HINT_FF <= '0';
 	elsif rising_edge( CLK) then
-		if HINT_PENDING = '1' and IE1 = '1' then
-			HINT_FF <= '1';
-		else
-			HINT_FF <= '0';
+		if PHI1 = '1' and AS_N = '1' then
+			if HINT_PENDING = '1' and IE1 = '1' then
+				HINT_FF <= '1';
+			else
+				HINT_FF <= '0';
+			end if;
 		end if;
 	end if;	
 end process;
@@ -3743,10 +3747,12 @@ begin
 	if RST_N = '0' then
 		VINT_TG68_FF <= '0';
 	elsif rising_edge( CLK) then
-		if VINT_TG68_PENDING = '1' and IE0 = '1' then
-			VINT_TG68_FF <= '1';
-		else
-			VINT_TG68_FF <= '0';
+		if PHI1 = '1' and AS_N = '1' then
+			if VINT_TG68_PENDING = '1' and IE0 = '1' then
+				VINT_TG68_FF <= '1';
+			else
+				VINT_TG68_FF <= '0';
+			end if;
 		end if;
 	end if;	
 end process;

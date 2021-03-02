@@ -884,30 +884,9 @@ FX68_SEL <= '1' when FX68_AS_N = '0' and (FX68_UDS_N = '0' or FX68_LDS_N = '0') 
 -- INTERRUPTS CONTROL
 
 T80_INT_N <= not VINT_T80;
---FX68_IPL_N <= "001" when VINT_FX68 = '1' else "011" when HINT = '1' else "111";
+FX68_IPL_N <= "001" when VINT_FX68 = '1' else "011" when HINT = '1' else "101" when EXINT = '1' else "111";
 FX68_VPA_N <= '0' when FX68_INTACK = '1' else '1';
 FX68_INTACK <= '1' when FX68_FC = "111" else '0';
-
-process( MCLK )
-begin
-	if rising_edge(MCLK) then
-		-- some delay between the VDP and CPU interrupt lines
-		-- makes Fatal Rewind happy
-		-- probably it should belong to the CPU
---		if FX68_CYCLE = '1' and FX68_BUS_WAIT = "00" then
-		if FX68_PHI1 = '1' and FX68_AS_N = '1' then
-			if VINT_FX68 = '1' then
-				FX68_IPL_N <= "001";
-			elsif HINT = '1' then
-				FX68_IPL_N <= "011";
-			elsif EXINT = '1' then
-				FX68_IPL_N <= "101";
-			else
-				FX68_IPL_N <= "111";
-			end if;
-		end if;
-	end if;
-end process;
 
 -- CLOCK GENERATION
 process( MRST_N, MCLK, VCLKCNT )

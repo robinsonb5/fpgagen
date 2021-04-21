@@ -74,7 +74,7 @@ architecture rtl of chameleon2 is
 	signal audio_r : std_logic_vector(15 downto 0);
 
 -- IO
-	signal button_reset_n : std_logic;
+	signal menu_btn : std_logic;
 
 	signal c64_keys : unsigned(63 downto 0);
 	signal keys_valid : std_logic;
@@ -90,6 +90,7 @@ architecture rtl of chameleon2 is
 	signal joy2 : unsigned(7 downto 0);
 	signal joy3 : unsigned(7 downto 0);
 	signal joy4 : unsigned(7 downto 0);
+	signal ir_power : std_logic;
 	signal ir : std_logic;
 	signal ir_d : std_logic;
 	signal debug1 : std_logic_vector(31 downto 0);
@@ -276,6 +277,7 @@ begin
 				joystick4 => joystick4,
 				keys => c64_keys,
 				keys_valid => keys_valid,
+				ir_right_button => ir_power,
 --				restore_key_n => restore_n
 				restore_key_n => open,
 				debug1 => debug1,
@@ -304,6 +306,7 @@ begin
 		if keys_valid='1' then
 			gp1_run<=c64_keys(11) and c64_keys(56);
 			gp1_select<=c64_keys(60);
+			menu_btn <= usart_cts and c64_keys(63) and not ir_power;
 		end if;
 	end if;
 end process;
@@ -354,6 +357,7 @@ joy4<=joy2(7)&joy2(5)&joy2(4)&joy2(6)&joy2(0)&joy2(1)&joy2(2)&joy2(3);
 	joyb => std_logic_vector(not joy4),
 --	joyc => std_logic_vector(joy3),
 --	joyd => std_logic_vector(joy4),
+	menu_button => freeze_btn_n
 
     -- SD/MMC slot ports
 	spi_clk => spi_clk,

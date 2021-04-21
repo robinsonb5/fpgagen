@@ -90,7 +90,8 @@ entity Virtual_Toplevel is
 		spi_miso		: in std_logic := '1';
 		spi_mosi		: out std_logic;
 		spi_clk		: out std_logic;
-		spi_cs 		: out std_logic
+		spi_cs 		: out std_logic;
+		menu_button : in std_logic
 	);
 end entity;
 

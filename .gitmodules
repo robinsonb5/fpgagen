@@ -16,3 +16,6 @@
 [submodule "src/T80"]
 	path = src/T80
 	url = https://github.com/mist-devel/T80.git
+[submodule "DeMiSTify"]
+	path = DeMiSTify
+	url = https://github.com/robinsonb5/DeMiSTify.git

@@ -215,7 +215,7 @@ COMPONENT hybrid_pwm_sd
 END COMPONENT;
 
 component data_io
-    generic ( ROM_DIRECT_UPLOAD : boolean := true );
+    generic ( ROM_DIRECT_UPLOAD : integer := 1 );
     port (  clk_sys        : in std_logic;
             clkref_n       : in std_logic;
             ioctl_wr       : out std_logic;
@@ -483,7 +483,7 @@ sd_conf <= '0';
 user_io_inst : user_io
     generic map (
         STRLEN => CONF_STR'length,
-        ROM_DIRECT_UPLOAD => true
+        ROM_DIRECT_UPLOAD => 1
 	)
     port map (
         clk_sys => MCLK,

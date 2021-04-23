@@ -2,26 +2,25 @@ DEMISTIFYPATH=DeMiSTify
 PROJECT=FPGAGen
 BOARD=
 
-all: $(DEMISTIFYPATH)/site.mk submodules vbcc firmware init compile tns
+all: $(DEMISTIFYPATH)/site.mk firmware init compile tns
 
 $(DEMISTIFYPATH)/site.mk:
-	$(info ******************************************************************)
-	$(info Copy the example DeMiSTify.site.template file to DeMiSTify/site.mk)
-	$(info and edit the paths for the version(s) of Quartus)
-	$(info you have installed.)
-	$(info ******************************************************************)
+	$(info ******************************************************)
+	$(info Please checkout submodules using "git submodule init" )
+	$(info followed by "git submodule update --recursive")
+	$(info )
+	$(info Then Copy the example DeMiSTify/site.template file to)
+	$(info DeMiSTify/site.mk and edit the paths for the version(s))
+	$(info  of Quartus you have installed.)
+	$(info *******************************************************)
 	$(error site.mk not found.)
 
 include $(DEMISTIFYPATH)/site.mk
 
-submodules: $(DEMISTIFYPATH)/Makefile
-
-.PHONY: vbcc
-vbcc:
-	make -C $(DEMISTIFYPATH)/EightThirtyTwo/ vbcc
-
-$(DEMISTIFYPATH)/DeMiSTify/Makefile:
+.PHONY: submodules
+submodules:
 	git submodule update --init --recursive
+	make -C $(DEMISTIFYPATH) -f bootstrap.mk
 
 .PHONY: firmware
 firmware: submodules

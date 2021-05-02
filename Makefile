@@ -1,4 +1,5 @@
 DEMISTIFYPATH=DeMiSTify
+SUBMODULES=$(DEMISTIFYPATH)/EightThirtyTwo/Makefile
 PROJECT=FPGAGen
 BOARD=
 
@@ -17,13 +18,12 @@ $(DEMISTIFYPATH)/site.mk:
 
 include $(DEMISTIFYPATH)/site.mk
 
-.PHONY: submodules
-submodules:
+$(SUBMODULES):
 	git submodule update --init --recursive
 	make -C $(DEMISTIFYPATH) -f bootstrap.mk
 
 .PHONY: firmware
-firmware: submodules
+firmware: $(SUBMDOULES)
 	make -C firmware -f ../$(DEMISTIFYPATH)/Scripts/firmware.mk DEMISTIFYPATH=../$(DEMISTIFYPATH)
 
 .PHONY: init

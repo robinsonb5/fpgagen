@@ -15,17 +15,15 @@
 // Copyright 2021 by Alastair M. Robinson
 
 
-module hybrid_pwm_sd_2ndorder
+module hybrid_pwm_sd_2ndorder #(parameter signalwidth=16, parameter filtersize=4)
 (
 	input clk,
 	input reset_n,
-	input [15:0] d_l,
+	input [signalwidth-1:0] d_l,
 	output q_l,
-	input [15:0] d_r,
+	input [signalwidth-1:0] d_r,
 	output q_r
 );
-
-parameter filtersize=4;
 
 reg q_l_reg;
 reg q_r_reg;
@@ -44,11 +42,11 @@ begin
 	begin
 		if(infilterena)
 		begin
-			initctr<=initctr+7'b1;
+			initctr<=initctr+1'b1;
 			if(initctr==0)
 				initfilterena<=1'b1;
 		end
-		if(infiltered_l[15:3]==d_l[15:3])
+		if(infiltered_l[signalwidth-1:3]==d_l[signalwidth-1:3])
 			init<=1'b0;
 	end
 end
@@ -56,11 +54,11 @@ end
 // Input filtering - a simple single-pole IIR low-pass filter.
 // configurable number of bits.
 
-wire [15:0] infiltered_l;
-wire [15:0] infiltered_r;
+wire [signalwidth-1:0] infiltered_l;
+wire [signalwidth-1:0] infiltered_r;
 reg infilterena;
 
-iirfilter_stereo # (.signalwidth(16),.cbits(filtersize),.immediate(0)) inputfilter
+iirfilter_stereo # (.signalwidth(signalwidth),.cbits(filtersize),.immediate(0)) inputfilter
 (
 	.clk(clk),
 	.reset_n(reset_n),
@@ -78,16 +76,16 @@ iirfilter_stereo # (.signalwidth(16),.cbits(filtersize),.immediate(0)) inputfilt
 
 // 9 bits for the coefficient (1/512)
 
-wire [15:0] outfiltered_l;
-wire [15:0] outfiltered_r;
+wire [signalwidth-1:0] outfiltered_l;
+wire [signalwidth-1:0] outfiltered_r;
 
 iirfilter_stereo # (.cbits(9),.immediate(1)) outputfilter
 (
 	.clk(clk),
 	.reset_n(reset_n),
 	.ena(1'b1),
-	.d_l(q_l_reg ? 16'hffff : 16'h0000),
-	.d_r(q_r_reg ? 16'hffff : 16'h0000),
+	.d_l(q_l_reg ? {signalwidth{1'b1}} : {signalwidth{1'b0}}),
+	.d_r(q_r_reg ? {signalwidth{1'b1}} : {signalwidth{1'b0}}),
 	.q_l(outfiltered_l),
 	.q_r(outfiltered_r)
 );
@@ -96,28 +94,28 @@ reg [6:0] pwmcounter;
 wire [6:0] pwmthreshold_l;
 wire [6:0] pwmthreshold_r;
 reg [33:0] scaledin;
-reg [17:0] sigma_l;
-reg [17:0] sigma2_l;
-reg [17:0] sigma_r;
-reg [17:0] sigma2_r;
+reg [signalwidth+1:0] sigma_l;
+reg [signalwidth+1:0] sigma2_l;
+reg [signalwidth+1:0] sigma_r;
+reg [signalwidth+1:0] sigma2_r;
 
-wire [17:0] sigmanext_l;
-wire [17:0] sigmanext_r;
+wire [signalwidth+1:0] sigmanext_l;
+wire [signalwidth+1:0] sigmanext_r;
 
 assign sigmanext_l = sigma_l+{2'b0,infiltered_l}-{2'b0,outfiltered_l};
 assign sigmanext_r = sigma_r+{2'b0,infiltered_r}-{2'b0,outfiltered_r};
 
-assign pwmthreshold_l = sigma2_l[17:11];
-assign pwmthreshold_r = sigma2_r[17:11];
+assign pwmthreshold_l = sigma2_l[signalwidth+1:signalwidth-5];
+assign pwmthreshold_r = sigma2_r[signalwidth+1:signalwidth-5];
 
 
 always @(posedge clk,negedge reset_n)
 begin
 	if(!reset_n) begin
-		sigma_l<=18'h0;
-		sigma_r<=18'h0;
-		sigma2_l=18'h0;
-		sigma2_r=18'h0;
+		sigma_l<={signalwidth+2{1'b0}};
+		sigma_r<={signalwidth+2{1'b0}};
+		sigma2_l={signalwidth+2{1'b0}};
+		sigma2_r={signalwidth+2{1'b0}};
 		pwmcounter<=7'b111110;
 	end else begin
 		infilterena<=1'b0;
@@ -128,27 +126,25 @@ begin
 		if(pwmcounter==pwmthreshold_r)
 			q_r_reg<=1'b0;
 
-		if(pwmcounter==7'b11111) // Update threshold when pwmcounter reaches zero
+		if(pwmcounter==7'b11111) // Update threshold just before pwmcounter wraps around
 		begin
 
-//			previnfiltered_l<=infiltered_l;
-//			previnfiltered_r<=infiltered_r;
 			infilterena<=1'b1;
 
 			// PWM
 
 			sigma_l<=sigmanext_l;
-			sigma2_l=sigmanext_l+{7'b0010000,sigma2_l[10:0]};	// Will use previous iteration's scaledin value
+			sigma2_l=sigmanext_l+{7'b0010000,sigma2_l[signalwidth-6:0]};
 
 			sigma_r<=sigmanext_r;
-			sigma2_r=sigmanext_r+{7'b0010000,sigma2_r[10:0]};	// Will use previous iteration's scaledin value
+			sigma2_r=sigmanext_r+{7'b0010000,sigma2_r[signalwidth-6:0]};
 
-			if(sigma2_l[17]==1'b1)
+			if(sigma2_l[signalwidth+1]==1'b1)
 				q_l_reg<=1'b0;
 			else
 				q_l_reg<=1'b1;
 
-			if(sigma2_r[17]==1'b1)
+			if(sigma2_r[signalwidth+1]==1'b1)
 				q_r_reg<=1'b0;
 			else
 				q_r_reg<=1'b1;
@@ -227,18 +223,17 @@ wire [signalwidth+cbits:0] delta = {d,{cbits{1'b0}}} - acc;
 
 assign acc_new = acc + {{cbits{delta[signalwidth+cbits]}},delta[signalwidth+cbits-1:cbits]};
 
-
 always @(posedge clk, negedge reset_n)
 begin
 	if(!reset_n)
 	begin
-		acc[signalwidth+cbits-1:0]<={{signalwidth{1'b1}},{cbits{1'b0}}}; // 1'b1;
-//		acc[signalwidth+cbits-2:0]<=0;
+		acc[signalwidth+cbits-1:0]<={{signalwidth{1'b1}},{cbits{1'b0}}};
 	end
 	else if(ena)
-		acc <= acc_new; // + {{cbits{delta[signalwidth+cbits]}},delta[signalwidth+cbits-1:cbits]};
+		acc <= acc_new;
 end
 
+// Based on the immediate signal, q is either combinational or registered.
 assign q=immediate ? acc_new[signalwidth+cbits-1:cbits] : acc[signalwidth+cbits-1:cbits];
 
 endmodule

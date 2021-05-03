@@ -263,6 +263,16 @@ architecture rtl of chameleon64v2_top is
 	signal porta_select : std_logic;
 	signal portb_start : std_logic;
 	signal portb_select : std_logic;
+
+	COMPONENT throbber
+	PORT
+	(
+		clk		:	 IN STD_LOGIC;
+		reset_n		:	 IN STD_LOGIC;
+		q		:	 OUT STD_LOGIC
+	);
+	END COMPONENT;
+	signal act_led : std_logic;
 	
 begin
 
@@ -578,6 +588,17 @@ begin
 		rxd => rs232_rxd,
 		txd => rs232_txd
 	);
+
+pulseleds : COMPONENT throbber
+PORT map
+(
+	clk => clk_50,
+	reset_n => reset_btn,
+	q => act_led
+);
+
+led_red<=act_led and not spi_ss4;
+led_green<=(not act_led) and not spi_ss4;
 	
 end architecture;
 

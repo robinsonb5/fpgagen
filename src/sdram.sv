@@ -122,21 +122,16 @@ localparam RFRSH_CYCLES = 11'd842;
  SDRAM state machine for 2 bank interleaved access
  2 words burst, CL3
 cmd issued  registered
- 0 RAS0     data1 available (ds1 effective)
- 1          ras0 - data1 available (ds1 effective)
- 2 RAS1
- 3 CAS0     ras1
- 4 DS0      cas0
- 5 CAS1     ds0
- 6 DS1      cas1 (overwrites ds0)
- 7 DS1      data0 available (ds0 effective)
- 8          data0 available (ds0 can be corrupt)
+ 0 RAS1     data0 available (ds0 effective)
+ 1          ras1 - data0 available (ds0 effective)
+ 2 RAS0
+ 3 CAS1     ras0
+ 4 DS1      cas1
+ 5 CAS0     ds1
+ 6 DS0      cas0 (overwrites ds1)
+ 7 DS0      data1 available (ds1 effective)
+ 8          data1 available (ds1 can be corrupt)
 */
-
-/* Not sure that writing on CAS1 is legal while a read is in progress
-   so might be safer to direct all writes to CAS0, and a read to another bank to CAS1,
-   extending the cycle by two clocks if the next RAS0 is to the same bank as CAS1.
-   Added advantage: both ports can then support 32-bit access. */
 
 //CL2
 //0 RAS0
@@ -160,16 +155,13 @@ localparam STATE_DS1b      = 4'd5; // STATE_CAS1 + 4'd2; // 7
 localparam STATE_READ1     = 4'd8; // 4'd1;
 localparam STATE_READ1b    = 4'd0; // 4'd2;
 localparam STATE_LAST      = 4'd8;
-localparam STATE_EXTENDED  = 4'd10; // For refresh cycles, to avoid violating tRCD
 
 reg [3:0] t;
 
 always @(posedge clk) begin
 	t <= t + 1'd1;
 	if (t == 4'd3 && !(|oe_latch) && !(|we_latch) && !refresh && !init) t <= 0;
-	// Extend the cycle if a refresh is in progress to avoid violating tRCD
-	if (t == STATE_LAST && !refresh) t <= 0;
-	if (t == STATE_EXTENDED) t <= 0;
+	if (t == STATE_LAST) t <= 0;
 end
 
 // ---------------------------------------------------------------------
@@ -340,7 +332,7 @@ always @(posedge clk) begin
 		if(t == STATE_RAS0) begin
 			port[0] <= PORT_NONE;
 			{ oe_latch[0], we_latch[0] } <= 2'b00;
-			if(!refresh && (!next_wr[0] || next_wr[1] || port[1]==PORT_NONE)) begin
+			if(!refresh && (!next_wr[0] || we_latch[1] || port[1]==PORT_NONE)) begin
 				port[0] <= next_port[0];
 				addr_latch[0] <= addr_latch_next[0];
 				if (next_port[0] != PORT_NONE) begin

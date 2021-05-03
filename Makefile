@@ -23,7 +23,7 @@ $(SUBMODULES):
 	make -C $(DEMISTIFYPATH) -f bootstrap.mk
 
 .PHONY: firmware
-firmware: $(SUBMDOULES)
+firmware: $(SUBMODULES)
 	make -C firmware -f ../$(DEMISTIFYPATH)/Scripts/firmware.mk DEMISTIFYPATH=../$(DEMISTIFYPATH)
 
 .PHONY: init

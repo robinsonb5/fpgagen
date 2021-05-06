@@ -142,7 +142,6 @@ cmd issued  registered
 //5
 //6 DATA0
 //7 DATA1
-
 localparam STATE_RAS0      = 4'd2; // 4'd0;   // first state in cycle
 localparam STATE_RAS1      = 4'd0; //4'd2;   // Second ACTIVE command after RAS0 + tRRD (15ns)
 localparam STATE_CAS0      = 4'd5; //STATE_RAS0 + RASCAS_DELAY; // CAS phase - 3
@@ -301,7 +300,9 @@ always @(posedge clk) begin
 	// permanently latch ram data to reduce delays
 	sd_din <= SDRAM_DQ;
 //	SDRAM_DQ <= 16'bZZZZZZZZZZZZZZZZ;
-	drive_dq<=1'b0;
+//	drive_dq<=1'b0;
+	drive_dq<=1'b1;
+	dq_out<=16'hA5A5;
 	{ SDRAM_DQMH, SDRAM_DQML } <= 2'b11;
 	sd_cmd <= CMD_NOP;  // default: idle
 	refresh_cnt <= refresh_cnt + 1'd1;
@@ -329,10 +330,15 @@ always @(posedge clk) begin
 	end else begin
 		// RAS phase
 		// bank 0,1,2
+
+		if(t == STATE_READ0-1 || t==STATE_DS0+2)
+			drive_dq<=1'b0;
+		if(t == STATE_READ1-1 || t==STATE_DS1+2)
+			drive_dq<=1'b0;
 		if(t == STATE_RAS0) begin
 			port[0] <= PORT_NONE;
 			{ oe_latch[0], we_latch[0] } <= 2'b00;
-			if(!refresh && (!next_wr[0] || we_latch[1] || port[1]==PORT_NONE)) begin
+			if(!refresh && (!next_wr[0] || next_wr[1] || port[1]==PORT_NONE)) begin
 				port[0] <= next_port[0];
 				addr_latch[0] <= addr_latch_next[0];
 				if (next_port[0] != PORT_NONE) begin

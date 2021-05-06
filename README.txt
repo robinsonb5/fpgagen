@@ -1,12 +1,16 @@
-This is a port of fpgagen - Genesis/Megadrive core to additional platform(s)
-MiST, Turbo Chameleon 64, Altera/Terasic DE2 board
+This is a port of the fpgagen Genesis/Megadrive core to MiST and
+Turbo Chameleon 64.
 
-Currently only the MiST port is maintained here.
+==== Installing the core on Chameleon64 ====
+Use the chaco utility to flash the appropriate .rbf file into a free slot in
+your Chameleon.  You only need to flash the core itself, there is no
+associated ROM file required.
 
-==== Installing the core ====
+Optionally, copy the supplied autoboot.md file to your SD card's root directory.
+
+==== Installing the core on MiST ====
 If you are not buidling the core, copy the following files to the root of your sdcard:
 fpgagen.rbf
-Configs/VGA/FPGAGEN.CFG
 
 Then rename the file fpgagen.rbf to core.rbf
 
@@ -15,10 +19,13 @@ The project depends on submodules, so you need to type in the following commands
 
 cd fpgagen
 git submodule init
-git submodule update
+git submodule update --recursive
 
-Then load the Quartus II project file, and build:
-fpgagen/syn/mist/fpgagen.qpf
+For Chameleon, type:
+make
+
+For MiST, load the Quartus II project file, and build:
+Board/mist/fpgagen.qpf
 
 When you have built the core, copy the following files to the root of your sdcard:
 fpgagen/syn/mist/fpgagen.rbf

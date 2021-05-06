@@ -3,7 +3,7 @@ SUBMODULES=$(DEMISTIFYPATH)/EightThirtyTwo/Makefile
 PROJECT=FPGAGen
 BOARD=
 
-all: $(DEMISTIFYPATH)/site.mk firmware init compile tns
+all: $(DEMISTIFYPATH)/site.mk firmware init compile tns mist
 
 $(DEMISTIFYPATH)/site.mk:
 	$(info ******************************************************)
@@ -45,4 +45,8 @@ clean:
 .PHONY: tns
 tns:
 	grep -r Design-wide\ TNS fpga/*
+
+.PHONY: mist
+mist:
+	$(Q13)/quartus_sh --flow compile Board/mist/fpgagen.qpf
 

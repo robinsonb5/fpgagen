@@ -107,7 +107,7 @@ localparam BURST_LENGTH   = 3'b001; // 000=1, 001=2, 010=4, 011=8
 localparam ACCESS_TYPE    = 1'b0;   // 0=sequential, 1=interleaved
 localparam CAS_LATENCY    = 3'd3;   // 2/3 allowed
 localparam OP_MODE        = 2'b00;  // only 00 (standard operation) allowed
-localparam NO_WRITE_BURST = 1'b1;   // 0= write burst enabled, 1=only single access write
+localparam NO_WRITE_BURST = 1'b0;   // 0= write burst enabled, 1=only single access write
 
 localparam MODE = { 3'b000, NO_WRITE_BURST, OP_MODE, CAS_LATENCY, ACCESS_TYPE, BURST_LENGTH}; 
 
@@ -163,6 +163,7 @@ localparam STATE_RAS0      = 4'd0;   // first state in cycle
 localparam STATE_RAS1      = 4'd4;   // Second ACTIVE command after RAS0 + tRRD (15ns)
 localparam STATE_CAS0      = STATE_RAS0 + RASCAS_DELAY; // CAS phase - 3
 localparam STATE_CAS1      = 4'd8;   //STATE_RAS1 + RASCAS_DELAY; // CAS phase - 5
+localparam STATE_CAS1b      = 4'd0;   //STATE_RAS1 + RASCAS_DELAY; // CAS phase - 5
 localparam STATE_DS0       = STATE_CAS0 + 1'd1; // 4
 localparam STATE_DS0b      = STATE_CAS0 + 4'd2; // 5
 localparam STATE_READ0     = STATE_CAS0 + CAS_LATENCY + 4'd2; // 8
@@ -336,7 +337,7 @@ always @(posedge clk) begin
 			addr_latch[0] <= addr_latch_next[0];
 			if (next_port[0] != PORT_NONE) begin
 				port_state[next_port[0]] <= ~port_state[next_port[0]];
-				sd_cmd <= CMD_ACTIVE;
+//				sd_cmd <= CMD_ACTIVE;
 				SDRAM_A <= addr_latch_next[0][22:10];
 				SDRAM_BA <= addr_latch_next[0][24:23];
 			end
@@ -382,6 +383,9 @@ always @(posedge clk) begin
 
 		end
 
+		if(t == (STATE_RAS1+1) && port[0]!=PORT_NONE)
+			sd_cmd <= CMD_ACTIVE;
+
 		// bank3 - VRAM
 		if(t == STATE_RAS0) begin
 			refresh <= 1'b0;
@@ -423,8 +427,7 @@ always @(posedge clk) begin
 			sd_cmd <= we_latch[0]?CMD_WRITE:CMD_READ;
 			if (we_latch[0]) begin
 				dq_reg <= din_latch[0];
-				drive_dq<=1'b1;
-				{ SDRAM_DQMH, SDRAM_DQML } <= ~ds[0];
+				{ SDRAM_DQMH, SDRAM_DQML } <= (~ds[0]) | {2{we_latch[0]}};
 				case (port[0])
 					PORT_ROMWR:  romwr_ack <= romwr_req;
 					PORT_SRAM:   sram_ack <= sram_req;
@@ -434,8 +437,13 @@ always @(posedge clk) begin
 					default: ;
 				endcase
 			end
-			SDRAM_A <= { 4'b0010, addr_latch[0][9:1] };  // auto precharge
+			SDRAM_A <= { 4'b0010, addr_latch[0][9:2],addr_latch[0][1]^we_latch[0]};  // auto precharge
 			SDRAM_BA <= addr_latch[0][24:23];
+		end
+
+		if(t == STATE_CAS1b && we_latch[0]) begin
+			{ SDRAM_DQMH, SDRAM_DQML } <= ~ds[0];			
+			drive_dq<=1'b1;
 		end
 
 		// VRAM only
@@ -443,13 +451,17 @@ always @(posedge clk) begin
 			sd_cmd <= we_latch[1]?CMD_WRITE:CMD_READ;
 			if (we_latch[1]) begin
 				dq_reg <= din_latch[1];
-				drive_dq<=1'b1;
-				{ SDRAM_DQMH, SDRAM_DQML } <= ~ds[1];
+				{ SDRAM_DQMH, SDRAM_DQML } <= (~ds[1]) | {2{we_latch[1]}};
 				if (port[1] == PORT_VRAM) vram_ack <= vram_req;
 			end
-			SDRAM_A <= { 4'b0010, addr_latch[1][9:1] };  // auto precharge
+			SDRAM_A <= { 4'b0010, addr_latch[1][9:2], addr_latch[1][1]^we_latch[1]};  // auto precharge
 			SDRAM_BA <= addr_latch[1][24:23];
 		end
+
+		if(t == STATE_CAS0+1 && we_latch[1]) begin
+			{ SDRAM_DQMH, SDRAM_DQML } <= ~ds[1];
+			drive_dq<=1'b1;
+		end			
 
 		// read phase
 		if(t == STATE_DS1 && oe_latch[0]) { SDRAM_DQMH, SDRAM_DQML } <= ~ds[0];

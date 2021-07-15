@@ -180,23 +180,18 @@ architecture rtl of chameleon64v2_top is
 	signal audio_r : std_logic_vector(15 downto 0);
 
 -- IO	
-	signal power_button : std_logic;
-	signal play_button : std_logic;
 	signal c64_keys : unsigned(63 downto 0);
 	signal c64_restore_key_n : std_logic;
 	signal c64_nmi_n : std_logic;
 	signal c64_joy1 : unsigned(6 downto 0);
 	signal c64_joy2 : unsigned(6 downto 0);
-	signal joystick3 : unsigned(6 downto 0);
-	signal joystick4 : unsigned(6 downto 0);
-	signal cdtv_joya : unsigned(5 downto 0);
-	signal cdtv_joyb : unsigned(5 downto 0);
+	signal c64_joy3 : unsigned(6 downto 0);
+	signal c64_joy4 : unsigned(6 downto 0);
 	signal joy1 : unsigned(7 downto 0);
 	signal joy2 : unsigned(7 downto 0);
 	signal joy3 : unsigned(7 downto 0);
 	signal joy4 : unsigned(7 downto 0);
-	signal ir : std_logic;
-	signal ir_d : std_logic;
+	signal menu_button_n : std_logic;
 
 	signal amiga_reset_n : std_logic;
 	signal amiga_key : unsigned(7 downto 0);
@@ -247,22 +242,6 @@ architecture rtl of chameleon64v2_top is
 			AUDIO_R  : out std_logic
 		);
 	END COMPONENT;
-	
-	signal vol_up : std_logic;
-	signal vol_down : std_logic;
-	signal cdtv_port : std_logic;
-
-	signal keys_safe : std_logic;
-	signal c64_menu : std_logic;
-	signal gp1_run : std_logic;
-	signal gp1_select :std_logic;
-	signal gp2_run : std_logic;
-	signal gp2_select : std_logic;
-	
-	signal porta_start : std_logic;
-	signal porta_select : std_logic;
-	signal portb_start : std_logic;
-	signal portb_select : std_logic;
 
 	COMPONENT throbber
 	PORT
@@ -366,20 +345,6 @@ begin
 			led_red => led_red
 		);
 
-	cdtv : entity work.chameleon_cdtv_remote
-	port map(
-		clk => clk_100,
-		ena_1mhz => ena_1mhz,
-		ir => ir,
-		key_power => power_button,
-		key_play => play_button,
-		joystick_a => cdtv_joya,
-		joystick_b => cdtv_joyb,
-		key_vol_up => vol_up,
-		key_vol_dn => vol_down,
-		currentport => cdtv_port
-	);
-
 
 -- -----------------------------------------------------------------------
 -- Chameleon IO, docking station and cartridge port
@@ -401,7 +366,7 @@ begin
 
 				reset => not reset_n,
 
-				ir_data => ir,
+				ir_data => '1',
 				ioef => ioef,
 				romlh => romlh,
 
@@ -431,8 +396,8 @@ begin
 
 				joystick1 => c64_joy1,
 				joystick2 => c64_joy2,
-				joystick3 => joystick3,
-				joystick4 => joystick4,
+				joystick3 => c64_joy3,
+				joystick4 => c64_joy4,
 				keys => c64_keys,
 --				restore_key_n => restore_n
 				restore_key_n => open,
@@ -446,47 +411,39 @@ begin
 			);
 	end block;
 
-	-- Synchronise IR signal
-	process (clk_100)
-	begin
-		if rising_edge(clk_100) then
-			ir_d<=ir_data;
-			ir<=ir_d;
-		end if;
-	end process;
+-- Input mapping
 
-
-	--joy1<=not gp1_run & not gp1_select & (c64_joy1 and cdtv_joy1);
-	--runstop<='0' when c64_keys(63)='0' and c64_joy1="1111111" else '1';
-	-- gp1_run<=c64_keys(11) and c64_keys(56) when c64_joy1="111111" else '1';
-	-- gp1_select<=c64_keys(60) when c64_joy1="111111" else '1';
-
-	keys_safe <= '1' when c64_joy1="1111111" else '0';
-
-	-- Update c64 keys only when the joystick isn't active.
-	process (clk_100)
-	begin
-		if rising_edge(clk_100) then
-			if keys_safe='1' then
-				gp1_run <= c64_keys(8); -- Return
-				gp1_select <= c64_keys(38); -- Right shift
-				gp2_run <= c64_keys(63); -- Run/stop
-				gp2_select <= c64_keys(57); -- Left shift;
-				c64_menu <= c64_keys(15); -- Left arrow;
-			end if;
-		end if;
-	end process;
+-- Core expects buttons in the order START, C, B, A.
+-- B & C are the most important buttons, so we map them to
+-- buttons 1 and 2, respectively, with button 3 -> A and 4 -> start.
+-- We remap them to START, A, A, B, C, so remap here
 	
-	porta_start <= cdtv_port or ((not play_button) and gp1_run);
-	porta_select <= (cdtv_port or ((not vol_up) and gp1_select)) and c64_joy1(6);
+mergeinputs : entity work.chameleon_mergeinputs
+generic map (
+	button1=>5,
+	button2=>6,
+	button3=>4,
+	button4=>7
+)
+port map (
+	clk => clk_100,
+	reset_n => reset_n,
+	ena_1mhz => ena_1mhz,
+	ir_data => ir_data,
+	button_menu_n => usart_cts,
+	c64_joy1 => c64_joy1,
+	c64_joy2 => c64_joy2,
+	c64_joy3 => c64_joy3,
+	c64_joy4 => c64_joy4,
+	c64_keys => c64_keys,
+	c64_joykey_ena => '1',
 
-	portb_start <= (not cdtv_port) or ((not play_button) and gp2_run);
-	portb_select <= ((not cdtv_port) or ((not vol_up) and gp2_select)) and c64_joy2(6);
-
-	joy1<=porta_start & porta_select & (c64_joy1(5 downto 0) and cdtv_joya);
-	joy2<=portb_start & portb_select & (c64_joy2(5 downto 0) and cdtv_joyb);
-	joy3<="1" & joystick3;
-	joy4<="1" & joystick4;
+	joy1_out => joy1,
+	joy2_out => joy2,
+	joy3_out => joy3,
+	joy4_out => joy4,
+	menu_out_n => menu_button_n
+);
 
 	-- Guest core
 	
@@ -572,17 +529,12 @@ begin
 
 		-- Joysticks
 
-		-- Core expects buttons in the order START, C, B, A.
-		-- B & C are the most important buttons, so we map them to
-		-- buttons 1 and 2, respectively, with button 3 -> A and 4 -> start.
-		-- We remap them to START, A, A, B, C, so remap here
-
-		joy1 => std_logic_vector(joy1(7)&joy1(5)&joy1(4)&joy1(6)&joy1(3 downto 0)),
-		joy2 => std_logic_vector(joy2(7)&joy2(5)&joy2(4)&joy2(6)&joy2(3 downto 0)),
+		joy1 => std_logic_vector(joy1),
+		joy2 => std_logic_vector(joy2),
 		joy3 => std_logic_vector(joy3),
 		joy4 => std_logic_vector(joy4),
 
-		buttons => (0=>usart_cts and not power_button,others=>'0'),
+		buttons => (0=>menu_button_n,others=>'0'),
 
 		-- UART
 		rxd => rs232_rxd,

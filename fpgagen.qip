@@ -10,6 +10,7 @@ set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) src/vdp_co
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) src/vdp.vhd]
 set_global_assignment -name QIP_FILE [file join $::quartus(qip_path) src/obj_cache.qip]
 set_global_assignment -name SYSTEMVERILOG_FILE [file join $::quartus(qip_path) src/sdram.sv]
+set_global_assignment -name SYSTEMVERILOG_FILE [file join $::quartus(qip_path) src/sdram_alt.sv]
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) src/sdram.vhd]
 set_global_assignment -name SYSTEMVERILOG_FILE [file join $::quartus(qip_path) src/fx68k/uaddrPla.sv]
 set_global_assignment -name SYSTEMVERILOG_FILE [file join $::quartus(qip_path) src/fx68k/fx68kAlu.sv]
@@ -26,4 +27,4 @@ set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) src/hyb
 set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) build_id.vhd]
 set_global_assignment -name SDC_FILE [file join $::quartus(qip_path) constraints.sdc]
 set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) src/throbber.v]
-
+set_global_assignment -name VHDL_FILE [file join $::quartus(qip_path) src/demistify_config_pkg.vhd]

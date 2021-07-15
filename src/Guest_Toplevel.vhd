@@ -179,8 +179,8 @@ constant CONF_DBG_STR : string := "";
 
 constant CONF_STR : string := core_name &
     ";BINGENMD ;"&
---    "S,SAV,Mount;"&
---    "TE,Write Save RAM;"&
+    "S,SAV,Mount;"&
+    "TE,Write Save RAM;"&
     "P1,Video & Audio;"&
     "P2,Controls;"&
     "P3,System;"&

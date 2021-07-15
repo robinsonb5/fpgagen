@@ -115,9 +115,8 @@ architecture rtl of chameleon64_top is
 	signal spi_mosi : std_logic;
 	signal mmc_cs : std_logic;
 	signal spi_clk : std_logic;
-	signal spi_raw_ack : std_logic;
-	signal spi_raw_ack_d : std_logic;
 	signal spi_ack : std_logic;
+	signal spi_req : std_logic;
 
 -- internal SPI signals
 	
@@ -143,9 +142,6 @@ architecture rtl of chameleon64_top is
 	signal ena_1mhz : std_logic;
 	signal button_reset_n : std_logic;
 
-	signal power_button : std_logic;
-	signal play_button : std_logic;
-
 	signal no_clock : std_logic;
 	signal docking_station : std_logic;
 	signal c64_keys : unsigned(63 downto 0);
@@ -153,16 +149,15 @@ architecture rtl of chameleon64_top is
 	signal c64_nmi_n : std_logic;
 	signal c64_joy1 : unsigned(6 downto 0);
 	signal c64_joy2 : unsigned(6 downto 0);
-	signal joystick3 : unsigned(6 downto 0);
-	signal joystick4 : unsigned(6 downto 0);
-	signal cdtv_joya : unsigned(5 downto 0);
-	signal cdtv_joyb : unsigned(5 downto 0);
+	signal c64_joy3 : unsigned(6 downto 0);
+	signal c64_joy4 : unsigned(6 downto 0);
 	signal joy1 : unsigned(7 downto 0);
 	signal joy2 : unsigned(7 downto 0);
 	signal joy3 : unsigned(7 downto 0);
 	signal joy4 : unsigned(7 downto 0);
 	signal usart_rx : std_logic:='1'; -- Safe default
-	signal ir : std_logic;
+	signal ir_data : std_logic;
+	signal menu_button_n : std_logic;
 	
 	signal amiga_reset_n : std_logic;
 	signal amiga_key : unsigned(7 downto 0);
@@ -217,22 +212,6 @@ architecture rtl of chameleon64_top is
 		);
 	END COMPONENT;
 	
-	signal vol_up : std_logic;
-	signal vol_down : std_logic;
-	signal cdtv_port : std_logic;
-
-	signal keys_safe : std_logic;
-	signal c64_menu : std_logic;
-	signal gp1_run : std_logic;
-	signal gp1_select :std_logic;
-	signal gp2_run : std_logic;
-	signal gp2_select : std_logic;
-
-	signal porta_start : std_logic;
-	signal porta_select : std_logic;
-	signal portb_start : std_logic;
-	signal portb_select : std_logic;
-
 	COMPONENT throbber
 	PORT
 	(
@@ -244,6 +223,8 @@ architecture rtl of chameleon64_top is
 	signal act_led : std_logic;
 
 begin
+
+rtc_cs<='0';
 
 -- -----------------------------------------------------------------------
 -- Clocks and PLL
@@ -332,12 +313,13 @@ begin
 			mmc_cs_n => mmc_cs,
 			spi_raw_clk => spi_clk,
 			spi_raw_mosi => spi_mosi,
-			spi_raw_ack => spi_raw_ack,
+			spi_raw_req => spi_req,
+			spi_raw_ack => spi_ack,
 
 		-- LEDs
 			led_green => led_green,
 			led_red => led_red,
-			ir => ir,
+			ir => ir_data,
 		
 		-- PS/2 Keyboard
 			ps2_keyboard_clk_out => ps2_keyboard_clk_out,
@@ -357,8 +339,8 @@ begin
 		-- Joysticks
 			joystick1 => c64_joy1,
 			joystick2 => c64_joy2,
-			joystick3 => joystick3, 
-			joystick4 => joystick4,
+			joystick3 => c64_joy3,
+			joystick4 => c64_joy4,
 
 		-- Keyboards
 			keys => c64_keys,
@@ -383,57 +365,42 @@ begin
 	
 		);
 
-	-- Widen the SPI ack pulse		
-	process(clk_100,spi_raw_ack,spi_raw_ack_d)
-	begin
-		if rising_edge(clk_100) then
-			spi_raw_ack_d <= spi_raw_ack;
-		end if;
-		spi_ack <= spi_raw_ack or spi_raw_ack_d;
-	end process;
 
-	cdtv : entity work.chameleon_cdtv_remote
-	port map(
-		clk => clk_100,
-		ena_1mhz => ena_1mhz,
-		ir => ir,
-		key_power => power_button,
-		key_play => play_button,
-		joystick_a => cdtv_joya,
-		joystick_b => cdtv_joyb,
-		key_vol_up => vol_up,
-		key_vol_dn => vol_down,
-		currentport => cdtv_port
-	);
+-- Input mapping
 
-	rtc_cs<='0';
-
-	keys_safe <= '1' when c64_joy1="1111111" else '0';
-
-	-- Update c64 keys only when the joystick isn't active.
-	process (clk_100)
-	begin
-		if rising_edge(clk_100) then
-			if keys_safe='1' then
-				gp1_run <= c64_keys(62); -- Return
-				gp1_select <= c64_keys(11); -- Right shift
-				gp2_run <= c64_keys(0); -- Run/stop
-				gp2_select <= c64_keys(48); -- Left shift;
-				c64_menu <= c64_keys(54); -- Up arrow;
-			end if;
-		end if;
-	end process;
+-- Core expects buttons in the order START, C, B, A.
+-- B & C are the most important buttons, so we map them to
+-- buttons 1 and 2, respectively, with button 3 -> A and 4 -> start.
+-- We remap them to START, A, A, B, C, so remap here
 	
-	porta_start <= cdtv_port or ((not play_button) and gp1_run);
-	porta_select <= (cdtv_port or ((not vol_up) and gp1_select)) and c64_joy1(6);
+mergeinputs : entity work.chameleon_mergeinputs
+generic map (
+	button1=>5,
+	button2=>6,
+	button3=>4,
+	button4=>7
+)
+port map (
+	clk => clk_100,
+	reset_n => reset_n,
+	ena_1mhz => ena_1mhz,
+	ir_data => ir_data,
+	button_menu_n => usart_cts,
+	c64_joy1 => c64_joy1,
+	c64_joy2 => c64_joy2,
+	c64_joy3 => c64_joy3,
+	c64_joy4 => c64_joy4,
+	c64_keys => c64_keys,
+	c64_joykey_ena => '1',
 
-	portb_start <= (not cdtv_port) or ((not play_button) and gp2_run);
-	portb_select <= ((not cdtv_port) or ((not vol_up) and gp2_select)) and c64_joy2(6);
+	joy1_out => joy1,
+	joy2_out => joy2,
+	joy3_out => joy3,
+	joy4_out => joy4,
+	menu_out_n => menu_button_n
+);
 
-	joy1<=porta_start & porta_select & (c64_joy1(5 downto 0) and cdtv_joya);
-	joy2<=portb_start & portb_select & (c64_joy2(5 downto 0) and cdtv_joyb);
-	joy3<="1" & joystick3;
-	joy4<="1" & joystick4;
+
 
 	-- Guest core
 	
@@ -501,7 +468,9 @@ begin
 	controller : entity work.substitute_mcu
 	generic map (
 		sysclk_frequency => 500,
-		debug => false
+		debug => false,
+		SPI_FASTBIT => 3,
+		SPI_EXTERNALCLK => true
 	)
 	port map (
 		clk => clk_50,
@@ -519,6 +488,8 @@ begin
 		spi_ss3 => spi_ss3,
 		spi_ss4 => spi_ss4,
 		conf_data0 => conf_data0,
+		spi_req => spi_req,
+		spi_ack => spi_ack,
 		
 		-- PS/2 signals
 		ps2k_clk_in => ps2_keyboard_clk_in,
@@ -537,12 +508,12 @@ begin
 		-- buttons 1 and 2, respectively, with button 3 -> A and 4 -> start.
 		-- We remap them to START, A, A, B, C, so remap here
 
-		joy1 => std_logic_vector(joy1(7)&joy1(5)&joy1(4)&joy1(6)&joy1(3 downto 0)),
-		joy2 => std_logic_vector(joy2(7)&joy2(5)&joy2(4)&joy2(6)&joy2(3 downto 0)),
+		joy1 => std_logic_vector(joy1),
+		joy2 => std_logic_vector(joy2),
 		joy3 => std_logic_vector(joy3),
 		joy4 => std_logic_vector(joy4),
 
-		buttons => (0=>usart_cts and not power_button,others=>'0'),
+		buttons => (0=>menu_button_n,others=>'0'),
 
 		-- UART
 		rxd => rs232_rxd,

@@ -55,6 +55,12 @@ signal memclk      : std_logic;
 
 signal audiol : std_logic_vector(15 downto 0);
 signal audior : std_logic_vector(15 downto 0);
+alias audiol_sign : std_logic is audiol(15);
+alias audior_sign : std_logic is audior(15);
+alias audiol_adj : std_logic is audiol(14);
+alias audior_adj : std_logic is audior(14);
+signal audiol_clamp : std_logic_vector(14 downto 0);
+signal audior_clamp : std_logic_vector(14 downto 0);
 
 signal gen_red    : std_logic_vector(3 downto 0);
 signal gen_green  : std_logic_vector(3 downto 0);
@@ -202,6 +208,18 @@ begin
   end loop;
   return rval;
 end function;
+
+-- Sigma Delta audio
+COMPONENT hybrid_pwm_sd_2ndorder
+	PORT (
+		clk : in std_logic;
+		reset_n : in std_logic;
+		d_l : in std_logic_vector(15 downto 0);
+		q_l : out std_logic;
+		d_r : in std_logic_vector(15 downto 0);
+		q_r : out std_logic
+);
+END COMPONENT;
 
 -- Sigma Delta audio
 COMPONENT hybrid_pwm_sd
@@ -672,23 +690,19 @@ mist_video : work.mist.mist_video
         VGA_B       => VGA_B
     );
 
--- Do we have audio?  If so, instantiate a two DAC channels.
-leftsd: component hybrid_pwm_sd
-	port map
-	(
-		clk => MCLK,
-		n_reset => reset_n,
-		din => not audiol(15) & std_logic_vector(audiol(14 downto 0)),
-		dout => AUDIO_L
-	);
-	
-rightsd: component hybrid_pwm_sd
-	port map
-	(
-		clk => MCLK,
-		n_reset => reset_n,
-		din => not audior(15) & std_logic_vector(audior(14 downto 0)),
-		dout => AUDIO_R
-	);
+audiol_clamp <= audiol(audiol'high-1 downto 0) when audiol_sign=audiol_adj else -- Pass through
+				(audiol_clamp'high=>audiol_sign,others=>audiol_adj); -- Clamp
+audior_clamp <= audior(audior'high-1 downto 0) when audior_sign=audior_adj else -- Pass through
+				(audior_clamp'high=>audior_sign,others=>audior_adj); -- Clamp
+
+audioout : component hybrid_pwm_sd_2ndorder
+port map (
+	clk => MCLK,
+	reset_n => reset_n,
+	d_l => not audiol_sign & audiol_clamp(13 downto 0) & '0',
+	q_l => AUDIO_L,
+	d_r => not audior_sign & audior_clamp(13 downto 0) & '0',
+	q_r => AUDIO_R
+);
 
 end architecture;

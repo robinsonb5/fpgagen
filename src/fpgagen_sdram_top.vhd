@@ -196,7 +196,7 @@ DRAM_BA_1 <= SDRAM_BA(1);
 DRAM_CKE <= '1';
 DRAM_CS_N <= '0';
 
-sdc : sdram
+sdc : sdram_alt
 port map(
 	clk         => SDR_CLK,
 	init_n      => FPGA_INIT_N,

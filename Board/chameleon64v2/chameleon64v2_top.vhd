@@ -1,7 +1,14 @@
+-- -----------------------------------------------------------------------
+--
+-- Toplevel file for Turbo Chameleon 64 V2
+--
 
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
+
+library work;
+use work.demistify_config_pkg.all;
 
 -- -----------------------------------------------------------------------
 
@@ -259,7 +266,7 @@ begin
 -- Unused pins
 -- -----------------------------------------------------------------------
 	iec_clk_out <= '0';
-	iec_atn_out <= '0';
+	iec_atn_out <= rs232_txd or not demistify_serialdebug;
 	iec_dat_out <= '0';
 	iec_srq_out <= '0';
 	nmi_out <= '0';
@@ -420,10 +427,10 @@ begin
 	
 mergeinputs : entity work.chameleon_mergeinputs
 generic map (
-	button1=>5,
-	button2=>6,
-	button3=>4,
-	button4=>7
+	button1=>demistify_button1,
+	button2=>demistify_button2,
+	button3=>demistify_button3,
+	button4=>demistify_button4
 )
 port map (
 	clk => clk_100,

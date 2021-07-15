@@ -1,13 +1,14 @@
 -- -----------------------------------------------------------------------
 --
--- Turbo Chameleon
---
--- Toplevel file for Turbo Chameleon 64
+-- Toplevel file for Turbo Chameleon 64 V1
 --
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.numeric_std.ALL;
+
+library work;
+use work.demistify_config_pkg.all;
 
 -- -----------------------------------------------------------------------
 
@@ -354,7 +355,7 @@ rtc_cs<='0';
 			midi_txd => midi_txd,
 			midi_rxd => midi_rxd,
 
-			iec_atn_out => rs232_txd,
+			iec_atn_out => rs232_txd or not demistify_serialdebug,
 			iec_clk_in => rs232_rxd
 --			iec_clk_out : in std_logic := '1';
 --			iec_dat_out : in std_logic := '1';
@@ -362,7 +363,6 @@ rtc_cs<='0';
 --			iec_dat_in : out std_logic;
 --			iec_atn_in : out std_logic;
 --			iec_srq_in : out std_logic
-	
 		);
 
 
@@ -371,14 +371,13 @@ rtc_cs<='0';
 -- Core expects buttons in the order START, C, B, A.
 -- B & C are the most important buttons, so we map them to
 -- buttons 1 and 2, respectively, with button 3 -> A and 4 -> start.
--- We remap them to START, A, A, B, C, so remap here
 	
 mergeinputs : entity work.chameleon_mergeinputs
 generic map (
-	button1=>5,
-	button2=>6,
-	button3=>4,
-	button4=>7
+	button1=>demistify_button1,
+	button2=>demistify_button2,
+	button3=>demistify_button3,
+	button4=>demistify_button4
 )
 port map (
 	clk => clk_100,
@@ -448,18 +447,13 @@ port map (
 	);
 	
 	
-	-- Register video outputs, invert sync for Chameleon V1 hardware
+	-- invert sync for Chameleon V1 hardware
 	
---	process(clk_sys)
---	begin
---		if rising_edge(clk_sys) then
-			red<=unsigned(vga_red(7 downto 3));
-			grn<=unsigned(vga_green(7 downto 3));
-			blu<=unsigned(vga_blue(7 downto 3));
-			hsync_n<=not vga_hsync;
-			vsync_n<=not vga_vsync;
---		end if;
---	end process;
+	red<=unsigned(vga_red(7 downto 3));
+	grn<=unsigned(vga_green(7 downto 3));
+	blu<=unsigned(vga_blue(7 downto 3));
+	hsync_n<=not vga_hsync;
+	vsync_n<=not vga_vsync;
 
 
 	-- Pass internal signals to external SPI interface
@@ -502,11 +496,6 @@ port map (
 		ps2m_dat_out => ps2_mouse_dat_out,
 
 		-- Joysticks
-		
-		-- Core expects buttons in the order START, C, B, A.
-		-- B & C are the most important buttons, so we map them to
-		-- buttons 1 and 2, respectively, with button 3 -> A and 4 -> start.
-		-- We remap them to START, A, A, B, C, so remap here
 
 		joy1 => std_logic_vector(joy1),
 		joy2 => std_logic_vector(joy2),
